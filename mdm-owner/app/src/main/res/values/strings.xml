@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MDM Launcher</string>
+    <string name="app_name_short">MDM</string>
+    
+    <!-- Launcher UI -->
+    <string name="launcher_title">Aplicativos Permitidos</string>
+    <string name="no_apps_available">Nenhum aplicativo disponível</string>
+    <string name="waiting_for_permissions">Aguardando permissões do servidor...</string>
+    <string name="connection_status">Status da Conexão</string>
+    <string name="connected">Conectado</string>
+    <string name="disconnected">Desconectado</string>
+    <string name="connecting">Conectando...</string>
+    
+    <!-- Device Owner -->
+    <string name="device_owner_setup">Configuração do Device Owner</string>
+    <string name="device_owner_required">Este aplicativo precisa ser configurado como Device Owner</string>
+    <string name="setup_instructions">Instruções de configuração:</string>
+    <string name="setup_step1">1. Execute o script de instalação</string>
+    <string name="setup_step2">2. Configure como Device Owner via ADB</string>
+    <string name="setup_step3">3. Reinicie o dispositivo</string>
+    
+    <!-- Permissions -->
+    <string name="permission_required">Permissão necessária</string>
+    <string name="device_admin_required">Device Admin é necessário para o funcionamento completo</string>
+    <string name="usage_stats_required">Estatísticas de uso necessárias para gerenciar aplicativos</string>
+    <string name="grant_permission">Conceder Permissão</string>
+    
+    <!-- Settings -->
+    <string name="settings">Configurações</string>
+    <string name="server_url">URL do Servidor</string>
+    <string name="device_id">ID do Dispositivo</string>
+    <string name="save">Salvar</string>
+    <string name="reset">Resetar</string>
+    
+    <!-- Errors -->
+    <string name="error_connection_failed">Falha na conexão com o servidor</string>
+    <string name="error_websocket_failed">Falha na conexão WebSocket</string>
+    <string name="error_permission_denied">Permissão negada</string>
+    <string name="error_device_owner_not_set">Device Owner não configurado</string>
+    
+    <!-- Notifications -->
+    <string name="notification_channel_name">MDM Launcher</string>
+    <string name="notification_channel_description">Notificações do MDM Launcher</string>
+    <string name="notification_websocket_running">Serviço WebSocket ativo</string>
+</resources>

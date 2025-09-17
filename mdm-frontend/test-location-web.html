@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Localização - MDM Web</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .log {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #dee2e6;
+        }
+        .device-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .location-info {
+            background: #d1ecf1;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        .map-container {
+            width: 100%;
+            height: 400px;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🗺️ Teste de Localização - MDM Web</h1>
+    
+    <div class="container">
+        <h2>Status da Conexão</h2>
+        <div id="status" class="status disconnected">Desconectado</div>
+        
+        <div>
+            <button id="connectBtn" onclick="connect()">Conectar</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Desconectar</button>
+            <button id="clearBtn" onclick="clearLog()">Limpar Log</button>
+        </div>
+    </div>
+    
+    <div class="container">
+        <h2>Dispositivos Conectados</h2>
+        <div id="devicesList"></div>
+    </div>
+    
+    <div class="container">
+        <h2>Log de Mensagens</h2>
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let devices = [];
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function updateStatus(status, className) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = status;
+            statusDiv.className = `status ${className}`;
+        }
+        
+        function connect() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('⚠️ Já conectado!');
+                return;
+            }
+            
+            updateStatus('Conectando...', 'disconnected');
+            log('🔄 Tentando conectar ao WebSocket...');
+            
+            try {
+                ws = new WebSocket('ws://localhost:3002');
+                
+                ws.onopen = function(event) {
+                    updateStatus('Conectado', 'connected');
+                    log('✅ WebSocket conectado com sucesso!');
+                    
+                    // Enviar identificação como cliente web
+                    ws.send(JSON.stringify({
+                        type: 'web_client',
+                        timestamp: Date.now()
+                    }));
+                    log('📤 Enviada mensagem de identificação como cliente web');
+                    
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('disconnectBtn').disabled = false;
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const data = JSON.parse(event.data);
+                        log(`📨 Mensagem recebida: ${JSON.stringify(data, null, 2)}`);
+                        
+                        // Processar diferentes tipos de mensagem
+                        if (data.type === 'devices_list') {
+                            log(`📱 Lista de dispositivos recebida: ${data.devices.length} dispositivos`);
+                            devices = data.devices;
+                            updateDevicesList();
+                        } else if (data.type === 'devices_status') {
+                            log(`📱 Status dos dispositivos atualizado: ${data.devices.length} dispositivos`);
+                            devices = data.devices;
+                            updateDevicesList();
+                        } else if (data.type === 'device_connected') {
+                            log(`📱 Dispositivo conectado: ${data.device.deviceId}`);
+                            devices.push(data.device);
+                            updateDevicesList();
+                        } else if (data.type === 'device_disconnected') {
+                            log(`📱 Dispositivo desconectado: ${data.deviceId}`);
+                            devices = devices.filter(d => d.deviceId !== data.deviceId);
+                            updateDevicesList();
+                        } else if (data.type === 'location_updated') {
+                            log(`📍 Localização atualizada para dispositivo ${data.deviceId}: ${data.location.latitude}, ${data.location.longitude}`);
+                            // Atualizar dispositivo na lista
+                            const deviceIndex = devices.findIndex(d => d.deviceId === data.deviceId);
+                            if (deviceIndex >= 0) {
+                                devices[deviceIndex] = {
+                                    ...devices[deviceIndex],
+                                    latitude: data.location.latitude,
+                                    longitude: data.location.longitude,
+                                    locationAccuracy: data.location.accuracy,
+                                    lastLocationUpdate: data.location.timestamp,
+                                    isLocationEnabled: true
+                                };
+                                updateDevicesList();
+                            }
+                        }
+                    } catch (error) {
+                        log(`📨 Mensagem recebida (texto): ${event.data}`);
+                    }
+                };
+                
+                ws.onclose = function(event) {
+                    updateStatus('Desconectado', 'disconnected');
+                    log(`❌ WebSocket desconectado. Código: ${event.code}, Motivo: ${event.reason}`);
+                    
+                    document.getElementById('connectBtn').disabled = false;
+                    document.getElementById('disconnectBtn').disabled = true;
+                };
+                
+                ws.onerror = function(error) {
+                    log(`❌ Erro no WebSocket: ${error}`);
+                    updateStatus('Erro', 'disconnected');
+                };
+                
+            } catch (error) {
+                log(`❌ Erro ao criar conexão: ${error.message}`);
+                updateStatus('Erro', 'disconnected');
+            }
+        }
+        
+        function disconnect() {
+            if (ws) {
+                ws.close(1000, 'Desconexão manual');
+                ws = null;
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        function updateDevicesList() {
+            const devicesDiv = document.getElementById('devicesList');
+            devicesDiv.innerHTML = '';
+            
+            if (devices.length === 0) {
+                devicesDiv.innerHTML = '<p>Nenhum dispositivo conectado</p>';
+                return;
+            }
+            
+            devices.forEach(device => {
+                const deviceDiv = document.createElement('div');
+                deviceDiv.className = 'device-info';
+                
+                const locationInfo = device.latitude && device.longitude ? 
+                    `<div class="location-info">
+                        <strong>📍 Localização:</strong><br>
+                        Latitude: ${device.latitude.toFixed(6)}<br>
+                        Longitude: ${device.longitude.toFixed(6)}<br>
+                        Precisão: ${device.locationAccuracy ? device.locationAccuracy.toFixed(1) + 'm' : 'N/A'}<br>
+                        Última atualização: ${device.lastLocationUpdate ? new Date(device.lastLocationUpdate).toLocaleString() : 'Nunca'}<br>
+                        Provider: ${device.locationProvider || 'N/A'}
+                    </div>` : 
+                    '<div class="location-info"><strong>📍 Localização:</strong> Não disponível</div>';
+                
+                deviceDiv.innerHTML = `
+                    <h4>📱 ${device.name || 'Dispositivo Desconhecido'}</h4>
+                    <p><strong>ID:</strong> ${device.deviceId}</p>
+                    <p><strong>Modelo:</strong> ${device.model || 'N/A'}</p>
+                    <p><strong>Fabricante:</strong> ${device.manufacturer || 'N/A'}</p>
+                    <p><strong>Android:</strong> ${device.androidVersion || 'N/A'}</p>
+                    <p><strong>Status:</strong> ${device.status || 'unknown'}</p>
+                    <p><strong>Localização Ativada:</strong> ${device.isLocationEnabled ? 'Sim' : 'Não'}</p>
+                    ${locationInfo}
+                    ${device.latitude && device.longitude ? `
+                        <div class="map-container">
+                            <iframe
+                                src="https://www.openstreetmap.org/export/embed.html?bbox=${device.longitude-0.01},${device.latitude-0.01},${device.longitude+0.01},${device.latitude+0.01}&layer=mapnik&marker=${device.latitude},${device.longitude}"
+                                width="100%"
+                                height="100%"
+                                style="border: none; border-radius: 5px;"
+                                loading="lazy"
+                                referrerPolicy="no-referrer-when-downgrade">
+                            </iframe>
+                        </div>
+                    ` : ''}
+                `;
+                
+                devicesDiv.appendChild(deviceDiv);
+            });
+        }
+        
+        // Conectar automaticamente ao carregar a página
+        window.onload = function() {
+            log('🚀 Página carregada, iniciando teste...');
+            connect();
+        };
+    </script>
+</body>
+</html>

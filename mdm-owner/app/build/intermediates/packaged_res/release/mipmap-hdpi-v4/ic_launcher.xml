@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- Círculo de fundo -->
+    <path
+        android:fillColor="@color/md_blue_500"
+        android:pathData="M24,4C13.5,4 5,12.5 5,23s8.5,19 19,19s19,-8.5 19,-19S34.5,4 24,4z"/>
+    
+    <!-- Ícone de launcher - grade de apps -->
+    <path
+        android:fillColor="@color/white"
+        android:pathData="M16,16h4v4h-4V16zM24,16h4v4h-4V16zM32,16h4v4h-4V16zM16,24h4v4h-4V24zM24,24h4v4h-4V24zM32,24h4v4h-4V24zM16,32h4v4h-4V32zM24,32h4v4h-4V32zM32,32h4v4h-4V32z"/>
+</vector>

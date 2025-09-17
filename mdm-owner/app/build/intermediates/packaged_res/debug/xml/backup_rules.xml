@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Excluir dados sensíveis do backup -->
+    <exclude domain="sharedpref" path="device_config.xml"/>
+    <exclude domain="sharedpref" path="websocket_config.xml"/>
+    <exclude domain="database" path="device_info.db"/>
+</full-backup-content>

@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:ns1="http://schemas.android.com/tools">
+    <color name="app_card_background">#FFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="connection_connected">#4CAF50</color>
+    <color name="connection_connecting">#FF9800</color>
+    <color name="connection_disconnected">#F44336</color>
+    <color name="launcher_background">#F5F5F5</color>
+    <color name="md_blue_100">#BBDEFB</color>
+    <color name="md_blue_200">#90CAF9</color>
+    <color name="md_blue_300">#64B5F6</color>
+    <color name="md_blue_400">#42A5F5</color>
+    <color name="md_blue_50">#E3F2FD</color>
+    <color name="md_blue_500">#2196F3</color>
+    <color name="md_blue_600">#1E88E5</color>
+    <color name="md_blue_700">#1976D2</color>
+    <color name="md_blue_800">#1565C0</color>
+    <color name="md_blue_900">#0D47A1</color>
+    <color name="md_green_500">#4CAF50</color>
+    <color name="md_grey_100">#F5F5F5</color>
+    <color name="md_grey_200">#EEEEEE</color>
+    <color name="md_grey_300">#E0E0E0</color>
+    <color name="md_grey_400">#BDBDBD</color>
+    <color name="md_grey_50">#FAFAFA</color>
+    <color name="md_grey_500">#9E9E9E</color>
+    <color name="md_grey_600">#757575</color>
+    <color name="md_grey_700">#616161</color>
+    <color name="md_grey_800">#424242</color>
+    <color name="md_grey_900">#212121</color>
+    <color name="md_orange_500">#FF9800</color>
+    <color name="md_red_500">#F44336</color>
+    <color name="message_background">#F5F5F5</color>
+    <color name="modal_background">#00000000</color>
+    <color name="modal_overlay">#80000000</color>
+    <color name="muted_text">#9E9E9E</color>
+    <color name="primary_color">#2196F3</color>
+    <color name="primary_text">#212121</color>
+    <color name="secondary_text">#757575</color>
+    <color name="white">#FFFFFFFF</color>
+    <string name="app_name">MDM Launcher</string>
+    <string name="app_name_short">MDM</string>
+    <string name="connected">Conectado</string>
+    <string name="connecting">Conectando...</string>
+    <string name="connection_status">Status da Conexão</string>
+    <string name="device_admin_required">Device Admin é necessário para o funcionamento completo</string>
+    <string name="device_id">ID do Dispositivo</string>
+    <string name="device_owner_required">Este aplicativo precisa ser configurado como Device Owner</string>
+    <string name="device_owner_setup">Configuração do Device Owner</string>
+    <string name="disconnected">Desconectado</string>
+    <string name="error_connection_failed">Falha na conexão com o servidor</string>
+    <string name="error_device_owner_not_set">Device Owner não configurado</string>
+    <string name="error_permission_denied">Permissão negada</string>
+    <string name="error_websocket_failed">Falha na conexão WebSocket</string>
+    <string name="grant_permission">Conceder Permissão</string>
+    <string name="launcher_title">Aplicativos Permitidos</string>
+    <string name="no_apps_available">Nenhum aplicativo disponível</string>
+    <string name="notification_channel_description">Notificações do MDM Launcher</string>
+    <string name="notification_channel_name">MDM Launcher</string>
+    <string name="notification_websocket_running">Serviço WebSocket ativo</string>
+    <string name="permission_required">Permissão necessária</string>
+    <string name="reset">Resetar</string>
+    <string name="save">Salvar</string>
+    <string name="server_url">URL do Servidor</string>
+    <string name="settings">Configurações</string>
+    <string name="setup_instructions">Instruções de configuração:</string>
+    <string name="setup_step1">1. Execute o script de instalação</string>
+    <string name="setup_step2">2. Configure como Device Owner via ADB</string>
+    <string name="setup_step3">3. Reinicie o dispositivo</string>
+    <string name="usage_stats_required">Estatísticas de uso necessárias para gerenciar aplicativos</string>
+    <string name="waiting_for_permissions">Aguardando permissões do servidor...</string>
+    <style name="AppCardStyle" parent="Widget.MaterialComponents.CardView">
+        <item name="cardCornerRadius">12dp</item>
+        <item name="cardElevation">4dp</item>
+        <item name="android:layout_margin">8dp</item>
+    </style>
+    <style name="AppIconStyle">
+        <item name="android:layout_width">64dp</item>
+        <item name="android:layout_height">64dp</item>
+        <item name="android:scaleType">centerCrop</item>
+    </style>
+    <style name="AppNameStyle" parent="TextAppearance.Material3.BodyMedium">
+        <item name="android:textSize">14sp</item>
+        <item name="android:textColor">@color/black</item>
+        <item name="android:maxLines">2</item>
+        <item name="android:ellipsize">end</item>
+        <item name="android:gravity">center</item>
+    </style>
+    <style name="Theme.MDMLauncher" parent="Theme.MaterialComponents.DayNight">
+        
+        <item name="colorPrimary">@color/md_blue_500</item>
+        <item name="colorPrimaryVariant">@color/md_blue_700</item>
+        <item name="colorOnPrimary">@color/white</item>
+        
+        <item name="colorSecondary">@color/md_blue_200</item>
+        <item name="colorSecondaryVariant">@color/md_blue_700</item>
+        <item name="colorOnSecondary">@color/black</item>
+        
+        <item name="android:statusBarColor" ns1:targetApi="l">?attr/colorPrimaryVariant</item>
+        
+        <item name="android:windowBackground">@color/white</item>
+    </style>
+    <style name="Theme.MDMLauncher.Launcher" parent="Theme.MDMLauncher">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowBackground">@color/launcher_background</item>
+        <item name="android:windowTranslucentStatus">false</item>
+        <item name="android:windowTranslucentNavigation">false</item>
+        <item name="android:fitsSystemWindows">true</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+    <style name="Theme.MDMLauncher.Setup" parent="Theme.MDMLauncher">
+        <item name="android:windowNoTitle">false</item>
+        <item name="android:windowFullscreen">false</item>
+    </style>
+</resources>
