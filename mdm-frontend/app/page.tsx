@@ -252,11 +252,20 @@ export default function Home() {
     setIsSupportModalOpen(true)
   }, [])
 
+  const [supportCountUpdateTrigger, setSupportCountUpdateTrigger] = useState(0)
+
   const handleSupportModalClose = useCallback(() => {
     setIsSupportModalOpen(false)
     setSupportDevice(null)
     // Recarregar contagem após fechar o modal (mensagens podem ter sido lidas)
     loadUnreadSupportCount()
+    // Trigger para atualizar todos os badges dos DeviceCards
+    setSupportCountUpdateTrigger(prev => prev + 1)
+  }, [loadUnreadSupportCount])
+
+  const handleSupportCountUpdate = useCallback(() => {
+    loadUnreadSupportCount()
+    setSupportCountUpdateTrigger(prev => prev + 1)
   }, [loadUnreadSupportCount])
 
   const showSupportNotification = useCallback((supportMessage: any) => {
@@ -400,6 +409,7 @@ export default function Home() {
                     onClick={() => handleDeviceClick(device)}
                     onDelete={() => handleDeleteDevice(device.deviceId)}
                     onSupport={() => handleSupportClick(device)}
+                    onSupportCountUpdate={supportCountUpdateTrigger}
                   />
                 ))}
               </div>
@@ -674,7 +684,7 @@ export default function Home() {
           device={supportDevice}
           isOpen={isSupportModalOpen}
           onClose={handleSupportModalClose}
-          onMessageStatusUpdate={loadUnreadSupportCount}
+          onMessageStatusUpdate={handleSupportCountUpdate}
         />
       )}
     </div>

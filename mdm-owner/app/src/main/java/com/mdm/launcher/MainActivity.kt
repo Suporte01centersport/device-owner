@@ -113,6 +113,9 @@ class MainActivity : AppCompatActivity() {
     private var customDeviceName: String = ""
     private var adminPassword: String = ""
     
+    // Controle de interação do usuário
+    private var lastInteractionTime = System.currentTimeMillis()
+    
     // Serviço WebSocket em background
     private var webSocketService: WebSocketService? = null
     private var isServiceBound = false
@@ -316,9 +319,14 @@ class MainActivity : AppCompatActivity() {
                 val type = object : TypeToken<List<String>>() {}.type
                 allowedApps = gson.fromJson<List<String>>(savedAllowedApps, type)
                 Log.d(TAG, "Apps permitidos carregados: ${allowedApps.size}")
+                Log.d(TAG, "Lista carregada: $allowedApps")
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao carregar apps permitidos", e)
+                allowedApps = emptyList()
             }
+        } else {
+            Log.d(TAG, "Nenhum app permitido salvo, lista vazia")
+            allowedApps = emptyList()
         }
         
         // Carregar nome personalizado do dispositivo
@@ -336,10 +344,8 @@ class MainActivity : AppCompatActivity() {
         // Os apps instalados serão coletados novamente no onResume()
         Log.d(TAG, "Apps instalados serão coletados novamente no onResume()")
         
-        // Atualizar a interface com os dados carregados
-        if (allowedApps.isNotEmpty()) {
-            updateAppsList()
-        }
+        // Atualizar a interface com os dados carregados (sempre, mesmo se lista estiver vazia)
+        updateAppsList()
     }
     
     private fun setupRecyclerView() {
@@ -1040,11 +1046,18 @@ class MainActivity : AppCompatActivity() {
             
             when (type) {
                 "update_app_permissions" -> {
+                    Log.d(TAG, "=== DEBUG: update_app_permissions recebido ===")
                     val data = jsonObject["data"] as? Map<*, *>
+                    Log.d(TAG, "Data recebida: $data")
                     val allowedAppsList = data?.get("allowedApps") as? List<*>
+                    Log.d(TAG, "Apps permitidos recebidos: $allowedAppsList")
                     allowedApps = allowedAppsList?.map { it.toString() } ?: emptyList()
+                    Log.d(TAG, "Apps permitidos processados: ${allowedApps.size} apps")
+                    Log.d(TAG, "Lista de apps permitidos: $allowedApps")
                     saveData() // Salvar dados recebidos da web
+                    markUserInteraction() // Marcar como interação significativa
                     updateAppsList()
+                    Log.d(TAG, "Apps list atualizada no launcher")
                 }
                 "set_admin_password" -> {
                     Log.d(TAG, "=== DEBUG: set_admin_password recebido ===")
@@ -1153,8 +1166,22 @@ class MainActivity : AppCompatActivity() {
     
     private fun updateAppsList() {
         runOnUiThread {
+            Log.d(TAG, "=== DEBUG: updateAppsList() chamada ===")
+            Log.d(TAG, "Apps instalados: ${installedApps.size}")
+            Log.d(TAG, "Apps permitidos: ${allowedApps.size}")
+            Log.d(TAG, "Lista de apps permitidos: $allowedApps")
+            
             val filteredApps = installedApps.filter { app ->
-                allowedApps.contains(app.packageName)
+                val isAllowed = allowedApps.contains(app.packageName)
+                if (!isAllowed) {
+                    Log.d(TAG, "App ${app.appName} (${app.packageName}) não está na lista de permitidos")
+                }
+                isAllowed
+            }
+            
+            Log.d(TAG, "Apps filtrados para exibição: ${filteredApps.size}")
+            filteredApps.forEach { app ->
+                Log.d(TAG, "App permitido: ${app.appName} (${app.packageName})")
             }
             
             // Otimização: reutilizar adapter existente se possível
@@ -1163,8 +1190,10 @@ class MainActivity : AppCompatActivity() {
                     launchApp(app)
                 }
                 appsRecyclerView.adapter = appAdapter
+                Log.d(TAG, "Novo adapter criado com ${filteredApps.size} apps")
             } else {
                 appAdapter?.updateApps(filteredApps)
+                Log.d(TAG, "Adapter existente atualizado com ${filteredApps.size} apps")
             }
             
             // Atualizar visibilidade com animação suave
@@ -1190,6 +1219,9 @@ class MainActivity : AppCompatActivity() {
     
     private fun showDeviceNameDialog() {
         Log.d(TAG, "=== DEBUG: showDeviceNameDialog chamada ===")
+        
+        // Marcar interação do usuário
+        markUserInteraction()
         
         // Mostrar menu de opções
         showOptionsMenu()
@@ -1229,6 +1261,12 @@ class MainActivity : AppCompatActivity() {
         val input = android.widget.EditText(this)
         input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
         input.hint = "Senha de administrador"
+        input.setSingleLine(true)
+        
+        // Configurar padding para melhor aparência
+        val padding = 40
+        input.setPadding(padding, padding, padding, padding)
+        
         builder.setView(input)
         
         builder.setPositiveButton("Continuar") { _, _ ->
@@ -1241,7 +1279,18 @@ class MainActivity : AppCompatActivity() {
         }
         
         builder.setNegativeButton("Cancelar", null)
-        builder.show()
+        
+        val dialog = builder.create()
+        dialog.show()
+        
+        // Forçar foco e teclado após um delay maior para garantir que o EditText esteja "served"
+        input.postDelayed({
+            if (input.isFocusable) {
+                input.requestFocus()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_FORCED)
+            }
+        }, 300)
     }
     
     private fun showNameChangeDialog() {
@@ -1252,6 +1301,14 @@ class MainActivity : AppCompatActivity() {
         val input = android.widget.EditText(this)
         input.setText(customDeviceName)
         input.hint = "Ex: Dispositivo Sala 1"
+        input.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        input.setSingleLine(true)
+        input.selectAll() // Selecionar todo o texto para facilitar edição
+        
+        // Configurar padding para melhor aparência
+        val padding = 40
+        input.setPadding(padding, padding, padding, padding)
+        
         builder.setView(input)
         
         builder.setPositiveButton("Salvar") { _, _ ->
@@ -1259,6 +1316,7 @@ class MainActivity : AppCompatActivity() {
             if (newName.isNotEmpty()) {
                 customDeviceName = newName
                 saveData()
+                markUserInteraction() // Interação significativa
                 Log.d(TAG, "Nome do dispositivo alterado para: $customDeviceName")
                 
                 // Atualizar dados do dispositivo se estiver conectado
@@ -1277,6 +1335,7 @@ class MainActivity : AppCompatActivity() {
         builder.setNeutralButton("Resetar") { _, _ ->
             customDeviceName = ""  // Limpar nome personalizado para usar o padrão
             saveData()
+            markUserInteraction() // Interação significativa
             Log.d(TAG, "Nome do dispositivo resetado para padrão: ${getDeviceName()}")
             
             // Atualizar dados do dispositivo se estiver conectado
@@ -1288,7 +1347,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        builder.show()
+        val dialog = builder.create()
+        dialog.show()
+        
+        // Forçar foco e teclado após um delay maior para garantir que o EditText esteja "served"
+        input.postDelayed({
+            if (input.isFocusable) {
+                input.requestFocus()
+                input.selectAll()
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                imm.showSoftInput(input, android.view.inputmethod.InputMethodManager.SHOW_FORCED)
+            }
+        }, 300)
     }
     
     private fun showSupportChat() {
@@ -1383,6 +1453,7 @@ class MainActivity : AppCompatActivity() {
         builder.setPositiveButton("Enviar") { _, _ ->
             val message = input.text.toString().trim()
             if (message.isNotEmpty()) {
+                markUserInteraction() // Interação significativa
                 Log.d(TAG, "=== DEBUG: Tentando enviar mensagem de suporte ===")
                 Log.d(TAG, "webSocketClient é null? ${webSocketClient == null}")
                 Log.d(TAG, "isServiceBound: $isServiceBound")
@@ -1761,6 +1832,11 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Activity estável, resetando contador de ciclos")
         }
         
+        // Marcar como interação significativa se foi um resume após pausa longa
+        if (timeSinceLastResume > 10000) { // 10 segundos
+            markUserInteraction()
+        }
+        
         // Garantir que a barra de navegação permaneça visível
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.insetsController?.let { controller ->
@@ -1827,6 +1903,8 @@ class MainActivity : AppCompatActivity() {
                     val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
                     installedApps = deviceInfo.installedApps
                     lastAppUpdateTime = currentTime
+                    Log.d(TAG, "Apps instalados carregados: ${installedApps.size}")
+                    Log.d(TAG, "Apps permitidos antes de updateAppsList: ${allowedApps.size}")
                     saveData()
                     updateAppsList()
                     loadingProgress.visibility = View.GONE
@@ -1867,39 +1945,78 @@ class MainActivity : AppCompatActivity() {
     
     private fun startPeriodicDeviceInfoUpdates() {
         scope.launch {
+            var lastSentInfo: String? = null
+            
             while (true) {
-                delay(30000) // A cada 30 segundos
+                delay(60000) // Aumentado para 60 segundos - menos frequente
                 
                 try {
-                    // Sempre coletar e enviar informações, independentemente da conexão
+                    val currentTime = System.currentTimeMillis()
+                    val timeSinceLastInteraction = currentTime - this@MainActivity.lastInteractionTime
+                    
+                    // Só enviar se:
+                    // 1. Houve interação recente (últimos 5 minutos) OU
+                    // 2. Passou muito tempo sem enviar (10 minutos) para manter conexão viva
+                    val shouldSend = timeSinceLastInteraction < 300000 || // 5 minutos
+                                   (lastSentInfo == null) || // Primeira vez
+                                   (currentTime - (lastSentInfo?.toLongOrNull() ?: 0L)) > 600000 // 10 minutos
+                    
+                    if (!shouldSend) {
+                        Log.d(TAG, "Pulando envio de informações - sem interação recente")
+                        continue
+                    }
+                    
+                    // Coletar informações do dispositivo
                     val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                    val deviceInfoJson = gson.toJson(deviceInfo)
+                    
+                    // Verificar se houve mudanças significativas
+                    if (deviceInfoJson == lastSentInfo) {
+                        Log.d(TAG, "Informações do dispositivo não mudaram, pulando envio")
+                        continue
+                    }
                     
                     // Tentar enviar via serviço primeiro
                     if (isServiceBound && webSocketService?.isConnected() == true) {
-                        webSocketService?.sendMessage(gson.toJson(deviceInfo))
-                        Log.d(TAG, "Informações do dispositivo enviadas via WebSocketService (30s)")
+                        webSocketService?.sendMessage(deviceInfoJson)
+                        Log.d(TAG, "Informações do dispositivo enviadas via WebSocketService (mudança detectada)")
+                        lastSentInfo = currentTime.toString()
                     } 
                     // Tentar via cliente local
                     else if (webSocketClient?.isConnected() == true) {
                         webSocketClient?.sendDeviceStatus(deviceInfo)
-                        Log.d(TAG, "Informações do dispositivo enviadas via WebSocketClient local (30s)")
+                        Log.d(TAG, "Informações do dispositivo enviadas via WebSocketClient local (mudança detectada)")
+                        lastSentInfo = currentTime.toString()
                     }
-                    // Se não estiver conectado, tentar reconectar e enviar
                     else {
-                        Log.d(TAG, "Nenhuma conexão ativa - tentando reconectar para enviar informações (30s)")
-                        webSocketClient?.connect()
-                        // Aguardar um pouco e tentar novamente
-                        delay(2000)
-                        if (webSocketClient?.isConnected() == true) {
-                            webSocketClient?.sendDeviceStatus(deviceInfo)
-                            Log.d(TAG, "Informações do dispositivo enviadas após reconexão (30s)")
-                        } else {
-                            Log.w(TAG, "Não foi possível enviar informações - sem conexão (30s)")
-                        }
+                        Log.d(TAG, "Nenhuma conexão ativa - aguardando conexão para enviar informações")
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao enviar informações periódicas (30s)", e)
+                    Log.e(TAG, "Erro ao enviar informações condicionais", e)
                 }
+            }
+        }
+    }
+    
+    // Função para marcar que houve interação do usuário
+    private fun markUserInteraction() {
+        lastInteractionTime = System.currentTimeMillis()
+        Log.d(TAG, "Interação do usuário detectada - próximo sync será enviado")
+        
+        // Enviar informações imediatamente quando há interação
+        scope.launch {
+            try {
+                val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                
+                if (isServiceBound && webSocketService?.isConnected() == true) {
+                    webSocketService?.sendMessage(gson.toJson(deviceInfo))
+                    Log.d(TAG, "Informações enviadas imediatamente após interação (WebSocketService)")
+                } else if (webSocketClient?.isConnected() == true) {
+                    webSocketClient?.sendDeviceStatus(deviceInfo)
+                    Log.d(TAG, "Informações enviadas imediatamente após interação (WebSocketClient)")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao enviar informações após interação", e)
             }
         }
     }

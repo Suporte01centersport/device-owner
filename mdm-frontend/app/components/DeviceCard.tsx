@@ -1,5 +1,6 @@
 'use client'
 
+import { useState, useEffect, useCallback } from 'react'
 import { Device } from '../types/device'
 
 interface DeviceCardProps {
@@ -7,9 +8,38 @@ interface DeviceCardProps {
   onClick: () => void
   onDelete: () => void
   onSupport: () => void
+  onSupportCountUpdate?: number
 }
 
-export default function DeviceCard({ device, onClick, onDelete, onSupport }: DeviceCardProps) {
+export default function DeviceCard({ device, onClick, onDelete, onSupport, onSupportCountUpdate }: DeviceCardProps) {
+  const [readMessagesCount, setReadMessagesCount] = useState(0)
+
+  const loadReadMessagesCount = useCallback(async () => {
+    try {
+      const response = await fetch('/api/support-messages')
+      if (response.ok) {
+        const allMessages = await response.json()
+        const readCount = allMessages.filter((msg: any) => 
+          msg.deviceId === device.deviceId && msg.status === 'read'
+        ).length
+        setReadMessagesCount(readCount)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar mensagens lidas:', error)
+    }
+  }, [device.deviceId])
+
+  useEffect(() => {
+    loadReadMessagesCount()
+  }, [loadReadMessagesCount])
+
+  // Recarregar quando houver atualização externa (trigger numérico)
+  useEffect(() => {
+    if (onSupportCountUpdate !== undefined && onSupportCountUpdate > 0) {
+      loadReadMessagesCount()
+    }
+  }, [onSupportCountUpdate, loadReadMessagesCount])
+
   const formatStorage = (bytes: number) => {
     if (bytes === 0) return '0 B'
     const k = 1024
@@ -136,13 +166,19 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport }: Dev
       {/* Actions */}
       <div className="flex justify-between items-center pt-4 border-t border-border">
         <button 
-          className="btn btn-sm btn-primary"
+          className="btn btn-sm btn-primary relative"
           onClick={(e) => {
             e.stopPropagation()
             onSupport()
           }}
+          title={readMessagesCount > 0 ? `${readMessagesCount} mensagem${readMessagesCount !== 1 ? 's' : ''} lida${readMessagesCount !== 1 ? 's' : ''} (aguardando resolução)` : 'Mensagens de Suporte'}
         >
           🔔 Suporte
+          {readMessagesCount > 0 && (
+            <span className={`read-messages-badge ${readMessagesCount > 9 ? 'large-count' : ''}`}>
+              {readMessagesCount > 99 ? '99+' : readMessagesCount}
+            </span>
+          )}
         </button>
         <button 
           className="btn btn-sm btn-error"
