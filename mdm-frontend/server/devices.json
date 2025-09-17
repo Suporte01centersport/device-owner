@@ -1,8 +1,8 @@
 [
   {
     "allowedApps": [
-      "com.google.android.gm",
-      "com.google.android.googlequicksearchbox"
+      "com.google.android.youtube",
+      "com.google.android.apps.photos"
     ],
     "androidVersion": "16",
     "apiLevel": 36,
@@ -114,7 +114,7 @@
         "isEnabled": true,
         "isSystemApp": false,
         "packageName": "com.mdm.launcher",
-        "updateTime": 1758024942279,
+        "updateTime": 1758132293172,
         "versionCode": 1,
         "versionName": "1.0"
       },
@@ -212,7 +212,7 @@
     "installedAppsCount": 13,
     "ipAddress": "10.0.2.16",
     "isAdbEnabled": true,
-    "isBluetoothEnabled": false,
+    "isBluetoothEnabled": true,
     "isCharging": false,
     "isDeveloperOptionsEnabled": false,
     "isDeviceOwner": true,
@@ -224,8 +224,8 @@
     "locationHistoryCount": 0,
     "macAddress": "02:00:00:00:00:00",
     "manufacturer": "Google",
-    "memoryTotal": 2067734528,
-    "memoryUsed": 1369554944,
+    "memoryTotal": 2067730432,
+    "memoryUsed": 1424437248,
     "model": "sdk_gphone64_x86_64",
     "name": "Google sdk_gphone64_x86_64",
     "networkType": "wifi",
@@ -233,12 +233,12 @@
     "screenResolution": "1080x2138",
     "serialNumber": "unknown",
     "storageTotal": 8302063616,
-    "storageUsed": 1385943040,
+    "storageUsed": 1461932032,
     "timezone": "GMT",
     "wifiSSID": "AndroidWifi",
-    "status": "offline",
-    "lastSeen": 1758024948352,
-    "connectionId": "conn_1758024944815_9dhgumshl",
-    "connectedAt": 1758024944815
+    "status": "online",
+    "lastSeen": 1758134238506,
+    "connectionId": "conn_1758133382729_2p1ydcce3",
+    "connectedAt": 1758133382729
   }
 ]

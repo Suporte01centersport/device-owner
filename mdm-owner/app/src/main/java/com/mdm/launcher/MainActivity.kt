@@ -28,6 +28,7 @@ import java.lang.Runtime
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.view.View.MeasureSpec
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageButton
@@ -1274,9 +1275,17 @@ class MainActivity : AppCompatActivity() {
         
         builder.setNegativeButton("Cancelar", null)
         builder.setNeutralButton("Resetar") { _, _ ->
-            customDeviceName = Build.MODEL
+            customDeviceName = ""  // Limpar nome personalizado para usar o padrão
             saveData()
-            Log.d(TAG, "Nome do dispositivo resetado para padrão: ${Build.MODEL}")
+            Log.d(TAG, "Nome do dispositivo resetado para padrão: ${getDeviceName()}")
+            
+            // Atualizar dados do dispositivo se estiver conectado
+            webSocketClient?.let { client ->
+                scope.launch {
+                    val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                    client.sendDeviceStatus(deviceInfo)
+                }
+            }
         }
         
         builder.show()
@@ -1287,39 +1296,89 @@ class MainActivity : AppCompatActivity() {
         builder.setTitle("Chat com Suporte")
         builder.setMessage("Digite sua mensagem de suporte:")
         
+        // Criar ScrollView personalizado com altura máxima
+        val displayMetrics = resources.displayMetrics
+        val maxHeight = (displayMetrics.heightPixels * 0.4).toInt()
+        
+        val scrollView = object : android.widget.ScrollView(this) {
+            override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+                val newHeightMeasureSpec = MeasureSpec.makeMeasureSpec(maxHeight, MeasureSpec.AT_MOST)
+                super.onMeasure(widthMeasureSpec, newHeightMeasureSpec)
+            }
+        }
+        
+        val layoutParams = android.widget.LinearLayout.LayoutParams(
+            android.widget.LinearLayout.LayoutParams.MATCH_PARENT,
+            android.widget.LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        scrollView.layoutParams = layoutParams
+        
+        val layout = android.widget.LinearLayout(this)
+        layout.orientation = android.widget.LinearLayout.VERTICAL
+        layout.setPadding(50, 8, 50, 20)
+        
         val input = android.widget.EditText(this)
         input.setHint("Descreva o problema ou dúvida...")
-        input.minLines = 4
-        input.maxLines = 8
+        input.minLines = 3
+        input.maxLines = Int.MAX_VALUE  // Permitir expansão ilimitada
+        input.inputType = android.text.InputType.TYPE_CLASS_TEXT or 
+                         android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                         android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        input.isVerticalScrollBarEnabled = true
+        input.setVerticalScrollBarEnabled(true)
         
         // Limitar a 500 caracteres usando InputFilter
         val maxLengthFilter = android.text.InputFilter.LengthFilter(500)
         input.filters = arrayOf(maxLengthFilter)
         
-        // Adicionar contador de caracteres
-        val layout = android.widget.LinearLayout(this)
-        layout.orientation = android.widget.LinearLayout.VERTICAL
-        layout.setPadding(50, 20, 50, 20)
+        // Configurar padding para melhor aparência
+        val inputPadding = 24
+        input.setPadding(inputPadding, inputPadding, inputPadding, inputPadding)
         
+        // Adicionar contador de caracteres
         val counter = android.widget.TextView(this)
         counter.text = "0/500 caracteres"
         counter.textSize = 12f
         counter.setTextColor(android.graphics.Color.GRAY)
+        counter.setPadding(inputPadding, 8, inputPadding, 0)
         
-        // Atualizar contador conforme o usuário digita
+        // Atualizar contador e altura conforme o usuário digita
         input.addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: android.text.Editable?) {
                 val length = s?.length ?: 0
                 counter.text = "$length/500 caracteres"
-                counter.setTextColor(if (length > 450) android.graphics.Color.RED else android.graphics.Color.GRAY)
+                
+                // Mudar cor do contador baseado na quantidade de caracteres
+                when {
+                    length > 480 -> counter.setTextColor(android.graphics.Color.RED)
+                    length > 400 -> counter.setTextColor(android.graphics.Color.rgb(255, 140, 0)) // Orange
+                    else -> counter.setTextColor(android.graphics.Color.GRAY)
+                }
+                
+                // Forçar redesenho do layout para ajustar altura
+                input.post {
+                    val lineCount = input.lineCount
+                    val maxVisibleLines = 8
+                    
+                    if (lineCount <= maxVisibleLines) {
+                        // Para textos menores, mostrar todas as linhas
+                        input.maxLines = lineCount.coerceAtLeast(3)
+                        input.isVerticalScrollBarEnabled = false
+                    } else {
+                        // Para textos maiores, fixar em maxVisibleLines e habilitar scroll
+                        input.maxLines = maxVisibleLines
+                        input.isVerticalScrollBarEnabled = true
+                    }
+                }
             }
         })
         
         layout.addView(input)
         layout.addView(counter)
-        builder.setView(layout)
+        scrollView.addView(layout)
+        builder.setView(scrollView)
         
         builder.setPositiveButton("Enviar") { _, _ ->
             val message = input.text.toString().trim()
@@ -1345,10 +1404,6 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, "Digite uma mensagem válida", Toast.LENGTH_SHORT).show()
             }
-        }
-        
-        builder.setNeutralButton("Ligar") { _, _ ->
-            callSupport()
         }
         
         builder.setNegativeButton("Cancelar", null)
@@ -1717,6 +1772,9 @@ class MainActivity : AppCompatActivity() {
             window.decorView.systemUiVisibility = 0
         }
         
+        // Verificar saúde da conexão WebSocket após inatividade
+        checkWebSocketHealth()
+        
         // Carregar apps apenas se necessário (cache inteligente)
         loadAppsIfNeeded()
     }
@@ -1843,6 +1901,33 @@ class MainActivity : AppCompatActivity() {
                     Log.e(TAG, "Erro ao enviar informações periódicas (30s)", e)
                 }
             }
+        }
+    }
+    
+    private fun checkWebSocketHealth() {
+        Log.d(TAG, "=== Verificando saúde da conexão WebSocket ===")
+        
+        // Verificar se o WebSocket client existe e está saudável
+        val client = webSocketClient
+        if (client == null) {
+            Log.w(TAG, "WebSocket client é null, tentando reconectar...")
+            setupWebSocketClient()
+            return
+        }
+        
+        // Verificar saúde da conexão
+        val isHealthy = client.checkConnectionHealth()
+        if (!isHealthy) {
+            Log.w(TAG, "Conexão WebSocket não está saudável")
+            // A função checkConnectionHealth já tenta reconectar automaticamente
+        } else {
+            Log.d(TAG, "Conexão WebSocket está saudável")
+        }
+        
+        // Verificar se o serviço WebSocket está rodando
+        if (!isServiceBound) {
+            Log.w(TAG, "Serviço WebSocket não está conectado, tentando reconectar...")
+            startWebSocketService()
         }
     }
     

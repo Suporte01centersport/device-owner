@@ -19,9 +19,10 @@ interface SupportMessagesModalProps {
   device: Device
   isOpen: boolean
   onClose: () => void
+  onMessageStatusUpdate?: () => void
 }
 
-export default function SupportMessagesModal({ device, isOpen, onClose }: SupportMessagesModalProps) {
+export default function SupportMessagesModal({ device, isOpen, onClose, onMessageStatusUpdate }: SupportMessagesModalProps) {
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<SupportMessage | null>(null)
@@ -81,6 +82,98 @@ export default function SupportMessagesModal({ device, isOpen, onClose }: Suppor
     }
   }
 
+  const updateMessageStatus = async (messageId: string, newStatus: 'read' | 'resolved') => {
+    try {
+      const response = await fetch('/api/support-messages', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messageId,
+          status: newStatus
+        })
+      })
+
+      if (response.ok) {
+        // Atualizar o estado local
+        setMessages(prevMessages => 
+          prevMessages.map(msg => 
+            msg.id === messageId 
+              ? { ...msg, status: newStatus }
+              : msg
+          )
+        )
+        
+        // Atualizar mensagem selecionada se for a mesma
+        if (selectedMessage && selectedMessage.id === messageId) {
+          setSelectedMessage({ ...selectedMessage, status: newStatus })
+        }
+        
+        const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
+        console.log(`Mensagem marcada como ${statusText} com sucesso`)
+        
+        // Notificar o componente pai sobre a mudança
+        if (onMessageStatusUpdate) {
+          onMessageStatusUpdate()
+        }
+        
+        // Fechar modal de detalhes após marcar como resolvida
+        if (newStatus === 'resolved') {
+          setSelectedMessage(null)
+        }
+      } else {
+        const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
+        console.error(`Erro ao marcar mensagem como ${statusText}`)
+        alert(`Erro ao marcar mensagem como ${statusText}`)
+      }
+    } catch (error) {
+      const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
+      console.error(`Erro ao marcar mensagem como ${statusText}:`, error)
+      alert(`Erro ao marcar mensagem como ${statusText}`)
+    }
+  }
+
+  const clearAllMessages = async () => {
+    if (!confirm(`Tem certeza que deseja limpar todas as mensagens de suporte do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita.`)) {
+      return
+    }
+
+    try {
+      const response = await fetch('/api/support-messages', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          deviceId: device.deviceId
+        })
+      })
+
+      if (response.ok) {
+        const result = await response.json()
+        
+        // Limpar mensagens do estado local
+        setMessages([])
+        setSelectedMessage(null)
+        
+        // Notificar o componente pai sobre a mudança
+        if (onMessageStatusUpdate) {
+          onMessageStatusUpdate()
+        }
+        
+        console.log('Todas as mensagens foram limpas com sucesso')
+        alert(`✅ ${result.message || 'Mensagens limpas com sucesso!'}`)
+      } else {
+        console.error('Erro ao limpar mensagens')
+        alert('❌ Erro ao limpar mensagens de suporte')
+      }
+    } catch (error) {
+      console.error('Erro ao limpar mensagens:', error)
+      alert('Erro ao limpar mensagens de suporte')
+    }
+  }
+
   if (!isOpen) return null
 
   return (
@@ -118,14 +211,24 @@ export default function SupportMessagesModal({ device, isOpen, onClose }: Suppor
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <span className={`badge badge-sm ${getStatusColor(message.status)}`}>
+                          <span className={`badge badge-sm ${
+                            message.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                            message.status === 'read' ? 'bg-blue-100 text-blue-800' :
+                            message.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {message.status === 'pending' && '⏳ '}
+                            {message.status === 'read' && '👁️ '}
+                            {message.status === 'resolved' && '✅ '}
                             {getStatusText(message.status)}
                           </span>
                           <span className="text-xs text-muted">
                             {formatTimestamp(message.timestamp)}
                           </span>
                         </div>
-                        <p className="text-sm text-primary line-clamp-2">
+                        <p className={`text-sm line-clamp-2 ${
+                          message.status === 'pending' ? 'text-primary font-medium' : 'text-secondary'
+                        }`}>
                           {message.message}
                         </p>
                         <div className="flex items-center gap-4 mt-2 text-xs text-muted">
@@ -133,8 +236,15 @@ export default function SupportMessagesModal({ device, isOpen, onClose }: Suppor
                           <span>🤖 Android {message.androidVersion}</span>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <span className="text-lg">📨</span>
+                      <div className="text-right flex flex-col items-center">
+                        <span className="text-lg mb-1">
+                          {message.status === 'pending' ? '🔔' : 
+                           message.status === 'read' ? '📖' : 
+                           message.status === 'resolved' ? '✅' : '📨'}
+                        </span>
+                        {message.status === 'pending' && (
+                          <span className="text-xs text-yellow-600 font-medium">Nova</span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -155,9 +265,21 @@ export default function SupportMessagesModal({ device, isOpen, onClose }: Suppor
           
           <div className="p-6 border-t border-border">
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted">
-                {messages.length} mensagem{messages.length !== 1 ? 's' : ''} de suporte
-              </span>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-muted">
+                  {messages.length} mensagem{messages.length !== 1 ? 's' : ''} de suporte
+                </span>
+                {messages.length > 0 && (
+                  <button
+                    onClick={clearAllMessages}
+                    className="btn btn-sm btn-danger flex items-center gap-2"
+                    title="Limpar todas as mensagens deste dispositivo"
+                  >
+                    <span>🗑️</span>
+                    Limpar Mensagens
+                  </button>
+                )}
+              </div>
               <button
                 onClick={onClose}
                 className="btn btn-primary"
@@ -225,22 +347,58 @@ export default function SupportMessagesModal({ device, isOpen, onClose }: Suppor
               </div>
             </div>
             
-            <div className="p-6 border-t border-border flex justify-end gap-3">
+            <div className="p-6 border-t border-border flex justify-between items-center">
               <button
                 onClick={() => setSelectedMessage(null)}
                 className="btn btn-secondary"
               >
                 Fechar
               </button>
-              <button
-                onClick={() => {
-                  // Aqui você pode implementar a funcionalidade de marcar como lida
-                  console.log('Marcar como lida:', selectedMessage.id)
-                }}
-                className="btn btn-primary"
-              >
-                Marcar como Lida
-              </button>
+              
+              <div className="flex gap-3">
+                {selectedMessage.status === 'pending' && (
+                  <>
+                    <button
+                      onClick={() => updateMessageStatus(selectedMessage.id, 'read')}
+                      className="btn btn-primary"
+                    >
+                      👁️ Marcar como Lida
+                    </button>
+                    <button
+                      onClick={() => updateMessageStatus(selectedMessage.id, 'resolved')}
+                      className="btn btn-success"
+                    >
+                      ✅ Marcar como Resolvida
+                    </button>
+                  </>
+                )}
+                
+                {selectedMessage.status === 'read' && (
+                  <>
+                    <button
+                      className="btn btn-primary opacity-50 cursor-not-allowed"
+                      disabled
+                    >
+                      👁️ Já Lida
+                    </button>
+                    <button
+                      onClick={() => updateMessageStatus(selectedMessage.id, 'resolved')}
+                      className="btn btn-success"
+                    >
+                      ✅ Marcar como Resolvida
+                    </button>
+                  </>
+                )}
+                
+                {selectedMessage.status === 'resolved' && (
+                  <button
+                    className="btn btn-success opacity-50 cursor-not-allowed"
+                    disabled
+                  >
+                    ✅ Já Resolvida
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

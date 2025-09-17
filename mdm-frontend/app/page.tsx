@@ -28,6 +28,7 @@ export default function Home() {
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const [supportDevice, setSupportDevice] = useState<Device | null>(null)
   const [supportNotifications, setSupportNotifications] = useState<any[]>([])
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0)
   const [isConnected, setIsConnected] = useState(false)
   const [ws, setWs] = useState<WebSocket | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -131,6 +132,19 @@ export default function Home() {
           }
         })
         break
+      case 'device_connected':
+        console.log('Dispositivo conectado:', message.device)
+        updateDevices(prevDevices => {
+          const existingIndex = prevDevices.findIndex(d => d.deviceId === message.device.deviceId)
+          if (existingIndex >= 0) {
+            const updated = [...prevDevices]
+            updated[existingIndex] = { ...updated[existingIndex], ...message.device }
+            return updated
+          } else {
+            return [...prevDevices, message.device]
+          }
+        })
+        break
       case 'device_deleted':
         updateDevices(prevDevices => 
           prevDevices.filter(device => device.deviceId !== message.deviceId)
@@ -210,18 +224,51 @@ export default function Home() {
     }
   }, [sendMessage])
 
+  const loadUnreadSupportCount = useCallback(async () => {
+    try {
+      const response = await fetch('/api/support-messages')
+      if (response.ok) {
+        const allMessages = await response.json()
+        const unreadCount = allMessages.filter((msg: any) => msg.status === 'pending').length
+        console.log('Contagem de mensagens não lidas:', unreadCount)
+        setUnreadSupportCount(unreadCount)
+      }
+    } catch (error) {
+      console.error('Erro ao carregar contagem de mensagens não lidas:', error)
+    }
+  }, [])
+
+  // Debounced version para evitar chamadas excessivas
+  const debouncedLoadUnreadCount = useCallback(() => {
+    const timeoutId = setTimeout(() => {
+      loadUnreadSupportCount()
+    }, 500) // 500ms de debounce
+    
+    return () => clearTimeout(timeoutId)
+  }, [loadUnreadSupportCount])
+
   const handleSupportClick = useCallback((device: Device) => {
     setSupportDevice(device)
     setIsSupportModalOpen(true)
   }, [])
 
+  const handleSupportModalClose = useCallback(() => {
+    setIsSupportModalOpen(false)
+    setSupportDevice(null)
+    // Recarregar contagem após fechar o modal (mensagens podem ter sido lidas)
+    loadUnreadSupportCount()
+  }, [loadUnreadSupportCount])
+
   const showSupportNotification = useCallback((supportMessage: any) => {
-    // Adicionar notificação à lista
+    // Adicionar notificação à lista temporária
     setSupportNotifications(prev => [...prev, {
       ...supportMessage,
       id: supportMessage.id || `notification_${Date.now()}`,
       timestamp: Date.now()
     }])
+    
+    // Recarregar contagem real do banco de dados com debounce
+    debouncedLoadUnreadCount()
     
     // Mostrar notificação do browser se suportado
     if ('Notification' in window && Notification.permission === 'granted') {
@@ -232,13 +279,18 @@ export default function Home() {
       })
     }
     
-    // Auto-remover notificação após 10 segundos
+    // Auto-remover notificação temporária após 10 segundos
     setTimeout(() => {
       setSupportNotifications(prev => 
         prev.filter(notif => notif.id !== supportMessage.id)
       )
     }, 10000)
-  }, [])
+  }, [debouncedLoadUnreadCount])
+
+  // Carregar contagem inicial de mensagens não lidas
+  useEffect(() => {
+    loadUnreadSupportCount()
+  }, [loadUnreadSupportCount])
 
   const handleDeviceDeleted = useCallback((deviceId: string) => {
     setDevices(prevDevices => prevDevices.filter(device => device.deviceId !== deviceId))
@@ -582,6 +634,7 @@ export default function Home() {
           isConnected={isConnected}
           onMenuClick={() => setSidebarOpen(true)}
           supportNotifications={supportNotifications}
+          unreadSupportCount={unreadSupportCount}
           onSupportNotificationClick={(deviceId) => {
             const device = devices.find(d => d.deviceId === deviceId)
             if (device) {
@@ -620,10 +673,8 @@ export default function Home() {
         <SupportMessagesModal
           device={supportDevice}
           isOpen={isSupportModalOpen}
-          onClose={() => {
-            setIsSupportModalOpen(false)
-            setSupportDevice(null)
-          }}
+          onClose={handleSupportModalClose}
+          onMessageStatusUpdate={loadUnreadSupportCount}
         />
       )}
     </div>

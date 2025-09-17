@@ -589,6 +589,19 @@ function handleDeviceStatus(ws, data) {
         }
     });
     
+    // Notificar todos os clientes web sobre o novo dispositivo conectado
+    const deviceData = persistentDevices.get(deviceId);
+    if (deviceData) {
+        webClients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'device_connected',
+                    device: deviceData
+                }));
+            }
+        });
+    }
+    
     // Debug: verificar se installedApps está sendo recebido
     log.info(`=== DADOS RECEBIDOS DO DISPOSITIVO ===`, {
         deviceId: deviceId,
@@ -765,6 +778,22 @@ function handleWebClient(ws, data) {
         },
         timestamp: Date.now()
     };
+    
+    console.log('=== ENVIANDO LISTA DE DISPOSITIVOS PARA CLIENTE WEB ===');
+    console.log('Número de dispositivos:', devices.length);
+    if (devices.length > 0) {
+        console.log('Primeiro dispositivo:', {
+            deviceId: devices[0].deviceId,
+            name: devices[0].name,
+            model: devices[0].model,
+            status: devices[0].status,
+            batteryLevel: devices[0].batteryLevel,
+            installedAppsCount: devices[0].installedAppsCount,
+            hasInstalledApps: !!devices[0].installedApps,
+            installedAppsLength: devices[0].installedApps?.length
+        });
+    }
+    console.log('=======================================================');
     
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(response));
@@ -1189,19 +1218,21 @@ setInterval(() => {
     
     // Verificar dispositivos inativos e atualizar status
     const now = Date.now();
-    const INACTIVITY_TIMEOUT = 10 * 60 * 1000; // 10 minutos de inatividade - mais tolerante
+    const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inatividade - mais rápido para detectar desconexões
+    const WARNING_TIMEOUT = 2 * 60 * 1000; // 2 minutos para avisar sobre possível desconexão
     
     persistentDevices.forEach((device, deviceId) => {
         const timeSinceLastSeen = now - device.lastSeen;
         const isConnected = connectedDevices.has(deviceId);
         
-        // Se o dispositivo não está conectado via WebSocket OU não foi visto há mais de 10 minutos
+        // Se o dispositivo não está conectado via WebSocket OU não foi visto há mais de 5 minutos
         if (!isConnected || timeSinceLastSeen > INACTIVITY_TIMEOUT) {
             if (device.status === 'online') {
                 log.info(`Dispositivo marcado como offline por inatividade`, {
                     deviceId: deviceId,
                     timeSinceLastSeen: Math.round(timeSinceLastSeen / 1000),
-                    isConnected: isConnected
+                    isConnected: isConnected,
+                    reason: !isConnected ? 'WebSocket desconectado' : 'Timeout de inatividade'
                 });
                 
                 // Atualizar status para offline
@@ -1210,10 +1241,23 @@ setInterval(() => {
                     status: 'offline',
                     lastSeen: device.lastSeen // Manter o último timestamp visto
                 });
+                
+                // Notificar clientes web sobre mudança de status
+                webClients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(JSON.stringify({
+                            type: 'device_status_update',
+                            deviceId: deviceId,
+                            status: 'offline',
+                            lastSeen: device.lastSeen,
+                            reason: !isConnected ? 'disconnected' : 'inactive'
+                        }));
+                    }
+                });
             }
         } else if (isConnected && device.status === 'offline') {
             // Se está conectado mas marcado como offline, corrigir
-            log.info(`Dispositivo marcado como online (conectado)`, {
+            log.info(`Dispositivo marcado como online (reconectado)`, {
                 deviceId: deviceId,
                 timeSinceLastSeen: Math.round(timeSinceLastSeen / 1000)
             });
@@ -1223,8 +1267,21 @@ setInterval(() => {
                 status: 'online',
                 lastSeen: now
             });
-        } else if (isConnected && timeSinceLastSeen > (INACTIVITY_TIMEOUT / 2)) {
-            // Dispositivo conectado mas inativo há mais de 5 minutos - enviar ping
+            
+            // Notificar clientes web sobre reconexão
+            webClients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({
+                        type: 'device_status_update',
+                        deviceId: deviceId,
+                        status: 'online',
+                        lastSeen: now,
+                        reason: 'reconnected'
+                    }));
+                }
+            });
+        } else if (isConnected && timeSinceLastSeen > WARNING_TIMEOUT) {
+            // Dispositivo conectado mas inativo há mais de 2 minutos - enviar ping
             const deviceWs = connectedDevices.get(deviceId);
             if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
                 try {
@@ -1238,7 +1295,18 @@ setInterval(() => {
                         deviceId, 
                         error: error.message 
                     });
+                    // Se falhou ao enviar ping, marcar como offline
+                    persistentDevices.set(deviceId, {
+                        ...device,
+                        status: 'offline',
+                        lastSeen: device.lastSeen
+                    });
+                    connectedDevices.delete(deviceId);
                 }
+            } else {
+                // WebSocket não está aberto, remover da lista de conectados
+                log.warn(`WebSocket para dispositivo ${deviceId} não está aberto, removendo da lista`);
+                connectedDevices.delete(deviceId);
             }
         }
     });
@@ -1431,9 +1499,13 @@ function handleSupportMessage(ws, data) {
         }
         
         // Notificar clientes web sobre nova mensagem de suporte
-        broadcastToWebClients({
-            type: 'new_support_message',
-            data: supportMessage
+        webClients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'new_support_message',
+                    data: supportMessage
+                }));
+            }
         });
         
         log.info('Mensagem de suporte processada', {
