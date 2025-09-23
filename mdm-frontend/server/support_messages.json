@@ -1,1 +1,38 @@
-[]
+[
+  {
+    "id": "support_1758628548207_lb8oxfuoe",
+    "deviceId": "9b38b2791b1460dd",
+    "deviceName": "Google sdk_gphone64_x86_64",
+    "message": "ffff",
+    "timestamp": 1758628507907,
+    "androidVersion": "16",
+    "model": "sdk_gphone64_x86_64",
+    "receivedAt": 1758628548207,
+    "status": "resolved",
+    "updatedAt": 1758628562644
+  },
+  {
+    "id": "support_1758630477549_ymrjax0mn",
+    "deviceId": "9b38b2791b1460dd",
+    "deviceName": "Google sdk_gphone64_x86_64",
+    "message": "Aa",
+    "timestamp": 1758630476439,
+    "androidVersion": "16",
+    "model": "sdk_gphone64_x86_64",
+    "receivedAt": 1758630477549,
+    "status": "resolved",
+    "updatedAt": 1758630488345
+  },
+  {
+    "id": "support_1758632820903_ugmo4x3be",
+    "deviceId": "9b38b2791b1460dd",
+    "deviceName": "CSSPCEL0001",
+    "message": "xxss",
+    "timestamp": 1758632820037,
+    "androidVersion": "16",
+    "model": "sdk_gphone64_x86_64",
+    "receivedAt": 1758632820903,
+    "status": "resolved",
+    "updatedAt": 1758632839494
+  }
+]
