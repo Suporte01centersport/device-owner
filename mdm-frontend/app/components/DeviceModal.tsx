@@ -15,6 +15,33 @@ interface DeviceModalProps {
 
 export default function DeviceModal({ device, onClose, onDelete, sendMessage }: DeviceModalProps) {
   const [activeTab, setActiveTab] = useState('overview')
+  
+  // Debug: verificar dados do dispositivo
+  console.log('DeviceModal renderizando:', {
+    deviceId: device.deviceId,
+    name: device.name,
+    batteryLevel: device.batteryLevel,
+    installedAppsCount: device.installedAppsCount,
+    allowedAppsCount: device.allowedApps?.length || 0,
+    storageTotal: device.storageTotal,
+    storageUsed: device.storageUsed
+  })
+
+  // Função para detectar se os dados são válidos ou ainda estão carregando
+  const isDataLoading = () => {
+    // Detectar valores zerados
+    const isZeroed = device.batteryLevel === 0 && 
+                     device.installedAppsCount === 0 && 
+                     device.storageTotal === 0
+    
+    // Detectar valores simulados específicos (85% bateria, 32GB total, 15GB usado, 3 apps)
+    const isSimulated = device.batteryLevel === 85 && 
+                        device.storageTotal === 32 * 1024 * 1024 * 1024 && // 32GB
+                        device.storageUsed === 15 * 1024 * 1024 * 1024 &&   // 15GB
+                        device.installedAppsCount === 3
+    
+    return isZeroed || isSimulated
+  }
   const [selectedApps, setSelectedApps] = useState<string[]>(device.allowedApps || [])
   const [isSaving, setIsSaving] = useState(false)
   const [appFilter, setAppFilter] = useState('all')
@@ -331,13 +358,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                     </div>
                     <div>
                       <div className="text-sm text-secondary">Bateria</div>
-                      <div className={`text-xl font-bold ${getBatteryColor(device.batteryLevel)}`}>
-                        {device.batteryLevel}%
-                      </div>
+                      {isDataLoading() ? (
+                        <div className="text-xl font-bold text-gray-500">
+                          Carregando...
+                        </div>
+                      ) : (
+                        <div className={`text-xl font-bold ${getBatteryColor(device.batteryLevel)}`}>
+                          {device.batteryLevel}%
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs text-muted">
-                    {device.isCharging ? 'Carregando' : device.batteryStatus}
+                    {isDataLoading() ? 'aguarde' : (device.isCharging ? 'Carregando' : device.batteryStatus)}
                   </div>
                 </div>
 
@@ -348,13 +381,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                     </div>
                     <div>
                       <div className="text-sm text-secondary">Armazenamento</div>
-                      <div className="text-xl font-bold text-primary">
-                        {Math.round((device.storageUsed / device.storageTotal) * 100)}%
-                      </div>
+                      {isDataLoading() ? (
+                        <div className="text-xl font-bold text-gray-500">
+                          Carregando...
+                        </div>
+                      ) : (
+                        <div className="text-xl font-bold text-primary">
+                          {Math.round((device.storageUsed / device.storageTotal) * 100)}%
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-xs text-muted">
-                    {formatStorage(device.storageUsed)} / {formatStorage(device.storageTotal)}
+                    {isDataLoading() ? 'aguarde' : `${formatStorage(device.storageUsed)} / ${formatStorage(device.storageTotal)}`}
                   </div>
                 </div>
 
@@ -365,12 +404,20 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                     </div>
                     <div>
                       <div className="text-sm text-secondary">Apps</div>
-                      <div className="text-xl font-bold text-warning">
-                        {device.installedAppsCount}
-                      </div>
+                      {isDataLoading() ? (
+                        <div className="text-xl font-bold text-gray-500">
+                          Carregando...
+                        </div>
+                      ) : (
+                        <div className="text-xl font-bold text-warning">
+                          {device.installedAppsCount}
+                        </div>
+                      )}
                     </div>
                   </div>
-                  <div className="text-xs text-muted">Instalados</div>
+                  <div className="text-xs text-muted">
+                    {isDataLoading() ? 'aguarde' : 'Instalados'}
+                  </div>
                 </div>
 
                 <div className="card p-4">
@@ -628,7 +675,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                 <h3 className="text-lg font-semibold text-primary">Aplicações Instaladas</h3>
                 <div className="flex items-center gap-4">
                   <div className="text-sm text-secondary">
-                    Total: {device.installedApps?.length || 0} aplicações
+                    Total: {isDataLoading() ? 'Carregando...' : `${device.installedApps?.length || 0} aplicações`}
                   </div>
                   <div className="text-sm text-primary">
                     Permitidas: {selectedApps.length}
@@ -636,7 +683,17 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                 </div>
               </div>
 
-              {!device.installedApps || device.installedApps.length === 0 ? (
+              {isDataLoading() ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl animate-pulse">📱</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-gray-500 mb-2">Carregando aplicações...</h4>
+                  <p className="text-sm text-gray-400">
+                    Aguarde enquanto coletamos as informações das aplicações instaladas
+                  </p>
+                </div>
+              ) : !device.installedApps || device.installedApps.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
                     <span className="text-3xl">📱</span>

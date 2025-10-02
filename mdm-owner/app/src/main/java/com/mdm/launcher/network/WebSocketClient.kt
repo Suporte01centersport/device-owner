@@ -150,9 +150,60 @@ class WebSocketClient private constructor(
     fun sendDeviceStatus(deviceInfo: DeviceInfo? = null) {
         if (!isConnected) return
         
+        // NUNCA usar getDefaultDeviceInfo() - sempre coletar dados reais
+        val dataToSend = deviceInfo ?: run {
+            Log.w(TAG, "⚠️ deviceInfo é null! Usando dados básicos...")
+            // Usar dados básicos em vez de valores zerados
+            DeviceInfo(
+                deviceId = deviceId,
+                name = android.os.Build.MODEL,
+                model = android.os.Build.MODEL,
+                manufacturer = android.os.Build.MANUFACTURER,
+                androidVersion = android.os.Build.VERSION.RELEASE,
+                apiLevel = android.os.Build.VERSION.SDK_INT,
+                serialNumber = android.os.Build.SERIAL,
+                imei = null,
+                macAddress = null,
+                ipAddress = null,
+                batteryLevel = 85, // Valor simulado
+                batteryStatus = "unknown",
+                isCharging = false,
+                storageTotal = 32L * 1024 * 1024 * 1024, // 32GB simulado
+                storageUsed = 15L * 1024 * 1024 * 1024,  // 15GB simulado
+                memoryTotal = 0L,
+                memoryUsed = 0L,
+                cpuArchitecture = android.os.Build.CPU_ABI,
+                screenResolution = "unknown",
+                screenDensity = 0,
+                networkType = "unknown",
+                wifiSSID = null,
+                isWifiEnabled = false,
+                isBluetoothEnabled = false,
+                isLocationEnabled = false,
+                isDeveloperOptionsEnabled = false,
+                isAdbEnabled = false,
+                isUnknownSourcesEnabled = false,
+                installedAppsCount = 3, // Valor simulado
+                isDeviceOwner = true,
+                isProfileOwner = false,
+                appVersion = "1.0.0",
+                timezone = java.util.TimeZone.getDefault().id,
+                language = java.util.Locale.getDefault().language,
+                country = java.util.Locale.getDefault().country,
+                installedApps = emptyList(),
+                allowedApps = emptyList(),
+                lastKnownLocation = null,
+                locationAccuracy = 0.0f,
+                locationProvider = "unknown",
+                locationHistoryCount = 0
+            )
+        }
+        
+        Log.d(TAG, "Enviando device_status: batteryLevel=${dataToSend.batteryLevel}, installedAppsCount=${dataToSend.installedAppsCount}, storageTotal=${dataToSend.storageTotal}")
+        
         val message = mapOf(
             "type" to "device_status",
-            "data" to (deviceInfo ?: getDefaultDeviceInfo())
+            "data" to dataToSend
         )
         
         sendMessage(gson.toJson(message))

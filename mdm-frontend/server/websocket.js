@@ -4,6 +4,148 @@ const url = require('url');
 const fs = require('fs');
 const path = require('path');
 
+const config = require('./config');
+
+// Classes de otimização integradas
+class PingThrottler {
+    constructor(maxPingsPerMinute = 60) {
+        this.maxPingsPerMinute = maxPingsPerMinute;
+        this.pingHistory = new Map(); // deviceId -> timestamps[]
+    }
+    
+    canPing(deviceId) {
+        const now = Date.now();
+        const devicePings = this.pingHistory.get(deviceId) || [];
+        
+        // Remover pings antigos (mais de 1 minuto)
+        const recentPings = devicePings.filter(timestamp => now - timestamp < 60000);
+        
+        if (recentPings.length >= this.maxPingsPerMinute) {
+            return false; // Rate limit atingido
+        }
+        
+        recentPings.push(now);
+        this.pingHistory.set(deviceId, recentPings);
+        return true;
+    }
+}
+
+class AdaptiveTimeout {
+    constructor() {
+        this.latencyHistory = new Map(); // deviceId -> latencies[]
+        this.baseTimeout = 30000; // 30s base
+        this.maxTimeout = 120000; // 2 minutos máximo
+        this.minTimeout = 15000; // 15s mínimo
+    }
+    
+    updateLatency(deviceId, latency) {
+        const history = this.latencyHistory.get(deviceId) || [];
+        history.push(latency);
+        
+        // Manter apenas últimos 10 valores
+        if (history.length > 10) {
+            history.shift();
+        }
+        
+        this.latencyHistory.set(deviceId, history);
+    }
+    
+    getTimeout(deviceId) {
+        const history = this.latencyHistory.get(deviceId) || [];
+        if (history.length === 0) {
+            return this.baseTimeout;
+        }
+        
+        // Calcular latência média
+        const avgLatency = history.reduce((sum, lat) => sum + lat, 0) / history.length;
+        
+        // Ajustar timeout baseado na latência (latência alta = timeout maior)
+        const adaptiveTimeout = this.baseTimeout + (avgLatency * 2);
+        
+        return Math.max(this.minTimeout, Math.min(this.maxTimeout, adaptiveTimeout));
+    }
+}
+
+class ConfigurableLogger {
+    constructor(level = 'info') {
+        this.levels = {
+            error: 0,
+            warn: 1,
+            info: 2,
+            debug: 3
+        };
+        this.currentLevel = this.levels[level] || this.levels.info;
+    }
+    
+    setLevel(level) {
+        this.currentLevel = this.levels[level] || this.levels.info;
+    }
+    
+    log(level, message, data = {}) {
+        if (this.levels[level] <= this.currentLevel) {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, data);
+        }
+    }
+    
+    error(message, data) { this.log('error', message, data); }
+    warn(message, data) { this.log('warn', message, data); }
+    info(message, data) { this.log('info', message, data); }
+    debug(message, data) { this.log('debug', message, data); }
+}
+
+class ConnectionHealthMonitor {
+    constructor() {
+        this.metrics = new Map(); // deviceId -> metrics
+    }
+    
+    recordConnection(deviceId, success, latency = 0) {
+        const metrics = this.metrics.get(deviceId) || {
+            totalAttempts: 0,
+            successfulConnections: 0,
+            failedConnections: 0,
+            avgLatency: 0,
+            lastSeen: 0
+        };
+        
+        metrics.totalAttempts++;
+        metrics.lastSeen = Date.now();
+        
+        if (success) {
+            metrics.successfulConnections++;
+            if (latency > 0) {
+                metrics.avgLatency = (metrics.avgLatency + latency) / 2;
+            }
+        } else {
+            metrics.failedConnections++;
+        }
+        
+        this.metrics.set(deviceId, metrics);
+    }
+    
+    getHealthScore(deviceId) {
+        const metrics = this.metrics.get(deviceId);
+        if (!metrics || metrics.totalAttempts === 0) {
+            return 1.0; // Score perfeito se não há histórico
+        }
+        
+        const successRate = metrics.successfulConnections / metrics.totalAttempts;
+        const latencyScore = Math.max(0, 1 - (metrics.avgLatency / 5000)); // Penalizar latência > 5s
+        
+        return (successRate * 0.7) + (latencyScore * 0.3);
+    }
+    
+    getUnhealthyDevices(threshold = 0.5) {
+        const unhealthy = [];
+        for (const [deviceId, metrics] of this.metrics) {
+            if (this.getHealthScore(deviceId) < threshold) {
+                unhealthy.push({ deviceId, score: this.getHealthScore(deviceId), metrics });
+            }
+        }
+        return unhealthy;
+    }
+}
+
 // Criar servidor HTTP para API REST
 const server = http.createServer((req, res) => {
     // Configurar CORS
@@ -80,6 +222,34 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(response));
         
+    } else if (path === '/api/connection/health' && req.method === 'GET') {
+        // Endpoint para monitoramento de saúde da conexão
+        const unhealthyDevices = healthMonitor.getUnhealthyDevices(0.5);
+        const healthStats = {
+            totalDevices: persistentDevices.size,
+            connectedDevices: connectedDevices.size,
+            unhealthyDevices: unhealthyDevices.length,
+            unhealthyDevicesList: unhealthyDevices,
+            serverUptime: Date.now() - serverStats.startTime,
+            config: {
+                logLevel: config.LOG_LEVEL,
+                maxPingsPerMinute: config.MAX_PINGS_PER_MINUTE,
+                heartbeatInterval: config.HEARTBEAT_INTERVAL,
+                pingProbability: config.PING_PROBABILITY,
+                healthScoreThreshold: config.HEALTH_SCORE_THRESHOLD
+            },
+            pingThrottlerStats: {
+                maxPingsPerMinute: config.MAX_PINGS_PER_MINUTE,
+                activeThrottles: pingThrottler.pingHistory.size
+            },
+            adaptiveTimeoutStats: {
+                devicesWithHistory: adaptiveTimeout.latencyHistory.size
+            }
+        };
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(healthStats));
+        
     } else if (path.startsWith('/api/devices/') && req.method === 'POST') {
         // Endpoints para comandos de dispositivos
         let body = '';
@@ -153,24 +323,28 @@ const serverStats = {
     lastHeartbeat: Date.now()
 };
 
+// Inicializar sistemas de otimização
+const pingThrottler = new PingThrottler(config.MAX_PINGS_PER_MINUTE);
+const adaptiveTimeout = new AdaptiveTimeout();
+const logger = new ConfigurableLogger(config.LOG_LEVEL);
+const healthMonitor = new ConnectionHealthMonitor();
+
+// Log de inicialização das otimizações
+logger.info('Sistemas de otimização inicializados', {
+    logLevel: config.LOG_LEVEL,
+    maxPingsPerMinute: config.MAX_PINGS_PER_MINUTE,
+    adaptiveTimeoutEnabled: true,
+    healthMonitoringEnabled: true,
+    heartbeatInterval: config.HEARTBEAT_INTERVAL
+});
+
 // Logging melhorado
+// Sistema de logging otimizado (usando o novo logger configurável)
 const log = {
-    info: (message, data = null) => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] INFO: ${message}`, data ? JSON.stringify(data, null, 2) : '');
-    },
-    error: (message, error = null) => {
-        const timestamp = new Date().toISOString();
-        console.error(`[${timestamp}] ERROR: ${message}`, error ? error.stack || error : '');
-    },
-    warn: (message, data = null) => {
-        const timestamp = new Date().toISOString();
-        console.warn(`[${timestamp}] WARN: ${message}`, data ? JSON.stringify(data, null, 2) : '');
-    },
-    debug: (message, data = null) => {
-        const timestamp = new Date().toISOString();
-        console.log(`[${timestamp}] DEBUG: ${message}`, data ? JSON.stringify(data, null, 2) : '');
-    }
+    info: (message, data = null) => logger.info(message, data),
+    error: (message, error = null) => logger.error(message, error),
+    warn: (message, data = null) => logger.warn(message, data),
+    debug: (message, data = null) => logger.debug(message, data)
 };
 
 // Funções de persistência
@@ -379,11 +553,21 @@ wss.on('connection', ws => {
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
                 
-                // Notificar clientes web
+                // Notificar clientes web IMEDIATAMENTE sobre desconexão
                 notifyWebClients({
                     type: 'device_disconnected',
                     deviceId: deviceId,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    reason: 'websocket_closed'
+                });
+                
+                // Também enviar atualização de status para garantir que a UI seja atualizada
+                notifyWebClients({
+                    type: 'device_status_update',
+                    deviceId: deviceId,
+                    status: 'offline',
+                    lastSeen: Date.now(),
+                    reason: 'websocket_closed'
                 });
                 break;
             }
@@ -444,6 +628,10 @@ function handleMessage(ws, data) {
     switch (data.type) {
         case 'device_status':
             handleDeviceStatus(ws, data);
+            // Registrar conexão bem-sucedida no monitor de saúde
+            if (ws.deviceId) {
+                healthMonitor.recordConnection(ws.deviceId, true);
+            }
             break;
         case 'device_restrictions':
             handleDeviceRestrictions(ws, data);
@@ -550,13 +738,24 @@ function handleDeviceStatus(ws, data) {
     connectedDevices.set(deviceId, ws);
     
     // Armazenar dispositivo persistente com informações completas
-    persistentDevices.set(deviceId, {
+    const deviceData = {
         ...data.data,
         status: 'online',
         lastSeen: now, // Sempre atualizar com timestamp atual
         connectionId: ws.connectionId,
         connectedAt: ws.connectedAt
-    });
+    };
+    
+    console.log('=== ARMAZENANDO DADOS DO DISPOSITIVO ===');
+    console.log('Device ID:', deviceId);
+    console.log('Bateria:', deviceData.batteryLevel);
+    console.log('Apps instalados:', deviceData.installedAppsCount);
+    console.log('Apps permitidos:', deviceData.allowedApps?.length || 0);
+    console.log('Armazenamento total:', deviceData.storageTotal);
+    console.log('Armazenamento usado:', deviceData.storageUsed);
+    console.log('========================================');
+    
+    persistentDevices.set(deviceId, deviceData);
     
     // Salvar no arquivo
     saveDevicesToFile();
@@ -590,13 +789,13 @@ function handleDeviceStatus(ws, data) {
     });
     
     // Notificar todos os clientes web sobre o novo dispositivo conectado
-    const deviceData = persistentDevices.get(deviceId);
-    if (deviceData) {
+    const connectedDeviceData = persistentDevices.get(deviceId);
+    if (connectedDeviceData) {
         webClients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                     type: 'device_connected',
-                    device: deviceData
+                    device: connectedDeviceData
                 }));
             }
         });
@@ -658,11 +857,31 @@ function handleDeviceStatus(ws, data) {
     }
     
     // Notificar clientes web
-    notifyWebClients({
-        type: 'device_connected',
-        device: data.data,
-        timestamp: Date.now()
-    });
+    const statusDeviceData = persistentDevices.get(deviceId);
+    if (statusDeviceData) {
+        console.log('=== ENVIANDO DADOS DO DISPOSITIVO PARA CLIENTES WEB ===');
+        console.log('Device ID:', deviceId);
+        console.log('Bateria:', statusDeviceData.batteryLevel);
+        console.log('Apps instalados:', statusDeviceData.installedAppsCount);
+        console.log('Apps permitidos:', statusDeviceData.allowedApps?.length || 0);
+        console.log('Armazenamento total:', statusDeviceData.storageTotal);
+        console.log('Armazenamento usado:', statusDeviceData.storageUsed);
+        console.log('=======================================================');
+        
+        // Enviar dados completos do dispositivo
+        notifyWebClients({
+            type: 'device_connected',
+            device: statusDeviceData,
+            timestamp: Date.now()
+        });
+        
+        // Também enviar atualização de status
+        notifyWebClients({
+            type: 'device_status',
+            device: statusDeviceData,
+            timestamp: Date.now()
+        });
+    }
 }
 
 function handleDeviceRestrictions(ws, data) {
@@ -682,7 +901,15 @@ function handleDeviceRestrictions(ws, data) {
 }
 
 function handlePing(ws, data) {
+    const startTime = Date.now();
     log.debug('Ping recebido', { connectionId: ws.connectionId });
+    
+    // Registrar latência para timeout adaptativo
+    if (ws.deviceId && data.timestamp) {
+        const latency = startTime - data.timestamp;
+        adaptiveTimeout.updateLatency(ws.deviceId, latency);
+        healthMonitor.recordConnection(ws.deviceId, true, latency);
+    }
     
     // Responder com pong imediatamente
     const pongMessage = {
@@ -711,6 +938,11 @@ function handlePing(ws, data) {
             connectionId: ws.connectionId, 
             error: error.message 
         });
+        
+        // Registrar falha no monitor de saúde
+        if (ws.deviceId) {
+            healthMonitor.recordConnection(ws.deviceId, false);
+        }
     }
 }
 
@@ -1172,11 +1404,27 @@ function notifyWebClients(message) {
     let successCount = 0;
     let errorCount = 0;
     
+    console.log('=== NOTIFICANDO CLIENTES WEB ===');
+    console.log('Tipo da mensagem:', message.type);
+    console.log('Número de clientes web:', webClients.size);
+    
+    if (message.type === 'device_connected' && message.device) {
+        console.log('Dados do dispositivo sendo enviados:', {
+            deviceId: message.device.deviceId,
+            batteryLevel: message.device.batteryLevel,
+            installedAppsCount: message.device.installedAppsCount,
+            allowedAppsCount: message.device.allowedApps?.length || 0,
+            storageTotal: message.device.storageTotal,
+            storageUsed: message.device.storageUsed
+        });
+    }
+    
     webClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             try {
                 client.send(JSON.stringify(message));
                 successCount++;
+                console.log(`Mensagem enviada para cliente ${client.connectionId}`);
             } catch (error) {
                 log.error('Erro ao enviar mensagem para cliente web', {
                     connectionId: client.connectionId,
@@ -1187,8 +1435,12 @@ function notifyWebClients(message) {
         } else {
             // Remover clientes desconectados
             webClients.delete(client);
+            console.log(`Cliente ${client.connectionId} removido (desconectado)`);
         }
     });
+    
+    console.log(`Resultado: ${successCount} sucessos, ${errorCount} erros`);
+    console.log('================================');
     
     if (successCount > 0 || errorCount > 0) {
         log.debug('Notificação enviada para clientes web', {
@@ -1204,29 +1456,33 @@ function notifyWebClients(message) {
 setInterval(() => {
     serverStats.lastHeartbeat = Date.now();
     
-    // Enviar ping ativo para dispositivos conectados
+    // Enviar ping ativo para dispositivos conectados (com throttling)
     connectedDevices.forEach((deviceWs, deviceId) => {
-        if (deviceWs.readyState === WebSocket.OPEN) {
+        if (deviceWs.readyState === WebSocket.OPEN && pingThrottler.canPing(deviceId)) {
             try {
                 deviceWs.ping();
                 log.debug('Ping enviado para dispositivo', { deviceId });
             } catch (error) {
                 log.error('Erro ao enviar ping para dispositivo', { deviceId, error: error.message });
+                healthMonitor.recordConnection(deviceId, false);
             }
         }
     });
     
-    // Verificar dispositivos inativos e atualizar status
+    // Verificar dispositivos inativos e atualizar status (com timeout adaptativo)
     const now = Date.now();
-    const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inatividade - mais rápido para detectar desconexões
-    const WARNING_TIMEOUT = 2 * 60 * 1000; // 2 minutos para avisar sobre possível desconexão
+    const BASE_INACTIVITY_TIMEOUT = 30 * 1000; // 30 segundos base
+    const WARNING_TIMEOUT = 15 * 1000; // 15 segundos para avisar sobre possível desconexão
     
     persistentDevices.forEach((device, deviceId) => {
         const timeSinceLastSeen = now - device.lastSeen;
         const isConnected = connectedDevices.has(deviceId);
         
-        // Se o dispositivo não está conectado via WebSocket OU não foi visto há mais de 5 minutos
-        if (!isConnected || timeSinceLastSeen > INACTIVITY_TIMEOUT) {
+        // Usar timeout adaptativo baseado na latência do dispositivo
+        const adaptiveInactivityTimeout = adaptiveTimeout.getTimeout(deviceId);
+        
+        // Se o dispositivo não está conectado via WebSocket OU não foi visto há mais do timeout adaptativo
+        if (!isConnected || timeSinceLastSeen > adaptiveInactivityTimeout) {
             if (device.status === 'online') {
                 log.info(`Dispositivo marcado como offline por inatividade`, {
                     deviceId: deviceId,
@@ -1281,20 +1537,22 @@ setInterval(() => {
                 }
             });
         } else if (isConnected && timeSinceLastSeen > WARNING_TIMEOUT) {
-            // Dispositivo conectado mas inativo há mais de 2 minutos - enviar ping
+            // Dispositivo conectado mas inativo há mais de 15s - enviar ping (com throttling)
             const deviceWs = connectedDevices.get(deviceId);
-            if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+            if (deviceWs && deviceWs.readyState === WebSocket.OPEN && pingThrottler.canPing(deviceId)) {
                 try {
                     deviceWs.ping();
                     log.debug(`Ping de verificação enviado para dispositivo inativo`, { 
                         deviceId,
-                        timeSinceLastSeen: Math.round(timeSinceLastSeen / 1000)
+                        timeSinceLastSeen: Math.round(timeSinceLastSeen / 1000),
+                        adaptiveTimeout: Math.round(adaptiveInactivityTimeout / 1000)
                     });
                 } catch (error) {
                     log.warn(`Erro ao enviar ping de verificação`, { 
                         deviceId, 
                         error: error.message 
                     });
+                    healthMonitor.recordConnection(deviceId, false);
                     // Se falhou ao enviar ping, marcar como offline
                     persistentDevices.set(deviceId, {
                         ...device,
@@ -1314,18 +1572,19 @@ setInterval(() => {
     // Salvar mudanças no arquivo
     saveDevicesToFile();
     
-    // Enviar ping ativo para dispositivos conectados para manter conexão viva (menos frequente)
-    if (Math.random() < 0.3) { // 30% de chance de enviar ping para reduzir carga
+    // Enviar ping ativo para dispositivos conectados para manter conexão viva (com throttling)
+    if (Math.random() < config.PING_PROBABILITY) { // Probabilidade configurável de enviar ping para reduzir carga
         connectedDevices.forEach((deviceWs, deviceId) => {
-            if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+            if (deviceWs && deviceWs.readyState === WebSocket.OPEN && pingThrottler.canPing(deviceId)) {
                 try {
                     deviceWs.ping();
-                    log.debug(`Ping enviado para dispositivo`, { deviceId });
+                    log.debug(`Ping de manutenção enviado para dispositivo`, { deviceId });
                 } catch (error) {
-                    log.warn(`Erro ao enviar ping para dispositivo`, { 
+                    log.warn(`Erro ao enviar ping de manutenção para dispositivo`, { 
                         deviceId, 
                         error: error.message 
                     });
+                    healthMonitor.recordConnection(deviceId, false);
                 }
             }
         });
@@ -1405,7 +1664,7 @@ setInterval(() => {
         });
     }
     
-}, 5000); // A cada 5 segundos para teste
+}, config.HEARTBEAT_INTERVAL); // Intervalo configurável para detecção de desconexões
 
 // Log de estatísticas a cada 5 minutos
 setInterval(() => {

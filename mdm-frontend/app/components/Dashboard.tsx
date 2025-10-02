@@ -22,6 +22,18 @@ interface DashboardProps {
 
 export default function Dashboard({ devices, isConnected, onMessage }: DashboardProps) {
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
+  
+  // Debug: verificar dados dos dispositivos
+  console.log('Dashboard renderizando:', {
+    devicesCount: devices.length,
+    isConnected: isConnected,
+    devices: devices.map(d => ({
+      deviceId: d.deviceId,
+      name: d.name,
+      batteryLevel: d.batteryLevel,
+      status: d.status
+    }))
+  })
   const [isClient, setIsClient] = useState(false)
   const [notificationStatus, setNotificationStatus] = useState<{
     [deviceId: string]: {
