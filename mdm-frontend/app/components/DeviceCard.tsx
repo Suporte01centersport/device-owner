@@ -13,6 +13,17 @@ interface DeviceCardProps {
 
 export default function DeviceCard({ device, onClick, onDelete, onSupport, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
+  
+  // Debug: verificar dados do dispositivo
+  console.log('DeviceCard renderizando:', {
+    deviceId: device.deviceId,
+    name: device.name,
+    batteryLevel: device.batteryLevel,
+    installedAppsCount: device.installedAppsCount,
+    allowedAppsCount: device.allowedApps?.length || 0,
+    storageTotal: device.storageTotal,
+    storageUsed: device.storageUsed
+  })
 
   const loadReadMessagesCount = useCallback(async () => {
     try {
@@ -73,6 +84,22 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
     return 'bg-red-100'
   }
 
+  // Função para detectar se os dados são válidos ou ainda estão carregando
+  const isDataLoading = () => {
+    // Detectar valores zerados
+    const isZeroed = device.batteryLevel === 0 && 
+                     device.installedAppsCount === 0 && 
+                     device.storageTotal === 0
+    
+    // Detectar valores simulados específicos (85% bateria, 32GB total, 15GB usado, 3 apps)
+    const isSimulated = device.batteryLevel === 85 && 
+                        device.storageTotal === 32 * 1024 * 1024 * 1024 && // 32GB
+                        device.storageUsed === 15 * 1024 * 1024 * 1024 &&   // 15GB
+                        device.installedAppsCount === 3
+    
+    return isZeroed || isSimulated
+  }
+
   const storagePercentage = device.storageTotal > 0 
     ? Math.round((device.storageUsed / device.storageTotal) * 100)
     : 0
@@ -100,7 +127,11 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
           <div className={`status-dot ${
             device.status === 'online' ? 'status-dot-online' : 'status-dot-offline'
           }`} />
-          <span className="text-xs text-secondary">{device.status}</span>
+          <span className={`text-xs ${
+            device.status === 'online' ? 'text-secondary' : 'text-red-500 font-medium'
+          }`}>
+            {device.status === 'online' ? 'online' : 'offline'}
+          </span>
         </div>
       </div>
 
@@ -115,37 +146,56 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
         
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Bateria</span>
-          <div className="flex items-center gap-2">
-            <div className={`w-16 h-2 rounded-full ${getBatteryBgColor(device.batteryLevel)}`}>
-              <div 
-                className={`h-full rounded-full ${
-                  device.batteryLevel > 50 ? 'bg-success' :
-                  device.batteryLevel > 20 ? 'bg-warning' : 'bg-error'
-                }`}
-                style={{ width: `${device.batteryLevel}%` }}
-              />
+          {isDataLoading() ? (
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-gray-500">
+                Carregando...
+              </span>
             </div>
-            <span className={`text-sm font-medium ${getBatteryColor(device.batteryLevel)}`}>
-              {device.batteryLevel}%
-            </span>
-            {device.isCharging && <span className="text-success text-xs">⚡</span>}
-          </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <div className={`w-16 h-2 rounded-full ${getBatteryBgColor(device.batteryLevel)}`}>
+                <div 
+                  className={`h-full rounded-full ${
+                    device.batteryLevel > 50 ? 'bg-success' :
+                    device.batteryLevel > 20 ? 'bg-warning' : 'bg-error'
+                  }`}
+                  style={{ width: `${device.batteryLevel}%` }}
+                />
+              </div>
+              <span className={`text-sm font-medium ${getBatteryColor(device.batteryLevel)}`}>
+                {device.batteryLevel}%
+              </span>
+              {device.isCharging && <span className="text-success text-xs">⚡</span>}
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Armazenamento</span>
-          <div className="text-right">
-            <div className="text-sm font-medium text-primary">
-              {formatStorage(device.storageUsed)} / {formatStorage(device.storageTotal)}
+          {isDataLoading() ? (
+            <div className="text-right">
+              <div className="text-sm font-medium text-gray-500">
+                Carregando...
+              </div>
+              <div className="text-xs text-gray-400">aguarde</div>
             </div>
-            <div className="text-xs text-secondary">{storagePercentage}% usado</div>
-          </div>
+          ) : (
+            <div className="text-right">
+              <div className="text-sm font-medium text-primary">
+                {formatStorage(device.storageUsed)} / {formatStorage(device.storageTotal)}
+              </div>
+              <div className="text-xs text-secondary">{storagePercentage}% usado</div>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-secondary">Última conexão</span>
-          <span className="text-sm font-medium text-primary">
-            {formatLastSeen(device.lastSeen)}
+          <span className="text-sm text-secondary">Última atualização</span>
+          <span className={`text-sm font-medium ${
+            device.status === 'online' ? 'text-primary' : 'text-red-500'
+          }`}>
+            {device.status === 'online' ? formatLastSeen(device.lastSeen) : 'Desconectado'}
           </span>
         </div>
       </div>

@@ -133,16 +133,30 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
       hasServerPassword: !!serverPassword
     })
 
-    // Atualizar dispositivos se os dados do servidor forem diferentes
-    if (JSON.stringify(serverDevices) !== JSON.stringify(devices)) {
-      setDevices(serverDevices)
-      saveDevices(serverDevices)
+    // Debug: verificar dados específicos dos dispositivos
+    if (serverDevices.length > 0) {
+      const firstDevice = serverDevices[0]
+      console.log('Primeiro dispositivo do servidor:', {
+        deviceId: firstDevice.deviceId,
+        name: firstDevice.name,
+        batteryLevel: firstDevice.batteryLevel,
+        installedAppsCount: firstDevice.installedAppsCount,
+        allowedAppsCount: firstDevice.allowedApps?.length || 0,
+        storageTotal: firstDevice.storageTotal,
+        storageUsed: firstDevice.storageUsed
+      })
     }
+
+    // Sempre atualizar dispositivos com dados do servidor (mais robusto)
+    setDevices(serverDevices)
+    saveDevices(serverDevices)
+    console.log('Dispositivos atualizados com dados do servidor')
 
     // Atualizar senha se fornecida pelo servidor
     if (serverPassword !== undefined && serverPassword !== adminPassword) {
       setAdminPassword(serverPassword)
       saveAdminPassword(serverPassword)
+      console.log('Senha de administrador atualizada')
     }
   }, [devices, adminPassword, saveDevices, saveAdminPassword])
 

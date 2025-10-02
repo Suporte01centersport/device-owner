@@ -379,11 +379,21 @@ wss.on('connection', ws => {
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
                 
-                // Notificar clientes web
+                // Notificar clientes web IMEDIATAMENTE sobre desconexão
                 notifyWebClients({
                     type: 'device_disconnected',
                     deviceId: deviceId,
-                    timestamp: Date.now()
+                    timestamp: Date.now(),
+                    reason: 'websocket_closed'
+                });
+                
+                // Também enviar atualização de status para garantir que a UI seja atualizada
+                notifyWebClients({
+                    type: 'device_status_update',
+                    deviceId: deviceId,
+                    status: 'offline',
+                    lastSeen: Date.now(),
+                    reason: 'websocket_closed'
                 });
                 break;
             }
@@ -550,13 +560,24 @@ function handleDeviceStatus(ws, data) {
     connectedDevices.set(deviceId, ws);
     
     // Armazenar dispositivo persistente com informações completas
-    persistentDevices.set(deviceId, {
+    const deviceData = {
         ...data.data,
         status: 'online',
         lastSeen: now, // Sempre atualizar com timestamp atual
         connectionId: ws.connectionId,
         connectedAt: ws.connectedAt
-    });
+    };
+    
+    console.log('=== ARMAZENANDO DADOS DO DISPOSITIVO ===');
+    console.log('Device ID:', deviceId);
+    console.log('Bateria:', deviceData.batteryLevel);
+    console.log('Apps instalados:', deviceData.installedAppsCount);
+    console.log('Apps permitidos:', deviceData.allowedApps?.length || 0);
+    console.log('Armazenamento total:', deviceData.storageTotal);
+    console.log('Armazenamento usado:', deviceData.storageUsed);
+    console.log('========================================');
+    
+    persistentDevices.set(deviceId, deviceData);
     
     // Salvar no arquivo
     saveDevicesToFile();
@@ -590,13 +611,13 @@ function handleDeviceStatus(ws, data) {
     });
     
     // Notificar todos os clientes web sobre o novo dispositivo conectado
-    const deviceData = persistentDevices.get(deviceId);
-    if (deviceData) {
+    const connectedDeviceData = persistentDevices.get(deviceId);
+    if (connectedDeviceData) {
         webClients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                     type: 'device_connected',
-                    device: deviceData
+                    device: connectedDeviceData
                 }));
             }
         });
@@ -658,11 +679,31 @@ function handleDeviceStatus(ws, data) {
     }
     
     // Notificar clientes web
-    notifyWebClients({
-        type: 'device_connected',
-        device: data.data,
-        timestamp: Date.now()
-    });
+    const statusDeviceData = persistentDevices.get(deviceId);
+    if (statusDeviceData) {
+        console.log('=== ENVIANDO DADOS DO DISPOSITIVO PARA CLIENTES WEB ===');
+        console.log('Device ID:', deviceId);
+        console.log('Bateria:', statusDeviceData.batteryLevel);
+        console.log('Apps instalados:', statusDeviceData.installedAppsCount);
+        console.log('Apps permitidos:', statusDeviceData.allowedApps?.length || 0);
+        console.log('Armazenamento total:', statusDeviceData.storageTotal);
+        console.log('Armazenamento usado:', statusDeviceData.storageUsed);
+        console.log('=======================================================');
+        
+        // Enviar dados completos do dispositivo
+        notifyWebClients({
+            type: 'device_connected',
+            device: statusDeviceData,
+            timestamp: Date.now()
+        });
+        
+        // Também enviar atualização de status
+        notifyWebClients({
+            type: 'device_status',
+            device: statusDeviceData,
+            timestamp: Date.now()
+        });
+    }
 }
 
 function handleDeviceRestrictions(ws, data) {
@@ -1172,11 +1213,27 @@ function notifyWebClients(message) {
     let successCount = 0;
     let errorCount = 0;
     
+    console.log('=== NOTIFICANDO CLIENTES WEB ===');
+    console.log('Tipo da mensagem:', message.type);
+    console.log('Número de clientes web:', webClients.size);
+    
+    if (message.type === 'device_connected' && message.device) {
+        console.log('Dados do dispositivo sendo enviados:', {
+            deviceId: message.device.deviceId,
+            batteryLevel: message.device.batteryLevel,
+            installedAppsCount: message.device.installedAppsCount,
+            allowedAppsCount: message.device.allowedApps?.length || 0,
+            storageTotal: message.device.storageTotal,
+            storageUsed: message.device.storageUsed
+        });
+    }
+    
     webClients.forEach(client => {
         if (client.readyState === WebSocket.OPEN) {
             try {
                 client.send(JSON.stringify(message));
                 successCount++;
+                console.log(`Mensagem enviada para cliente ${client.connectionId}`);
             } catch (error) {
                 log.error('Erro ao enviar mensagem para cliente web', {
                     connectionId: client.connectionId,
@@ -1187,8 +1244,12 @@ function notifyWebClients(message) {
         } else {
             // Remover clientes desconectados
             webClients.delete(client);
+            console.log(`Cliente ${client.connectionId} removido (desconectado)`);
         }
     });
+    
+    console.log(`Resultado: ${successCount} sucessos, ${errorCount} erros`);
+    console.log('================================');
     
     if (successCount > 0 || errorCount > 0) {
         log.debug('Notificação enviada para clientes web', {
@@ -1218,8 +1279,8 @@ setInterval(() => {
     
     // Verificar dispositivos inativos e atualizar status
     const now = Date.now();
-    const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos de inatividade - mais rápido para detectar desconexões
-    const WARNING_TIMEOUT = 2 * 60 * 1000; // 2 minutos para avisar sobre possível desconexão
+    const INACTIVITY_TIMEOUT = 30 * 1000; // 30 segundos de inatividade - detecção rápida de desconexões
+    const WARNING_TIMEOUT = 15 * 1000; // 15 segundos para avisar sobre possível desconexão
     
     persistentDevices.forEach((device, deviceId) => {
         const timeSinceLastSeen = now - device.lastSeen;
@@ -1405,7 +1466,7 @@ setInterval(() => {
         });
     }
     
-}, 5000); // A cada 5 segundos para teste
+}, 10000); // A cada 10 segundos para detecção rápida de desconexões
 
 // Log de estatísticas a cada 5 minutos
 setInterval(() => {

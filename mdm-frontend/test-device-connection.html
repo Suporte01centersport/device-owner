@@ -208,7 +208,7 @@
                 deviceDiv.innerHTML = `
                     <h4>📱 Dispositivo: ${device.deviceId}</h4>
                     <p><strong>Status:</strong> ${device.status}</p>
-                    <p><strong>Última conexão:</strong> ${new Date(device.lastSeen).toLocaleString()}</p>
+                    <p><strong>Última atualização:</strong> ${new Date(device.lastSeen).toLocaleString()}</p>
                     ${device.name ? `<p><strong>Nome:</strong> ${device.name}</p>` : ''}
                     ${device.model ? `<p><strong>Modelo:</strong> ${device.model}</p>` : ''}
                     ${device.androidVersion ? `<p><strong>Android:</strong> ${device.androidVersion}</p>` : ''}

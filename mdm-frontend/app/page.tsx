@@ -112,35 +112,97 @@ export default function Home() {
       case 'devices_list':
         console.log('Lista de dispositivos recebida:', message.devices)
         const newDevices = message.devices || []
+        
+        // Debug: verificar dados específicos
+        if (newDevices.length > 0) {
+          const firstDevice = newDevices[0]
+          console.log('Primeiro dispositivo da lista:', {
+            deviceId: firstDevice.deviceId,
+            name: firstDevice.name,
+            batteryLevel: firstDevice.batteryLevel,
+            installedAppsCount: firstDevice.installedAppsCount,
+            allowedAppsCount: firstDevice.allowedApps?.length || 0,
+            storageTotal: firstDevice.storageTotal,
+            storageUsed: firstDevice.storageUsed
+          })
+        }
+        
         syncWithServer(newDevices, message.adminPassword)
         break
       case 'devices_status':
         console.log('Status dos dispositivos atualizado:', message.devices)
         const updatedDevices = message.devices || []
+        
+        // Debug: verificar dados específicos
+        if (updatedDevices.length > 0) {
+          const firstDevice = updatedDevices[0]
+          console.log('Primeiro dispositivo do status:', {
+            deviceId: firstDevice.deviceId,
+            name: firstDevice.name,
+            batteryLevel: firstDevice.batteryLevel,
+            installedAppsCount: firstDevice.installedAppsCount,
+            allowedAppsCount: firstDevice.allowedApps?.length || 0,
+            storageTotal: firstDevice.storageTotal,
+            storageUsed: firstDevice.storageUsed
+          })
+        }
+        
         syncWithServer(updatedDevices)
         break
       case 'device_status':
         console.log('Status do dispositivo atualizado:', message.device)
+        
+        // Debug: verificar dados específicos
+        if (message.device) {
+          console.log('Dados do dispositivo status recebidos:', {
+            deviceId: message.device.deviceId,
+            name: message.device.name,
+            batteryLevel: message.device.batteryLevel,
+            installedAppsCount: message.device.installedAppsCount,
+            allowedAppsCount: message.device.allowedApps?.length || 0,
+            storageTotal: message.device.storageTotal,
+            storageUsed: message.device.storageUsed
+          })
+        }
+        
         updateDevices(prevDevices => {
           const existingIndex = prevDevices.findIndex(d => d.deviceId === message.device.deviceId)
           if (existingIndex >= 0) {
             const updated = [...prevDevices]
             updated[existingIndex] = { ...updated[existingIndex], ...message.device }
+            console.log('Dispositivo status atualizado:', updated[existingIndex])
             return updated
           } else {
+            console.log('Novo dispositivo status adicionado:', message.device)
             return [...prevDevices, message.device]
           }
         })
         break
       case 'device_connected':
         console.log('Dispositivo conectado:', message.device)
+        
+        // Debug: verificar dados específicos
+        if (message.device) {
+          console.log('Dados do dispositivo conectado:', {
+            deviceId: message.device.deviceId,
+            name: message.device.name,
+            batteryLevel: message.device.batteryLevel,
+            installedAppsCount: message.device.installedAppsCount,
+            allowedAppsCount: message.device.allowedApps?.length || 0,
+            storageTotal: message.device.storageTotal,
+            storageUsed: message.device.storageUsed
+          })
+        }
+        
         updateDevices(prevDevices => {
           const existingIndex = prevDevices.findIndex(d => d.deviceId === message.device.deviceId)
           if (existingIndex >= 0) {
             const updated = [...prevDevices]
             updated[existingIndex] = { ...updated[existingIndex], ...message.device }
+            console.log('Dispositivo conectado atualizado:', updated[existingIndex])
             return updated
           } else {
+            console.log('Novo dispositivo conectado adicionado:', message.device)
             return [...prevDevices, message.device]
           }
         })
@@ -148,6 +210,36 @@ export default function Home() {
       case 'device_deleted':
         updateDevices(prevDevices => 
           prevDevices.filter(device => device.deviceId !== message.deviceId)
+        )
+        break
+      case 'device_disconnected':
+        console.log('Dispositivo desconectado:', message.deviceId, message.reason)
+        updateDevices(prevDevices => 
+          prevDevices.map(device => {
+            if (device.deviceId === message.deviceId) {
+              return { 
+                ...device, 
+                status: 'offline',
+                lastSeen: message.timestamp || Date.now()
+              }
+            }
+            return device
+          })
+        )
+        break
+      case 'device_status_update':
+        console.log('Status do dispositivo atualizado:', message.deviceId, message.status, message.reason)
+        updateDevices(prevDevices => 
+          prevDevices.map(device => {
+            if (device.deviceId === message.deviceId) {
+              return { 
+                ...device, 
+                status: message.status,
+                lastSeen: message.lastSeen || Date.now()
+              }
+            }
+            return device
+          })
         )
         break
       case 'app_permissions_updated':

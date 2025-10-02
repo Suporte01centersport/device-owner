@@ -24,6 +24,8 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import java.lang.Runtime
 import android.provider.Settings
 import android.util.Log
@@ -87,6 +89,8 @@ class MainActivity : AppCompatActivity() {
     private var appAdapter: AppAdapter? = null
     private var webSocketClient: WebSocketClient? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val handler = Handler(Looper.getMainLooper())
+    private var periodicSyncRunnable: Runnable? = null
     private val gson = GsonBuilder()
         .excludeFieldsWithModifiers(Modifier.TRANSIENT)
         .setExclusionStrategies(object : ExclusionStrategy {
@@ -1017,6 +1021,9 @@ class MainActivity : AppCompatActivity() {
             )
             
             webSocketClient?.connect()
+            
+            // Iniciar timer periódico para enviar dados a cada 30 segundos
+            startPeriodicSync()
         }
         
         // Enviar informações do dispositivo de forma otimizada
@@ -1024,6 +1031,24 @@ class MainActivity : AppCompatActivity() {
             try {
                 // Sempre coletar informações completas do dispositivo
                 val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                
+                Log.d(TAG, "=== DADOS COLETADOS DO DISPOSITIVO ===")
+                Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
+                Log.d(TAG, "Apps instalados: ${deviceInfo.installedAppsCount}")
+                Log.d(TAG, "Apps permitidos: ${deviceInfo.allowedApps.size}")
+                Log.d(TAG, "Armazenamento total: ${deviceInfo.storageTotal / (1024*1024*1024)}GB")
+                Log.d(TAG, "Armazenamento usado: ${deviceInfo.storageUsed / (1024*1024*1024)}GB")
+                Log.d(TAG, "Serial: ${deviceInfo.serialNumber}")
+                Log.d(TAG, "IMEI: ${deviceInfo.imei}")
+                Log.d(TAG, "=====================================")
+                
+                // Verificar se os dados são válidos
+                if (deviceInfo.batteryLevel == 0 && deviceInfo.installedAppsCount == 0 && deviceInfo.storageTotal == 0L) {
+                    Log.e(TAG, "⚠️ DADOS ZERADOS DETECTADOS! Problema na coleta de dados.")
+                } else {
+                    Log.d(TAG, "✓ Dados coletados com sucesso")
+                }
+                
                 installedApps = deviceInfo.installedApps
                 lastAppUpdateTime = System.currentTimeMillis()
                 saveData()
@@ -2060,6 +2085,7 @@ class MainActivity : AppCompatActivity() {
         isActivityDestroyed = true
         stopLocationTracking()
         stopNetworkMonitoring()
+        stopPeriodicSync()
         
         // Desconectar do serviço
         if (isServiceBound) {
@@ -2270,6 +2296,88 @@ class MainActivity : AppCompatActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao tentar restaurar app em Lock Task Mode", e)
             }
+        }
+    }
+    
+    /**
+     * Envia dados do dispositivo via WebSocket
+     */
+    private fun syncDeviceInfo() {
+        scope.launch {
+            try {
+                // Sempre coletar informações completas do dispositivo
+                val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                
+                Log.d(TAG, "=== DADOS COLETADOS DO DISPOSITIVO (PERIÓDICO) ===")
+                Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
+                Log.d(TAG, "Apps instalados: ${deviceInfo.installedAppsCount}")
+                Log.d(TAG, "Apps permitidos: ${deviceInfo.allowedApps.size}")
+                Log.d(TAG, "Armazenamento total: ${deviceInfo.storageTotal / (1024*1024*1024)}GB")
+                Log.d(TAG, "Armazenamento usado: ${deviceInfo.storageUsed / (1024*1024*1024)}GB")
+                Log.d(TAG, "Serial: ${deviceInfo.serialNumber}")
+                Log.d(TAG, "IMEI: ${deviceInfo.imei}")
+                Log.d(TAG, "==================================================")
+                
+                // Verificar se os dados são válidos
+                if (deviceInfo.batteryLevel == 0 && deviceInfo.installedAppsCount == 0 && deviceInfo.storageTotal == 0L) {
+                    Log.e(TAG, "⚠️ DADOS ZERADOS DETECTADOS! Problema na coleta de dados.")
+                } else {
+                    Log.d(TAG, "✓ Dados coletados com sucesso")
+                }
+                
+                installedApps = deviceInfo.installedApps
+                lastAppUpdateTime = System.currentTimeMillis()
+                saveData()
+                updateAppsList()
+                
+                // Enviar status completo do dispositivo
+                webSocketClient?.sendDeviceStatus(deviceInfo)
+                
+                Log.d(TAG, "Informações do dispositivo enviadas periodicamente: ${deviceInfo.installedApps.size} apps")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao coletar informações do dispositivo", e)
+            }
+        }
+    }
+    
+    /**
+     * Inicia o timer periódico para enviar dados do dispositivo a cada 30 segundos
+     */
+    private fun startPeriodicSync() {
+        Log.d(TAG, "Iniciando sincronização periódica a cada 30 segundos")
+        
+        // Parar timer anterior se existir
+        stopPeriodicSync()
+        
+        periodicSyncRunnable = object : Runnable {
+            override fun run() {
+                Log.d(TAG, "Timer periódico executado - enviando dados do dispositivo")
+                
+                // Verificar se WebSocket está conectado
+                if (webSocketClient?.isConnected() == true) {
+                    // Enviar dados do dispositivo
+                    syncDeviceInfo()
+                } else {
+                    Log.w(TAG, "WebSocket não conectado, pulando envio periódico")
+                }
+                
+                // Agendar próxima execução em 30 segundos
+                handler.postDelayed(this, 30000)
+            }
+        }
+        
+        // Iniciar timer
+        handler.postDelayed(periodicSyncRunnable!!, 30000)
+    }
+    
+    /**
+     * Para o timer periódico
+     */
+    private fun stopPeriodicSync() {
+        Log.d(TAG, "Parando sincronização periódica")
+        periodicSyncRunnable?.let { runnable ->
+            handler.removeCallbacks(runnable)
+            periodicSyncRunnable = null
         }
     }
 }
