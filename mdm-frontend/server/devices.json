@@ -114,7 +114,7 @@
         "isEnabled": true,
         "isSystemApp": false,
         "packageName": "com.mdm.launcher",
-        "updateTime": 1759405685668,
+        "updateTime": 1759408371574,
         "versionCode": 1,
         "versionName": "1.0"
       },
@@ -225,7 +225,7 @@
     "macAddress": "02:00:00:00:00:00",
     "manufacturer": "Google",
     "memoryTotal": 2067734528,
-    "memoryUsed": 1382744064,
+    "memoryUsed": 1391857664,
     "model": "sdk_gphone64_x86_64",
     "name": "Google sdk_gphone64_x86_64",
     "networkType": "wifi",
@@ -233,12 +233,12 @@
     "screenResolution": "1080x2138",
     "serialNumber": "unknown",
     "storageTotal": 8302063616,
-    "storageUsed": 1425113088,
+    "storageUsed": 1431908352,
     "timezone": "GMT",
     "wifiSSID": "AndroidWifi",
     "status": "online",
-    "lastSeen": 1759407939146,
-    "connectionId": "conn_1759407753125_cnps9eezb",
-    "connectedAt": 1759407753125
+    "lastSeen": 1759408436658,
+    "connectionId": "conn_1759408376081_o29m6gxyq",
+    "connectedAt": 1759408376081
   }
 ]
