@@ -6,7 +6,7 @@ Sistema profissional de gerenciamento de dispositivos Android estilo ScaleFusion
 
 ### 📱 **App Android (Device Owner)**
 - ✅ **Launcher Customizado** - Substitui tela inicial do Android
-- ✅ **Device Owner** - Controle total do dispositivo
+- ✅ **Device Owner** - Controle total do dispositivo  
 - ✅ **Sincronização em Tempo Real** - WebSocket com reconexão automática
 - ✅ **Monitoramento Completo** - Bateria, armazenamento, apps, localização
 - ✅ **Coleta de Dados** - Serial, IMEI, MAC, informações detalhadas
@@ -38,7 +38,7 @@ cd device-owner
 
 ### 2. **Iniciar Servidor WebSocket**
 ```bash
-cd mdm-frontend/server
+cd mdm-frontend\server
 npm install
 node websocket.js
 ```
@@ -60,7 +60,7 @@ npm run dev
    - Aguardar sincronização do Gradle
 
 2. **Configurar Device Owner**
-   ```bash
+   ```cmd
    # Conectar dispositivo via USB ou iniciar emulador
    adb devices
    
@@ -70,12 +70,12 @@ npm run dev
 
 3. **Compilar APK**
    - Build → Build Bundle(s) / APK(s) → Build APK(s)
-   - Ou usar atalho: `Ctrl+Shift+A` → "Build APK"
-   - **Ou via terminal**: `./gradlew.bat assembleDebug`
-   - APK será gerado em: `app/build/outputs/apk/debug/app-debug.apk`
+   - Ou usar atalho: "Ctrl+Shift+A" → "Build APK"
+   - **Ou via terminal**: "./gradlew.bat assembleDebug"
+   - APK será gerado em: "app\build\outputs\apk\debug\app-debug.apk"
 
 4. **Instalar APK**
-   ```bash
+   ```cmd
    # Instalar APK no dispositivo via terminal
    adb install -r app\build\outputs\apk\debug\app-debug.apk
    
@@ -83,13 +83,13 @@ npm run dev
    ```
 
 5. **Ativar Device Owner**
-   ```bash
+   ```cmd
    # Ativar Device Owner (dispositivo deve estar sem conta Google)
    adb shell dpm set-device-owner com.mdm.launcher/.device.MDMDeviceAdminReceiver
    
    # Verificar se foi ativado
-   adb shell dpm list-owners
-   ```
+adb shell dpm list-owners
+```
 
 #### 🖥️ **Configurar Emulador Android**
 
@@ -101,7 +101,7 @@ npm run dev
    - **IMPORTANTE**: Não adicionar Google Play Services
 
 2. **Configurações Especiais do Emulador**
-   ```bash
+   ```cmd
    # Iniciar emulador com configurações específicas
    emulator -avd NOME_DO_AVD -no-snapshot -wipe-data
    
@@ -109,7 +109,7 @@ npm run dev
    ```
 
 3. **Verificar Configuração**
-   ```bash
+   ```cmd
    # Verificar se emulador está rodando
    adb devices
    
@@ -121,7 +121,7 @@ npm run dev
    ```
 
 4. **Instalar e Configurar Device Owner**
-   ```bash
+   ```cmd
    # Instalar APK no emulador
    adb install -r app\build\outputs\apk\debug\app-debug.apk
    
@@ -135,7 +135,7 @@ npm run dev
 ## 🚨 Troubleshooting
 
 ### **Device Owner não ativa**
-```bash
+```cmd
 # Verificar se há conta Google
 adb shell pm list users
 
@@ -143,7 +143,7 @@ adb shell pm list users
 ```
 
 ### **App não conecta servidor**
-```bash
+```cmd
 # Testar conectividade
 adb shell ping 192.168.1.100
 
@@ -152,19 +152,19 @@ netstat -ano | findstr :3002
 ```
 
 ### **Logs de Debug**
-```bash
+```cmd
 # Android
-adb logcat | grep MDM
+adb logcat | findstr MDM
 
 # Servidor WebSocket
-node server/websocket.js
+node server\websocket.js
 
 # Painel Web
 npm run dev
 ```
 
 ### **Testar Otimizações**
-```bash
-cd mdm-frontend/server
+```cmd
+cd mdm-frontend\server
 node test-optimizations.js
 ```
