@@ -15,9 +15,9 @@ function checkPostgreSQL() {
         console.log('✅ PostgreSQL encontrado:', version.trim());
         return true;
     } catch (error) {
-        console.log('❌ PostgreSQL não encontrado. Instale primeiro o PostgreSQL.');
-        console.log('💡 Baixe em: https://www.postgresql.org/download/');
-        return false;
+        console.log('⚠️ Comando psql não encontrado no PATH, mas continuando...');
+        console.log('💡 Se houver problemas, adicione o PostgreSQL ao PATH do Windows');
+        return true; // Continuar mesmo sem psql no PATH
     }
 }
 
@@ -30,7 +30,7 @@ async function createDatabase() {
         user: process.env.DB_USER || 'postgres',
         host: process.env.DB_HOST || 'localhost',
         database: 'postgres', // Conectar ao banco padrão primeiro
-        password: process.env.DB_PASSWORD || 'postgres',
+        password: process.env.DB_PASSWORD || '2486',
         port: process.env.DB_PORT || 5432,
     });
 
@@ -39,14 +39,14 @@ async function createDatabase() {
         
         // Verificar se o banco já existe
         const result = await pool.query(
-            "SELECT 1 FROM pg_database WHERE datname = 'mdm_owner'"
+            "SELECT 1 FROM pg_database WHERE datname = 'mdmweb'"
         );
         
         if (result.rows.length === 0) {
-            await pool.query('CREATE DATABASE mdm_owner');
-            console.log('✅ Banco de dados "mdm_owner" criado!');
+            await pool.query('CREATE DATABASE mdmweb');
+            console.log('✅ Banco de dados "mdmweb" criado!');
         } else {
-            console.log('ℹ️ Banco de dados "mdm_owner" já existe.');
+            console.log('ℹ️ Banco de dados "mdmweb" já existe.');
         }
         
     } catch (error) {
@@ -64,8 +64,8 @@ async function runSchema() {
     const pool = new Pool({
         user: process.env.DB_USER || 'postgres',
         host: process.env.DB_HOST || 'localhost',
-        database: 'mdm_owner',
-        password: process.env.DB_PASSWORD || 'postgres',
+        database: 'mdmweb',
+        password: process.env.DB_PASSWORD || '2486',
         port: process.env.DB_PORT || 5432,
     });
 

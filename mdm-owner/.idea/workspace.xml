@@ -10,7 +10,27 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2fc4cc9a-af9d-48f0-b2c6-009fb6284145" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/app-build-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/app-build-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/build-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/build-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/0.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/0.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/2.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/2.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/4.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/4.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/5.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/5.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/7.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/7.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz.old" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz.old" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/0.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/0.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz.old" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz.old" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/app-paths-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/app-paths-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/middleware-build-manifest.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/middleware-build-manifest.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/server-reference-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/server-reference-manifest.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/trace" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/trace" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/env.example" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/database/connection.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/database/connection.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/database/migration.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/database/migration.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/devices.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/devices.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/setup-postgresql.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/setup-postgresql.js" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

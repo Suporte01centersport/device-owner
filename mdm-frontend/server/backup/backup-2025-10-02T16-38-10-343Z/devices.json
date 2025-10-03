@@ -225,7 +225,7 @@
     "macAddress": "02:00:00:00:00:00",
     "manufacturer": "Google",
     "memoryTotal": 2067734528,
-    "memoryUsed": 1269002240,
+    "memoryUsed": 1364434944,
     "model": "sdk_gphone64_x86_64",
     "name": "Google sdk_gphone64_x86_64",
     "networkType": "wifi",
@@ -233,12 +233,12 @@
     "screenResolution": "1080x2138",
     "serialNumber": "unknown",
     "storageTotal": 8302063616,
-    "storageUsed": 1481129984,
+    "storageUsed": 1425039360,
     "timezone": "GMT",
     "wifiSSID": "AndroidWifi",
     "status": "online",
-    "lastSeen": 1759486014380,
-    "connectionId": "conn_1759485859354_ucb3gy4fk",
-    "connectedAt": 1759485859354
+    "lastSeen": 1759411049536,
+    "connectionId": "conn_1759410779482_7dmh4dijg",
+    "connectedAt": 1759410779482
   }
 ]
