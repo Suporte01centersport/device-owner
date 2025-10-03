@@ -148,7 +148,16 @@ class WebSocketClient private constructor(
     }
     
     fun sendDeviceStatus(deviceInfo: DeviceInfo? = null) {
-        if (!isConnected) return
+        if (!isConnected) {
+            Log.w(TAG, "⚠️ WebSocket não conectado, não é possível enviar device_status")
+            return
+        }
+        
+        // Verificar se deviceId é válido
+        if (deviceId.isNullOrEmpty() || deviceId == "unknown") {
+            Log.e(TAG, "❌ DeviceId inválido: '$deviceId' - não é possível enviar device_status")
+            return
+        }
         
         // NUNCA usar getDefaultDeviceInfo() - sempre coletar dados reais
         val dataToSend = deviceInfo ?: run {
@@ -199,7 +208,15 @@ class WebSocketClient private constructor(
             )
         }
         
-        Log.d(TAG, "Enviando device_status: batteryLevel=${dataToSend.batteryLevel}, installedAppsCount=${dataToSend.installedAppsCount}, storageTotal=${dataToSend.storageTotal}")
+        Log.d(TAG, "=== ENVIANDO DEVICE_STATUS ===")
+        Log.d(TAG, "DeviceId: ${dataToSend.deviceId}")
+        Log.d(TAG, "Name: ${dataToSend.name}")
+        Log.d(TAG, "Model: ${dataToSend.model}")
+        Log.d(TAG, "Battery: ${dataToSend.batteryLevel}%")
+        Log.d(TAG, "Apps instalados: ${dataToSend.installedAppsCount}")
+        Log.d(TAG, "Storage total: ${dataToSend.storageTotal}")
+        Log.d(TAG, "Device Owner: ${dataToSend.isDeviceOwner}")
+        Log.d(TAG, "=============================")
         
         val message = mapOf(
             "type" to "device_status",

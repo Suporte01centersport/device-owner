@@ -6,6 +6,11 @@ const path = require('path');
 
 const config = require('./config');
 
+// PostgreSQL imports
+const DeviceModel = require('./database/models/Device');
+const DeviceGroupModel = require('./database/models/DeviceGroup');
+const { query, transaction } = require('./database/config');
+
 // Classes de otimização integradas
 class PingThrottler {
     constructor(maxPingsPerMinute = 60) {
@@ -347,34 +352,28 @@ const log = {
     debug: (message, data = null) => logger.debug(message, data)
 };
 
-// Funções de persistência
-function loadDevicesFromFile() {
+// Funções de persistência PostgreSQL
+async function loadDevicesFromDatabase() {
     try {
-        if (fs.existsSync(DEVICES_FILE)) {
-            const data = fs.readFileSync(DEVICES_FILE, 'utf8');
-            const devices = JSON.parse(data);
-            
-            // Converter array para Map
-            devices.forEach(device => {
-                persistentDevices.set(device.deviceId, device);
-            });
-            
-            log.info(`Dispositivos carregados do arquivo`, { count: devices.length });
-        } else {
-            log.info('Arquivo de dispositivos não encontrado, iniciando com lista vazia');
-        }
+        const devices = await DeviceModel.findAll();
+        
+        // Converter array para Map para compatibilidade
+        devices.forEach(device => {
+            persistentDevices.set(device.deviceId, device);
+        });
+        
+        log.info(`Dispositivos carregados do PostgreSQL`, { count: devices.length });
     } catch (error) {
-        log.error('Erro ao carregar dispositivos do arquivo', error);
+        log.error('Erro ao carregar dispositivos do PostgreSQL', error);
     }
 }
 
-function saveDevicesToFile() {
+async function saveDeviceToDatabase(deviceData) {
     try {
-        const devices = Array.from(persistentDevices.values());
-        fs.writeFileSync(DEVICES_FILE, JSON.stringify(devices, null, 2));
-        log.debug(`Dispositivos salvos no arquivo`, { count: devices.length });
+        await DeviceModel.upsert(deviceData);
+        log.debug(`Dispositivo salvo no PostgreSQL`, { deviceId: deviceData.deviceId });
     } catch (error) {
-        log.error('Erro ao salvar dispositivos no arquivo', error);
+        log.error('Erro ao salvar dispositivo no PostgreSQL', error);
     }
 }
 
@@ -445,7 +444,7 @@ function cleanInstalledAppsData() {
     });
     
     if (cleanedCount > 0) {
-        saveDevicesToFile();
+        // Dados já salvos no PostgreSQL via saveDeviceToDatabase
         log.info(`Limpeza de dados concluída`, { 
             devicesCleaned: cleanedCount,
             totalDevices: persistentDevices.size
@@ -454,7 +453,7 @@ function cleanInstalledAppsData() {
 }
 
 // Carregar dispositivos ao iniciar
-loadDevicesFromFile();
+loadDevicesFromDatabase();
 
 // Carregar senha de administrador salva na inicialização
 loadAdminPasswordFromFile();
@@ -548,7 +547,7 @@ wss.on('connection', ws => {
                     });
                     
                     // Salvar no arquivo
-                    saveDevicesToFile();
+                    // Dados já salvos no PostgreSQL via saveDeviceToDatabase
                 }
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
@@ -757,8 +756,8 @@ function handleDeviceStatus(ws, data) {
     
     persistentDevices.set(deviceId, deviceData);
     
-    // Salvar no arquivo
-    saveDevicesToFile();
+    // Salvar no PostgreSQL
+    saveDeviceToDatabase(deviceData);
     
     // Enviar senha de administrador se estiver definida
     if (globalAdminPassword) {
@@ -1050,8 +1049,8 @@ function handleDeleteDevice(ws, data) {
     persistentDevices.delete(deviceId);
     connectedDevices.delete(deviceId);
     
-    // Salvar no arquivo
-    saveDevicesToFile();
+    // Salvar no PostgreSQL
+    saveDeviceToDatabase(deviceData);
     
     log.info(`Dispositivo deletado permanentemente`, {
         deviceId: deviceId,
@@ -1069,6 +1068,13 @@ function handleDeleteDevice(ws, data) {
 function handleUpdateAppPermissions(ws, data) {
     const { deviceId, allowedApps } = data;
     
+    console.log('=== UPDATE APP PERMISSIONS RECEBIDO ===');
+    console.log('DeviceId:', deviceId);
+    console.log('AllowedApps:', allowedApps);
+    console.log('Tipo de dados:', typeof allowedApps);
+    console.log('É array?', Array.isArray(allowedApps));
+    console.log('=====================================');
+    
     // Verificar se o dispositivo existe
     if (!persistentDevices.has(deviceId)) {
         log.warn(`Dispositivo não encontrado para atualização de permissões`, {
@@ -1083,8 +1089,13 @@ function handleUpdateAppPermissions(ws, data) {
     device.allowedApps = allowedApps || [];
     persistentDevices.set(deviceId, device);
     
-    // Salvar no arquivo
-    saveDevicesToFile();
+    console.log('=== DADOS ATUALIZADOS NO DISPOSITIVO ===');
+    console.log('DeviceId:', deviceId);
+    console.log('AllowedApps atualizados:', device.allowedApps);
+    console.log('========================================');
+    
+    // Salvar no PostgreSQL
+    saveDeviceToDatabase(device);
     
     log.info(`Permissões de aplicativos atualizadas`, {
         deviceId: deviceId,
@@ -1104,6 +1115,12 @@ function handleUpdateAppPermissions(ws, data) {
             timestamp: Date.now()
         };
         
+        console.log('=== ENVIANDO MENSAGEM PARA ANDROID ===');
+        console.log('DeviceId:', deviceId);
+        console.log('Mensagem:', JSON.stringify(message, null, 2));
+        console.log('WebSocket estado:', deviceWs.readyState);
+        console.log('=====================================');
+        
         deviceWs.send(JSON.stringify(message));
         
         log.info(`Permissões enviadas para o dispositivo Android`, {
@@ -1111,6 +1128,12 @@ function handleUpdateAppPermissions(ws, data) {
             allowedAppsCount: allowedApps?.length || 0
         });
     } else {
+        console.log('=== DISPOSITIVO ANDROID NÃO CONECTADO ===');
+        console.log('DeviceId:', deviceId);
+        console.log('DeviceWs existe:', !!deviceWs);
+        console.log('WebSocket estado:', deviceWs?.readyState);
+        console.log('=========================================');
+        
         log.warn(`Dispositivo Android não conectado, permissões salvas para envio posterior`, {
             deviceId: deviceId
         });
@@ -1148,8 +1171,8 @@ function handleLocationUpdate(ws, data) {
     
     persistentDevices.set(deviceId, device);
     
-    // Salvar no arquivo
-    saveDevicesToFile();
+    // Salvar no PostgreSQL
+    saveDeviceToDatabase(deviceData);
     
     log.info(`Localização atualizada`, {
         deviceId: deviceId,
@@ -1569,8 +1592,7 @@ setInterval(() => {
         }
     });
     
-    // Salvar mudanças no arquivo
-    saveDevicesToFile();
+    // Dados já salvos no PostgreSQL via saveDeviceToDatabase
     
     // Enviar ping ativo para dispositivos conectados para manter conexão viva (com throttling)
     if (Math.random() < config.PING_PROBABILITY) { // Probabilidade configurável de enviar ping para reduzir carga
@@ -1924,7 +1946,7 @@ function handleGeofenceEvent(ws, data) {
         device.lastSeen = now;
         
         persistentDevices.set(deviceId, device);
-        saveDevicesToFile();
+        // Dados já salvos no PostgreSQL via saveDeviceToDatabase
         
         console.log(`Evento de geofencing processado: ${data.eventType} - ${data.zoneName}`);
         

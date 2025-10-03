@@ -307,12 +307,18 @@ class MainActivity : AppCompatActivity() {
     
     private fun saveData() {
         val editor = sharedPreferences.edit()
-        editor.putString("allowed_apps", gson.toJson(allowedApps))
+        val allowedAppsJson = gson.toJson(allowedApps)
+        editor.putString("allowed_apps", allowedAppsJson)
         editor.putString("custom_device_name", customDeviceName)
         editor.putString("admin_password", adminPassword)
         // Não salvar apps instalados pois contêm Drawable que não pode ser serializado
         editor.apply()
+        
+        Log.d(TAG, "=== DEBUG: saveData ===")
+        Log.d(TAG, "AllowedApps: $allowedApps")
+        Log.d(TAG, "AllowedApps JSON: $allowedAppsJson")
         Log.d(TAG, "Dados salvos: ${allowedApps.size} apps permitidos, nome: $customDeviceName, senha: ${if (adminPassword.isNotEmpty()) "***" else "não definida"}")
+        Log.d(TAG, "======================")
     }
     
     private fun loadSavedData() {
@@ -1007,6 +1013,33 @@ class MainActivity : AppCompatActivity() {
         val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
         val serverUrl = "ws://10.0.2.2:3002" // IP do emulador para localhost
         
+        Log.d(TAG, "=== CONFIGURAÇÃO WEBSOCKET ===")
+        Log.d(TAG, "DeviceId obtido: ${deviceId?.takeLast(4) ?: "null"}")
+        Log.d(TAG, "Server URL: $serverUrl")
+        Log.d(TAG, "Service bound: $isServiceBound")
+        Log.d(TAG, "=============================")
+        
+        // Verificar se deviceId é válido
+        if (deviceId.isNullOrEmpty()) {
+            Log.e(TAG, "❌ DeviceId é null ou vazio! Tentando obter novamente...")
+            val retryDeviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+            if (retryDeviceId.isNullOrEmpty()) {
+                Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback")
+                // Usar um ID baseado no modelo + timestamp como fallback
+                val fallbackId = "${Build.MODEL}_${System.currentTimeMillis()}"
+                Log.w(TAG, "⚠️ Usando DeviceId fallback: $fallbackId")
+                setupWebSocketWithId(fallbackId, serverUrl)
+            } else {
+                Log.d(TAG, "✅ DeviceId obtido na segunda tentativa: ${retryDeviceId.takeLast(4)}")
+                setupWebSocketWithId(retryDeviceId, serverUrl)
+            }
+        } else {
+            Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(4)}")
+            setupWebSocketWithId(deviceId, serverUrl)
+        }
+    }
+    
+    private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
         // Se o serviço estiver disponível, usar ele; senão, criar cliente local
         if (isServiceBound && webSocketService != null) {
             Log.d(TAG, "Usando WebSocketService para comunicação")
@@ -1196,18 +1229,33 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Apps permitidos: ${allowedApps.size}")
             Log.d(TAG, "Lista de apps permitidos: $allowedApps")
             
+            // Debug detalhado de cada app instalado
+            Log.d(TAG, "=== APPS INSTALADOS DETALHADOS ===")
+            installedApps.forEach { app ->
+                val isAllowed = allowedApps.contains(app.packageName)
+                Log.d(TAG, "App: ${app.appName}")
+                Log.d(TAG, "  Package: ${app.packageName}")
+                Log.d(TAG, "  Permitido: $isAllowed")
+                Log.d(TAG, "  ---")
+            }
+            Log.d(TAG, "==================================")
+            
             val filteredApps = installedApps.filter { app ->
                 val isAllowed = allowedApps.contains(app.packageName)
                 if (!isAllowed) {
-                    Log.d(TAG, "App ${app.appName} (${app.packageName}) não está na lista de permitidos")
+                    Log.d(TAG, "❌ App ${app.appName} (${app.packageName}) não está na lista de permitidos")
+                } else {
+                    Log.d(TAG, "✅ App ${app.appName} (${app.packageName}) está permitido")
                 }
                 isAllowed
             }
             
+            Log.d(TAG, "=== RESULTADO FINAL ===")
             Log.d(TAG, "Apps filtrados para exibição: ${filteredApps.size}")
             filteredApps.forEach { app ->
-                Log.d(TAG, "App permitido: ${app.appName} (${app.packageName})")
+                Log.d(TAG, "✅ App permitido: ${app.appName} (${app.packageName})")
             }
+            Log.d(TAG, "======================")
             
             // Otimização: reutilizar adapter existente se possível
             if (appAdapter == null) {

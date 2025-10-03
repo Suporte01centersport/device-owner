@@ -754,10 +754,14 @@ object DeviceInfoCollector {
             val gson = com.google.gson.Gson()
             val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
             
+            Log.d("DeviceInfoCollector", "=== DEBUG: getAllowedApps ===")
+            Log.d("DeviceInfoCollector", "SharedPreferences raw: $savedAllowedApps")
+            
             if (savedAllowedApps != null) {
                 val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
                 val allowedApps = gson.fromJson<List<String>>(savedAllowedApps, type)
                 Log.d("DeviceInfoCollector", "Apps permitidos carregados: ${allowedApps.size}")
+                Log.d("DeviceInfoCollector", "Lista carregada: $allowedApps")
                 allowedApps
             } else {
                 Log.d("DeviceInfoCollector", "Nenhum app permitido encontrado")

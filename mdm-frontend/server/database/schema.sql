@@ -1,48 +1,80 @@
--- Schema do banco PostgreSQL para MDM Owner
--- Baseado no ScaleFusion para máxima compatibilidade
+-- Schema PostgreSQL para MDM Owner
+-- Criado para substituir arquivos JSON por banco de dados robusto
 
 -- Extensões necessárias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
 
--- Tabela de dispositivos
-CREATE TABLE devices (
+-- Tabela de organizações (multi-tenancy)
+CREATE TABLE organizations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    device_id VARCHAR(255) UNIQUE NOT NULL,
-    device_name VARCHAR(255),
-    android_version VARCHAR(50),
-    api_level INTEGER,
-    app_version VARCHAR(50),
-    battery_level INTEGER,
-    battery_status VARCHAR(50),
-    country VARCHAR(10),
-    cpu_architecture VARCHAR(50),
-    memory_used BIGINT,
-    storage_used BIGINT,
-    last_seen TIMESTAMP WITH TIME ZONE,
-    connection_id VARCHAR(255),
-    connected_at TIMESTAMP WITH TIME ZONE,
-    is_connected BOOLEAN DEFAULT FALSE,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    description TEXT,
+    settings JSONB DEFAULT '{}',
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de aplicativos instalados
-CREATE TABLE installed_apps (
+-- Tabela de usuários
+CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
-    app_name VARCHAR(255) NOT NULL,
-    package_name VARCHAR(255) NOT NULL,
-    version_name VARCHAR(100),
-    version_code BIGINT,
-    install_time TIMESTAMP WITH TIME ZONE,
-    update_time TIMESTAMP WITH TIME ZONE,
-    is_allowed BOOLEAN DEFAULT FALSE,
-    is_enabled BOOLEAN DEFAULT TRUE,
-    is_system_app BOOLEAN DEFAULT FALSE,
-    icon_base64 TEXT,
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    first_name VARCHAR(100) NOT NULL,
+    last_name VARCHAR(100) NOT NULL,
+    role VARCHAR(50) DEFAULT 'viewer', -- admin, manager, operator, viewer
+    is_active BOOLEAN DEFAULT true,
+    last_login TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabela de dispositivos
+CREATE TABLE devices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    device_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255),
+    model VARCHAR(255),
+    manufacturer VARCHAR(255),
+    android_version VARCHAR(50),
+    api_level INTEGER,
+    serial_number VARCHAR(255),
+    imei VARCHAR(20),
+    mac_address VARCHAR(17),
+    ip_address INET,
+    battery_level INTEGER DEFAULT 0,
+    battery_status VARCHAR(50),
+    is_charging BOOLEAN DEFAULT false,
+    storage_total BIGINT DEFAULT 0,
+    storage_used BIGINT DEFAULT 0,
+    memory_total BIGINT DEFAULT 0,
+    memory_used BIGINT DEFAULT 0,
+    cpu_architecture VARCHAR(50),
+    screen_resolution VARCHAR(50),
+    screen_density INTEGER,
+    network_type VARCHAR(50),
+    wifi_ssid VARCHAR(255),
+    is_wifi_enabled BOOLEAN DEFAULT false,
+    is_bluetooth_enabled BOOLEAN DEFAULT false,
+    is_location_enabled BOOLEAN DEFAULT false,
+    is_developer_options_enabled BOOLEAN DEFAULT false,
+    is_adb_enabled BOOLEAN DEFAULT false,
+    is_unknown_sources_enabled BOOLEAN DEFAULT false,
+    is_device_owner BOOLEAN DEFAULT false,
+    is_profile_owner BOOLEAN DEFAULT false,
+    is_kiosk_mode BOOLEAN DEFAULT false,
+    app_version VARCHAR(50),
+    timezone VARCHAR(100),
+    language VARCHAR(10),
+    country VARCHAR(10),
+    status VARCHAR(20) DEFAULT 'offline', -- online, offline
+    last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(organization_id, device_id)
 );
 
 -- Tabela de localizações
@@ -51,55 +83,158 @@ CREATE TABLE device_locations (
     device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
     latitude DECIMAL(10, 8),
     longitude DECIMAL(11, 8),
-    accuracy DECIMAL(10, 2),
-    altitude DECIMAL(10, 2),
-    speed DECIMAL(10, 2),
-    bearing DECIMAL(10, 2),
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    accuracy DECIMAL(8, 2),
+    provider VARCHAR(50),
+    address TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabela de aplicativos instalados
+CREATE TABLE installed_apps (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
+    package_name VARCHAR(255) NOT NULL,
+    app_name VARCHAR(255) NOT NULL,
+    icon_base64 TEXT,
+    is_system_app BOOLEAN DEFAULT false,
+    is_enabled BOOLEAN DEFAULT true,
+    version_name VARCHAR(100),
+    version_code INTEGER,
+    install_time TIMESTAMP WITH TIME ZONE,
+    update_time TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(device_id, package_name)
+);
+
+-- Tabela de grupos de dispositivos
+CREATE TABLE device_groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    color VARCHAR(7) DEFAULT '#3B82F6',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(organization_id, name)
+);
+
+-- Tabela de membros de grupos
+CREATE TABLE device_group_memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
+    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
+    assigned_by UUID REFERENCES users(id),
+    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(device_id, group_id)
+);
+
+-- Tabela de políticas de aplicativos
+CREATE TABLE app_policies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
+    package_name VARCHAR(255) NOT NULL,
+    app_name VARCHAR(255) NOT NULL,
+    policy_type VARCHAR(20) DEFAULT 'allow', -- allow, block, require
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(group_id, package_name)
+);
+
+-- Tabela de restrições de dispositivos
+CREATE TABLE device_restrictions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
+    wifi_disabled BOOLEAN DEFAULT false,
+    bluetooth_disabled BOOLEAN DEFAULT false,
+    camera_disabled BOOLEAN DEFAULT false,
+    status_bar_disabled BOOLEAN DEFAULT false,
+    install_apps_disabled BOOLEAN DEFAULT false,
+    uninstall_apps_disabled BOOLEAN DEFAULT false,
+    settings_disabled BOOLEAN DEFAULT false,
+    system_notifications_disabled BOOLEAN DEFAULT false,
+    screen_capture_disabled BOOLEAN DEFAULT false,
+    sharing_disabled BOOLEAN DEFAULT false,
+    outgoing_calls_disabled BOOLEAN DEFAULT false,
+    sms_disabled BOOLEAN DEFAULT false,
+    user_creation_disabled BOOLEAN DEFAULT false,
+    user_removal_disabled BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(device_id)
 );
 
 -- Tabela de mensagens de suporte
 CREATE TABLE support_messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
     device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
+    device_name VARCHAR(255),
     message TEXT NOT NULL,
-    message_type VARCHAR(50) DEFAULT 'info',
-    timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    android_version VARCHAR(50),
+    model VARCHAR(255),
+    status VARCHAR(20) DEFAULT 'pending', -- pending, resolved, closed
+    received_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    resolved_at TIMESTAMP WITH TIME ZONE,
+    resolved_by UUID REFERENCES users(id)
+);
+
+-- Tabela de auditoria (logs de ações)
+CREATE TABLE audit_logs (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    action VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(50) NOT NULL,
+    resource_id VARCHAR(255),
+    details JSONB DEFAULT '{}',
+    ip_address INET,
+    user_agent TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Tabela de configurações do sistema
-CREATE TABLE system_config (
+CREATE TABLE system_configs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    config_key VARCHAR(255) UNIQUE NOT NULL,
-    config_value TEXT,
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    config_key VARCHAR(100) NOT NULL,
+    config_value JSONB NOT NULL,
     description TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(organization_id, config_key)
 );
 
--- Tabela de senhas de administrador
-CREATE TABLE admin_passwords (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    password_hash VARCHAR(255) NOT NULL,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE
-);
-
--- Índices para performance (seguindo padrões ScaleFusion)
-CREATE INDEX idx_devices_device_id ON devices(device_id);
-CREATE INDEX idx_devices_connected ON devices(is_connected);
+-- Índices para performance
+CREATE INDEX idx_devices_organization_id ON devices(organization_id);
+CREATE INDEX idx_devices_status ON devices(status);
 CREATE INDEX idx_devices_last_seen ON devices(last_seen);
+CREATE INDEX idx_devices_device_id ON devices(device_id);
+
+CREATE INDEX idx_device_locations_device_id ON device_locations(device_id);
+CREATE INDEX idx_device_locations_created_at ON device_locations(created_at);
+
 CREATE INDEX idx_installed_apps_device_id ON installed_apps(device_id);
 CREATE INDEX idx_installed_apps_package_name ON installed_apps(package_name);
-CREATE INDEX idx_device_locations_device_id ON device_locations(device_id);
-CREATE INDEX idx_device_locations_timestamp ON device_locations(timestamp);
-CREATE INDEX idx_support_messages_device_id ON support_messages(device_id);
-CREATE INDEX idx_support_messages_timestamp ON support_messages(timestamp);
 
--- Triggers para atualizar updated_at automaticamente
+CREATE INDEX idx_device_groups_organization_id ON device_groups(organization_id);
+CREATE INDEX idx_device_group_memberships_device_id ON device_group_memberships(device_id);
+CREATE INDEX idx_device_group_memberships_group_id ON device_group_memberships(group_id);
+
+CREATE INDEX idx_app_policies_organization_id ON app_policies(organization_id);
+CREATE INDEX idx_app_policies_group_id ON app_policies(group_id);
+
+CREATE INDEX idx_support_messages_organization_id ON support_messages(organization_id);
+CREATE INDEX idx_support_messages_device_id ON support_messages(device_id);
+CREATE INDEX idx_support_messages_status ON support_messages(status);
+
+CREATE INDEX idx_audit_logs_organization_id ON audit_logs(organization_id);
+CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
+CREATE INDEX idx_audit_logs_created_at ON audit_logs(created_at);
+CREATE INDEX idx_audit_logs_action ON audit_logs(action);
+
+-- Triggers para updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -108,77 +243,11 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
-CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_installed_apps_updated_at BEFORE UPDATE ON installed_apps
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON system_config
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Tabela de grupos de dispositivos
-CREATE TABLE device_groups (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    color VARCHAR(7) DEFAULT '#3B82F6', -- Cor hexadecimal para identificação visual
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Tabela de associação de dispositivos aos grupos
-CREATE TABLE device_group_memberships (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
-    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    assigned_by VARCHAR(255), -- Quem atribuiu o dispositivo ao grupo
-    UNIQUE(device_id, group_id)
-);
-
--- Tabela de políticas de aplicativos por grupo
-CREATE TABLE group_app_policies (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
-    package_name VARCHAR(255) NOT NULL,
-    app_name VARCHAR(255) NOT NULL,
-    is_allowed BOOLEAN DEFAULT TRUE,
-    policy_type VARCHAR(50) DEFAULT 'allow', -- 'allow', 'block', 'require'
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    UNIQUE(group_id, package_name)
-);
-
--- Índices para performance
-CREATE INDEX idx_device_group_memberships_device_id ON device_group_memberships(device_id);
-CREATE INDEX idx_device_group_memberships_group_id ON device_group_memberships(group_id);
-CREATE INDEX idx_group_app_policies_group_id ON group_app_policies(group_id);
-CREATE INDEX idx_group_app_policies_package_name ON group_app_policies(package_name);
-
--- Triggers para atualizar updated_at automaticamente
-CREATE TRIGGER update_device_groups_updated_at BEFORE UPDATE ON device_groups
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_group_app_policies_updated_at BEFORE UPDATE ON group_app_policies
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- Inserir configurações padrão
-INSERT INTO system_config (config_key, config_value, description) VALUES
-('max_pings_per_minute', '60', 'Máximo de pings por minuto'),
-('base_inactivity_timeout', '30000', 'Timeout base de inatividade em ms'),
-('max_inactivity_timeout', '120000', 'Timeout máximo de inatividade em ms'),
-('min_inactivity_timeout', '15000', 'Timeout mínimo de inatividade em ms'),
-('health_score_threshold', '0.5', 'Limiar de score de saúde'),
-('heartbeat_interval', '10000', 'Intervalo de heartbeat em ms'),
-('ping_probability', '0.3', 'Probabilidade de ping'),
-('max_reconnect_attempts', '20', 'Máximo de tentativas de reconexão'),
-('initial_reconnect_delay', '1000', 'Delay inicial de reconexão em ms'),
-('max_reconnect_delay', '30000', 'Delay máximo de reconexão em ms');
-
--- Inserir grupos padrão
-INSERT INTO device_groups (name, description, color) VALUES
-('Dispositivos Corporativos', 'Dispositivos destinados ao uso corporativo', '#3B82F6'),
-('Dispositivos de Campo', 'Dispositivos utilizados em campo pelos funcionários', '#10B981'),
-('Dispositivos de Demonstração', 'Dispositivos utilizados para demonstrações', '#F59E0B'),
-('Dispositivos de Teste', 'Dispositivos utilizados para testes e desenvolvimento', '#8B5CF6');
+CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_installed_apps_updated_at BEFORE UPDATE ON installed_apps FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_device_groups_updated_at BEFORE UPDATE ON device_groups FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_app_policies_updated_at BEFORE UPDATE ON app_policies FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_device_restrictions_updated_at BEFORE UPDATE ON device_restrictions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
