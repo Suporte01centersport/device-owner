@@ -10,7 +10,6 @@ class DeviceModel {
                 const orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
                 organizationId = orgResult.rows[0].id;
             }
-
             const result = await query(`
                 INSERT INTO devices (
                     organization_id, device_id, name, model, manufacturer, android_version,
@@ -176,8 +175,8 @@ class DeviceModel {
                 manufacturer: device.manufacturer,
                 androidVersion: device.android_version,
                 apiLevel: device.api_level,
-                serialNumber: device.serial_number,
-                imei: device.imei,
+                serialNumber: device.serial_number || 'n/d',
+                imei: device.imei || 'n/d',
                 macAddress: device.mac_address,
                 ipAddress: device.ip_address,
                 batteryLevel: device.battery_level || 0,

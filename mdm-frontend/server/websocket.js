@@ -717,11 +717,16 @@ function handleDeviceStatus(ws, data) {
     console.log('Profile Owner:', data.data.isProfileOwner);
     console.log('Apps instalados:', data.data.installedApps?.length || 0);
     console.log('Apps permitidos:', data.data.allowedApps?.length || 0);
-    console.log('Allowed Apps:', data.data.allowedApps);
     console.log('Bateria:', data.data.batteryLevel);
     console.log('Modelo:', data.data.model);
     console.log('Android Version:', data.data.androidVersion);
     console.log('===============================');
+    
+    // Verificar se deviceId é válido
+    if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
+        console.error('❌ DeviceId inválido:', deviceId);
+        return;
+    }
     
     // Marcar como dispositivo Android
     ws.isDevice = true;
@@ -732,6 +737,14 @@ function handleDeviceStatus(ws, data) {
     
     // Armazenar informações detalhadas do dispositivo
     ws.deviceInfo = data.data;
+    
+    // Verificar se dispositivo já existe
+    const existingDevice = persistentDevices.get(deviceId);
+    if (existingDevice) {
+        console.log('✅ Dispositivo já existe - atualizando status para online');
+    } else {
+        console.log('🆕 Novo dispositivo detectado');
+    }
     
     // Armazenar dispositivo conectado
     connectedDevices.set(deviceId, ws);
@@ -745,14 +758,7 @@ function handleDeviceStatus(ws, data) {
         connectedAt: ws.connectedAt
     };
     
-    console.log('=== ARMAZENANDO DADOS DO DISPOSITIVO ===');
-    console.log('Device ID:', deviceId);
-    console.log('Bateria:', deviceData.batteryLevel);
-    console.log('Apps instalados:', deviceData.installedAppsCount);
-    console.log('Apps permitidos:', deviceData.allowedApps?.length || 0);
-    console.log('Armazenamento total:', deviceData.storageTotal);
-    console.log('Armazenamento usado:', deviceData.storageUsed);
-    console.log('========================================');
+    console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
     
     persistentDevices.set(deviceId, deviceData);
     

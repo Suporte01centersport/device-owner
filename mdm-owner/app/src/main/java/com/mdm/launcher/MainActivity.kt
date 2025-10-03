@@ -1024,11 +1024,11 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "❌ DeviceId é null ou vazio! Tentando obter novamente...")
             val retryDeviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
             if (retryDeviceId.isNullOrEmpty()) {
-                Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback")
-                // Usar um ID baseado no modelo + timestamp como fallback
-                val fallbackId = "${Build.MODEL}_${System.currentTimeMillis()}"
-                Log.w(TAG, "⚠️ Usando DeviceId fallback: $fallbackId")
-                setupWebSocketWithId(fallbackId, serverUrl)
+                Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback persistente")
+                // Usar um ID persistente baseado no modelo (sem timestamp)
+                val persistentId = getPersistentDeviceId()
+                Log.w(TAG, "⚠️ Usando DeviceId persistente: ${persistentId.takeLast(4)}")
+                setupWebSocketWithId(persistentId, serverUrl)
             } else {
                 Log.d(TAG, "✅ DeviceId obtido na segunda tentativa: ${retryDeviceId.takeLast(4)}")
                 setupWebSocketWithId(retryDeviceId, serverUrl)
@@ -1037,6 +1037,21 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(4)}")
             setupWebSocketWithId(deviceId, serverUrl)
         }
+    }
+    
+    private fun getPersistentDeviceId(): String {
+        // Gerar um ID persistente baseado no modelo + serial (se disponível)
+        val model = Build.MODEL.replace(" ", "_")
+        val serial = Build.getSerial() ?: "unknown"
+        val persistentId = "${model}_${serial}".hashCode().toString()
+        
+        Log.d(TAG, "=== GERANDO DEVICE ID PERSISTENTE ===")
+        Log.d(TAG, "Modelo: $model")
+        Log.d(TAG, "Serial: $serial")
+        Log.d(TAG, "ID Persistente: ${persistentId.takeLast(4)}")
+        Log.d(TAG, "===================================")
+        
+        return persistentId
     }
     
     private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
