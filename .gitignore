@@ -55,3 +55,18 @@ local.properties
 
 # Large files that should not be in repository
 *.node
+
+# MDM Server - Dynamic data files (now using PostgreSQL)
+mdm-frontend/server/devices.json
+mdm-frontend/server/admin_password.json
+mdm-frontend/server/support_messages.json
+mdm-frontend/server/backup/
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+*.tmp
+*.temp
