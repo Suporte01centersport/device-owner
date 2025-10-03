@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard'
 import DeviceCard from './components/DeviceCard'
 import DeviceModal from './components/DeviceModal'
 import SupportMessagesModal from './components/SupportMessagesModal'
+import PoliciesPage from './policies/page'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
 
@@ -458,6 +459,8 @@ export default function Home() {
     switch (currentView) {
       case 'dashboard':
         return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} />
+      case 'policies':
+        return <PoliciesPage />
       case 'devices':
         return (
           <div className="p-6">

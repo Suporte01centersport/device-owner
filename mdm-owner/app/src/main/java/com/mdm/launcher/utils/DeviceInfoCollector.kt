@@ -531,6 +531,8 @@ object DeviceInfoCollector {
             val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
             Log.d("DeviceInfoCollector", "É Device Owner: $isDeviceOwner")
+            Log.d("DeviceInfoCollector", "Package Name: ${context.packageName}")
+            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
             
             val serial = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
@@ -585,6 +587,8 @@ object DeviceInfoCollector {
             val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
             Log.d("DeviceInfoCollector", "É Device Owner: $isDeviceOwner")
+            Log.d("DeviceInfoCollector", "Package Name: ${context.packageName}")
+            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
             
             val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
             

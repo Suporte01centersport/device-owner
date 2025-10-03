@@ -10,27 +10,148 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="2fc4cc9a-af9d-48f0-b2c6-009fb6284145" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/app-build-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/app-build-manifest.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/build-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/build-manifest.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/0.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/0.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/.tsbuildinfo" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development-fallback/0.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development-fallback/index.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/1.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/1.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/10.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/11.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/12.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/13.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/14.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/15.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/16.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/17.pack.gz" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/2.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/2.pack.gz" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/4.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/4.pack.gz" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/5.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/5.pack.gz" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/7.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/7.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/3.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/3.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/4.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/5.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/6.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/7.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/8.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/9.pack.gz" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz.old" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-development/index.pack.gz.old" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/0.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/1.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/10.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/11.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/12.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/13.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/14.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/15.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/16.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/17.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/18.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/19.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/2.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/20.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/21.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/22.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/23.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/24.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/25.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/26.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/3.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/4.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/5.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/6.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/7.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/8.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/9.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/index.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/client-production/index.pack.old" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/edge-server-production/0.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/edge-server-production/index.pack" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/0.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/0.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/1.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/1.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/10.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/11.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/12.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/2.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/2.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/3.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/3.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/4.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/4.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/5.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/5.pack.gz" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/6.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/7.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/8.pack.gz" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/9.pack.gz" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz.old" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-development/index.pack.gz.old" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/0.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/1.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/10.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/11.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/12.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/13.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/14.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/15.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/16.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/17.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/2.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/3.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/4.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/5.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/6.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/7.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/8.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/9.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/index.pack" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/cache/webpack/server-production/index.pack.old" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/app-paths-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/app-paths-manifest.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/middleware-build-manifest.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/middleware-build-manifest.js" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/server/server-reference-manifest.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/server/server-reference-manifest.json" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../mdm-frontend/.next/trace" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/.next/trace" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/env.example" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/env.example" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/database/connection.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/database/connection.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/database/migration.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/database/migration.js" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/devices.json" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/devices.json" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/setup-postgresql.js" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/setup-postgresql.js" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/app/components/Sidebar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/app/components/Sidebar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/app/page.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/app/page.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/app/types/device.ts" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/app/types/device.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../mdm-frontend/server/database/schema.sql" beforeDir="false" afterPath="$PROJECT_DIR$/../mdm-frontend/server/database/schema.sql" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/8.4/executionHistory/executionHistory.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.4/executionHistory/executionHistory.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/8.4/executionHistory/executionHistory.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.4/executionHistory/executionHistory.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/8.4/fileHashes/fileHashes.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.4/fileHashes/fileHashes.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/8.4/fileHashes/fileHashes.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.4/fileHashes/fileHashes.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/8.4/fileHashes/resourceHashesCache.bin" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/8.4/fileHashes/resourceHashesCache.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/buildOutputCleanup/buildOutputCleanup.lock" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.gradle/file-system.probe" beforeDir="false" afterPath="$PROJECT_DIR$/.gradle/file-system.probe" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/intermediates/dex/debug/mergeProjectDexDebug/5/classes.dex" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/intermediates/dex/debug/mergeProjectDexDebug/5/classes.dex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/intermediates/incremental/packageDebug/tmp/debug/dex-renamer-state.txt" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/intermediates/incremental/packageDebug/tmp/debug/dex-renamer-state.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/DeviceInfoCollector$getAllowedApps$type$1.dex" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/DeviceInfoCollector$getAllowedApps$type$1.dex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/DeviceInfoCollector.dex" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/DeviceInfoCollector.dex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/Quadruple.dex" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/intermediates/project_dex_archive/debug/out/com/mdm/launcher/utils/Quadruple.dex" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/inputs/source-to-output.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-attributes.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/class-fq-name-to-source.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/internal-name-to-source.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.s" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/proto.tab.values.s" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/jvm/kotlin/source-to-classes.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/counters.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/file-to-id.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.keystream.len" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.len" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/id-to-file.tab_i" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.at" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.s" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/caches-jvm/lookups/lookups.tab.values.s" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/last-build.bin" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/cacheable/last-build.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/local-state/build-history.bin" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/kotlin/compileDebugKotlin/local-state/build-history.bin" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/outputs/apk/debug/app-debug.apk" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/outputs/apk/debug/app-debug.apk" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/DeviceInfoCollector$getAllowedApps$type$1.class" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/DeviceInfoCollector$getAllowedApps$type$1.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/DeviceInfoCollector.class" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/DeviceInfoCollector.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/Quadruple.class" beforeDir="false" afterPath="$PROJECT_DIR$/app/build/tmp/kotlin-classes/debug/com/mdm/launcher/utils/Quadruple.class" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/app/src/main/java/com/mdm/launcher/utils/DeviceInfoCollector.kt" beforeDir="false" afterPath="$PROJECT_DIR$/app/src/main/java/com/mdm/launcher/utils/DeviceInfoCollector.kt" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -77,24 +198,24 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Android App.app.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
-    "RunOnceActivity.cidr.known.project.marker": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.readMode.enableVisualFormatting": "true",
-    "cf.first.check.clang-format": "false",
-    "cidr.known.project.marker": "true",
-    "com.google.services.firebase.aqiPopupShown": "true",
-    "git-widget-placeholder": "postegre",
-    "ignore.virus.scanning.warn.message": "true",
-    "last_opened_file_path": "C:/Desenvolvimento/device-owner/mdm-owner",
-    "settings.editor.selected.configurable": "project.propDebugger"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Android App.app.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;com.google.services.firebase.aqiPopupShown&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;postegre&quot;,
+    &quot;ignore.virus.scanning.warn.message&quot;: &quot;true&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Desenvolvimento/device-owner/mdm-owner&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propDebugger&quot;
   }
-}]]></component>
+}</component>
   <component name="RunManager">
     <configuration name="app" type="AndroidRunConfigurationType" factoryName="Android App" activateToolWindowBeforeRun="false">
       <module name="MDM_Launcher.app" />

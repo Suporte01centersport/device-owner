@@ -117,6 +117,52 @@ CREATE TRIGGER update_installed_apps_updated_at BEFORE UPDATE ON installed_apps
 CREATE TRIGGER update_system_config_updated_at BEFORE UPDATE ON system_config
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+-- Tabela de grupos de dispositivos
+CREATE TABLE device_groups (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    color VARCHAR(7) DEFAULT '#3B82F6', -- Cor hexadecimal para identificação visual
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Tabela de associação de dispositivos aos grupos
+CREATE TABLE device_group_memberships (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id UUID REFERENCES devices(id) ON DELETE CASCADE,
+    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    assigned_by VARCHAR(255), -- Quem atribuiu o dispositivo ao grupo
+    UNIQUE(device_id, group_id)
+);
+
+-- Tabela de políticas de aplicativos por grupo
+CREATE TABLE group_app_policies (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
+    package_name VARCHAR(255) NOT NULL,
+    app_name VARCHAR(255) NOT NULL,
+    is_allowed BOOLEAN DEFAULT TRUE,
+    policy_type VARCHAR(50) DEFAULT 'allow', -- 'allow', 'block', 'require'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(group_id, package_name)
+);
+
+-- Índices para performance
+CREATE INDEX idx_device_group_memberships_device_id ON device_group_memberships(device_id);
+CREATE INDEX idx_device_group_memberships_group_id ON device_group_memberships(group_id);
+CREATE INDEX idx_group_app_policies_group_id ON group_app_policies(group_id);
+CREATE INDEX idx_group_app_policies_package_name ON group_app_policies(package_name);
+
+-- Triggers para atualizar updated_at automaticamente
+CREATE TRIGGER update_device_groups_updated_at BEFORE UPDATE ON device_groups
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_group_app_policies_updated_at BEFORE UPDATE ON group_app_policies
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 -- Inserir configurações padrão
 INSERT INTO system_config (config_key, config_value, description) VALUES
 ('max_pings_per_minute', '60', 'Máximo de pings por minuto'),
@@ -129,3 +175,10 @@ INSERT INTO system_config (config_key, config_value, description) VALUES
 ('max_reconnect_attempts', '20', 'Máximo de tentativas de reconexão'),
 ('initial_reconnect_delay', '1000', 'Delay inicial de reconexão em ms'),
 ('max_reconnect_delay', '30000', 'Delay máximo de reconexão em ms');
+
+-- Inserir grupos padrão
+INSERT INTO device_groups (name, description, color) VALUES
+('Dispositivos Corporativos', 'Dispositivos destinados ao uso corporativo', '#3B82F6'),
+('Dispositivos de Campo', 'Dispositivos utilizados em campo pelos funcionários', '#10B981'),
+('Dispositivos de Demonstração', 'Dispositivos utilizados para demonstrações', '#F59E0B'),
+('Dispositivos de Teste', 'Dispositivos utilizados para testes e desenvolvimento', '#8B5CF6');

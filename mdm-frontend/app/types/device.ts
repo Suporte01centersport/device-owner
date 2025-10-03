@@ -80,3 +80,33 @@ export interface DeviceRestrictions {
   userCreationDisabled: boolean
   userRemovalDisabled: boolean
 }
+
+export interface DeviceGroup {
+  id: string
+  name: string
+  description?: string
+  color: string
+  deviceCount: number
+  devices: Device[]
+  appPolicies: AppPolicy[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AppPolicy {
+  id: string
+  packageName: string
+  appName: string
+  isAllowed: boolean
+  policyType: 'allow' | 'block' | 'require'
+  groupName?: string
+  groupColor?: string
+}
+
+export interface DeviceGroupMembership {
+  id: string
+  deviceId: string
+  groupId: string
+  assignedAt: string
+  assignedBy: string
+}
