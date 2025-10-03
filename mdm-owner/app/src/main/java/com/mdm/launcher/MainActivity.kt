@@ -1040,18 +1040,24 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun getPersistentDeviceId(): String {
-        // Gerar um ID persistente baseado no modelo + serial (se disponível)
+        // Gerar um ID persistente baseado em características que não mudam
         val model = Build.MODEL.replace(" ", "_")
-        val serial = Build.getSerial() ?: "unknown"
-        val persistentId = "${model}_${serial}".hashCode().toString()
+        val brand = Build.BRAND.replace(" ", "_")
+        val device = Build.DEVICE.replace(" ", "_")
+        val hardware = Build.HARDWARE.replace(" ", "_")
+        
+        // Combinar características estáveis para criar um ID único e persistente
+        val stableId = "${brand}_${model}_${device}_${hardware}".hashCode().toString()
         
         Log.d(TAG, "=== GERANDO DEVICE ID PERSISTENTE ===")
+        Log.d(TAG, "Brand: $brand")
         Log.d(TAG, "Modelo: $model")
-        Log.d(TAG, "Serial: $serial")
-        Log.d(TAG, "ID Persistente: ${persistentId.takeLast(4)}")
+        Log.d(TAG, "Device: $device")
+        Log.d(TAG, "Hardware: $hardware")
+        Log.d(TAG, "ID Persistente: ${stableId.takeLast(4)}")
         Log.d(TAG, "===================================")
         
-        return persistentId
+        return stableId
     }
     
     private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
