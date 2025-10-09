@@ -102,7 +102,6 @@ export default function PoliciesPage() {
         }
       ]
 
-      setGroups(mockGroups)
       setDevices(mockDevices)
     } catch (error) {
       console.error('Erro ao carregar dados:', error)

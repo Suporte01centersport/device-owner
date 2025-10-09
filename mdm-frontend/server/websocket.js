@@ -380,7 +380,6 @@ async function saveDeviceToDatabase(deviceData) {
 
 function loadAdminPasswordFromFile() {
     try {
-        console.log('=== DEBUG: loadAdminPasswordFromFile ===');
         console.log('Arquivo existe?', fs.existsSync(ADMIN_PASSWORD_FILE));
         if (fs.existsSync(ADMIN_PASSWORD_FILE)) {
             const data = fs.readFileSync(ADMIN_PASSWORD_FILE, 'utf8');
@@ -458,7 +457,6 @@ loadDevicesFromDatabase();
 
 // Carregar senha de administrador salva na inicialização
 loadAdminPasswordFromFile();
-console.log('=== DEBUG: Após carregamento ===');
 console.log('globalAdminPassword:', globalAdminPassword);
 console.log('Tipo:', typeof globalAdminPassword);
 console.log('Tamanho:', globalAdminPassword ? globalAdminPassword.length : 0);
@@ -491,7 +489,6 @@ wss.on('connection', ws => {
             serverStats.totalMessages++;
             
             const data = JSON.parse(message);
-            console.log('=== MENSAGEM WEBSOCKET RECEBIDA ===');
             console.log('Tipo:', data.type);
             console.log('Data completa:', data);
             console.log('Connection ID:', ws.connectionId);
@@ -633,7 +630,6 @@ wss.on('connection', ws => {
 });
 
 function handleMessage(ws, data) {
-    console.log('=== HANDLE MESSAGE ===');
     console.log('Processando tipo:', data.type);
     console.log('É dispositivo?', ws.isDevice);
     console.log('Device ID:', ws.deviceId);
@@ -697,7 +693,6 @@ function handleMessage(ws, data) {
             handleSetAdminPassword(ws, data);
             break;
         case 'get_admin_password':
-            console.log('=== DEBUG: get_admin_password recebido ===');
             console.log('Cliente é web client?', ws.isWebClient);
             console.log('globalAdminPassword atual:', globalAdminPassword);
             handleGetAdminPassword(ws, data);
@@ -730,17 +725,16 @@ function handleDeviceStatus(ws, data) {
     const deviceId = data.data.deviceId;
     const now = Date.now();
     
-    console.log('=== DEVICE STATUS RECEBIDO ===');
-    console.log('Device ID:', deviceId);
-    console.log('Device Name:', data.data.name);
-    console.log('Device Model:', data.data.model);
-    console.log('Device Owner:', data.data.isDeviceOwner);
-    console.log('Profile Owner:', data.data.isProfileOwner);
-    console.log('Apps instalados:', data.data.installedApps?.length || 0);
-    console.log('Apps permitidos:', data.data.allowedApps?.length || 0);
-    console.log('Bateria:', data.data.batteryLevel);
-    console.log('Android Version:', data.data.androidVersion);
-    console.log('===============================');
+    log.info(`Device status received`, {
+        deviceId,
+        name: data.data.name,
+        model: data.data.model,
+        isDeviceOwner: data.data.isDeviceOwner,
+        installedAppsCount: data.data.installedApps?.length || 0,
+        allowedAppsCount: data.data.allowedApps?.length || 0,
+        batteryLevel: data.data.batteryLevel,
+        androidVersion: data.data.androidVersion
+    });
     
     // Verificar se deviceId é válido
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
@@ -791,7 +785,6 @@ function handleDeviceStatus(ws, data) {
             type: 'set_admin_password',
             data: { password: globalAdminPassword }
         };
-        console.log(`=== DEBUG: Enviando senha para dispositivo ${deviceId} ===`);
         console.log('WebSocket readyState:', ws.readyState);
         console.log('Mensagem a ser enviada:', message);
         ws.send(JSON.stringify(message));
@@ -897,7 +890,6 @@ function handleDeviceStatus(ws, data) {
     // Notificar clientes web
     const statusDeviceData = persistentDevices.get(deviceId);
     if (statusDeviceData) {
-        console.log('=== ENVIANDO DADOS DO DISPOSITIVO PARA CLIENTES WEB ===');
         console.log('Device ID:', deviceId);
         console.log('Bateria:', statusDeviceData.batteryLevel);
         console.log('Apps instalados:', statusDeviceData.installedAppsCount);

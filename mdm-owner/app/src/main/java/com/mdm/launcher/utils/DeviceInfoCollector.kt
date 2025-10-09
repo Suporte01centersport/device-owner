@@ -763,7 +763,6 @@ object DeviceInfoCollector {
             val gson = com.google.gson.Gson()
             val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
             
-            Log.d("DeviceInfoCollector", "=== DEBUG: getAllowedApps ===")
             Log.d("DeviceInfoCollector", "SharedPreferences raw: $savedAllowedApps")
             
             if (savedAllowedApps != null) {

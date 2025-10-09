@@ -57,345 +57,352 @@
 27    <uses-permission android:name="android.permission.READ_PHONE_NUMBERS" />
 27-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:5-77
 27-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:22-74
-28    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
-28-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:5-80
-28-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:22-77
-29    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
-29-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:5-81
-29-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:22-78
-30    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
-30-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:24:5-77
-30-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:24:22-74
-31    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
-31-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:5-78
-31-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:22-75
-32    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-32-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:5-78
-32-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:22-75
-33    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
-33-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:5-75
-33-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:22-72
-34    <uses-permission android:name="android.permission.WAKE_LOCK" />
-34-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:5-68
-34-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:22-65
-35    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
-35-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:5-95
-35-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:22-92
-36    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-36-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:5-77
-36-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:22-74
-37    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
-37-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:5-87
-37-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:22-84
-38    <uses-permission android:name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
-38-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:5-100
-38-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:22-97
-39    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-39-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:5-81
-39-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:22-78
-40    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-40-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:5-77
-40-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:22-74
-41
-42    <!-- Permissões para gerenciar outros apps -->
-43    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
-43-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:5-75
-43-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:22-72
-44    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
-44-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:38:5-74
-44-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:38:22-71
-45    <uses-permission android:name="android.permission.CLEAR_APP_USER_DATA" />
-45-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:39:5-78
-45-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:39:22-75
-46    <uses-permission android:name="android.permission.SET_WALLPAPER" />
-46-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:5-72
-46-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:22-69
-47    <uses-permission android:name="android.permission.SET_WALLPAPER_HINTS" />
-47-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:5-78
-47-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:22-75
-48
-49    <permission
-49-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
-50        android:name="com.mdm.launcher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
-50-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
-51        android:protectionLevel="signature" />
-51-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
-52
-53    <uses-permission android:name="com.mdm.launcher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
-53-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
-53-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
-54
-55    <application
-55-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:5-144:19
-56        android:allowBackup="true"
-56-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:9-35
-57        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-57-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
-58        android:dataExtractionRules="@xml/data_extraction_rules"
-58-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:45:9-65
-59        android:debuggable="true"
-60        android:extractNativeLibs="false"
-61        android:fullBackupContent="@xml/backup_rules"
-61-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:46:9-54
-62        android:icon="@mipmap/ic_launcher"
-62-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:47:9-43
-63        android:label="@string/app_name"
-63-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:48:9-41
-64        android:networkSecurityConfig="@xml/network_security_config"
-64-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:54:9-69
-65        android:requestLegacyExternalStorage="true"
-65-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:52:9-52
-66        android:roundIcon="@mipmap/ic_launcher_round"
+28    <!-- Permissões de armazenamento - não necessárias para Android 10+ -->
+29    <uses-permission
+29-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:5-24:38
+30        android:name="android.permission.READ_EXTERNAL_STORAGE"
+30-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:22-77
+31        android:maxSdkVersion="32" />
+31-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:24:9-35
+32    <uses-permission
+32-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:5-26:38
+33        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+33-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:22-78
+34        android:maxSdkVersion="28" />
+34-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:9-35
+35    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+35-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:5-77
+35-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:22-74
+36    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+36-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:5-78
+36-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:22-75
+37    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+37-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:5-78
+37-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:22-75
+38    <uses-permission android:name="android.permission.DISABLE_KEYGUARD" />
+38-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:5-75
+38-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:22-72
+39    <uses-permission android:name="android.permission.WAKE_LOCK" />
+39-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:5-68
+39-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:22-65
+40    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+40-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:5-95
+40-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:22-92
+41    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+41-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:5-77
+41-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:22-74
+42    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+42-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:5-87
+42-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:22-84
+43    <uses-permission android:name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
+43-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:35:5-100
+43-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:35:22-97
+44    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+44-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:36:5-81
+44-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:36:22-78
+45    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+45-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:5-77
+45-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:22-74
+46
+47    <!-- Permissões para gerenciar outros apps -->
+48    <uses-permission android:name="android.permission.INSTALL_PACKAGES" />
+48-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:5-75
+48-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:22-72
+49    <uses-permission android:name="android.permission.DELETE_PACKAGES" />
+49-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:5-74
+49-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:22-71
+50    <uses-permission android:name="android.permission.CLEAR_APP_USER_DATA" />
+50-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:42:5-78
+50-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:42:22-75
+51    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+51-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:5-72
+51-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:22-69
+52    <uses-permission android:name="android.permission.SET_WALLPAPER_HINTS" />
+52-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:5-78
+52-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:22-75
+53
+54    <permission
+54-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:22:5-24:47
+55        android:name="com.mdm.launcher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+55-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:23:9-81
+56        android:protectionLevel="signature" />
+56-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:24:9-44
+57
+58    <uses-permission android:name="com.mdm.launcher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+58-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
+58-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+59
+60    <application
+60-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:46:5-147:19
+61        android:allowBackup="true"
+61-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:47:9-35
+62        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+62-->[androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
+63        android:dataExtractionRules="@xml/data_extraction_rules"
+63-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:48:9-65
+64        android:debuggable="true"
+65        android:extractNativeLibs="false"
+66        android:fullBackupContent="@xml/backup_rules"
 66-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:49:9-54
-67        android:supportsRtl="true"
-67-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:50:9-35
-68        android:theme="@style/Theme.MDMLauncher"
-68-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:51:9-49
-69        android:usesCleartextTraffic="true" >
-69-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:53:9-44
-70
-71        <!-- Activity principal do launcher -->
-72        <activity
-72-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:58:9-77:20
-73            android:name="com.mdm.launcher.MainActivity"
-73-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:59:13-41
-74            android:alwaysRetainTaskState="true"
-74-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:66:13-49
-75            android:clearTaskOnLaunch="false"
-75-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:67:13-46
-76            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-76-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:13-81
-77            android:exported="true"
-77-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:60:13-36
-78            android:launchMode="singleTop"
-78-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:61:13-43
-79            android:screenOrientation="portrait"
-79-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:62:13-49
-80            android:theme="@style/Theme.MDMLauncher.Launcher"
-80-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:13-62
-81            android:windowSoftInputMode="adjustResize" >
-81-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:64:13-55
-82            <intent-filter android:priority="1000" >
-82-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:13-71:29
-82-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:28-51
-83                <action android:name="android.intent.action.MAIN" />
-83-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:17-69
-83-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:25-66
-84
-85                <category android:name="android.intent.category.LAUNCHER" />
-85-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:17-77
-85-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:27-74
-86            </intent-filter>
+67        android:icon="@mipmap/ic_launcher"
+67-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:50:9-43
+68        android:label="@string/app_name"
+68-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:51:9-41
+69        android:networkSecurityConfig="@xml/network_security_config"
+69-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:57:9-69
+70        android:requestLegacyExternalStorage="true"
+70-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:55:9-52
+71        android:roundIcon="@mipmap/ic_launcher_round"
+71-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:52:9-54
+72        android:supportsRtl="true"
+72-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:53:9-35
+73        android:theme="@style/Theme.MDMLauncher"
+73-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:54:9-49
+74        android:usesCleartextTraffic="true" >
+74-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:56:9-44
+75
+76        <!-- Activity principal do launcher -->
+77        <activity
+77-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:61:9-80:20
+78            android:name="com.mdm.launcher.MainActivity"
+78-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:62:13-41
+79            android:alwaysRetainTaskState="true"
+79-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:13-49
+80            android:clearTaskOnLaunch="false"
+80-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:13-46
+81            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+81-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:13-81
+82            android:exported="true"
+82-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:13-36
+83            android:launchMode="singleTop"
+83-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:64:13-43
+84            android:screenOrientation="portrait"
+84-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:13-49
+85            android:theme="@style/Theme.MDMLauncher.Launcher"
+85-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:66:13-62
+86            android:windowSoftInputMode="adjustResize" >
+86-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:67:13-55
 87            <intent-filter android:priority="1000" >
-87-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:13-76:29
-87-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:28-51
+87-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:71:13-74:29
+87-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:71:28-51
 88                <action android:name="android.intent.action.MAIN" />
-88-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:17-69
-88-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:25-66
+88-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:17-69
+88-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:25-66
 89
-90                <category android:name="android.intent.category.HOME" />
-90-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:74:17-73
-90-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:74:27-70
-91                <category android:name="android.intent.category.DEFAULT" />
-91-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:17-76
-91-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:27-73
-92            </intent-filter>
-93        </activity>
+90                <category android:name="android.intent.category.LAUNCHER" />
+90-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:73:17-77
+90-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:73:27-74
+91            </intent-filter>
+92            <intent-filter android:priority="1000" >
+92-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:13-79:29
+92-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:28-51
+93                <action android:name="android.intent.action.MAIN" />
+93-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:17-69
+93-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:25-66
 94
-95        <!-- Device Admin Receiver -->
-96        <receiver
-96-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:80:9-90:20
-97            android:name="com.mdm.launcher.DeviceAdminReceiver"
-97-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:81:13-48
-98            android:exported="true"
-98-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:82:13-36
-99            android:permission="android.permission.BIND_DEVICE_ADMIN" >
-99-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:13-70
-100            <meta-data
-100-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-86:56
-101                android:name="android.app.device_admin"
-101-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:85:17-56
-102                android:resource="@xml/device_admin" />
-102-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:86:17-53
-103
-104            <intent-filter>
-104-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:87:13-89:29
-105                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
-105-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:17-82
-105-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:25-79
-106            </intent-filter>
-107        </receiver>
+95                <category android:name="android.intent.category.HOME" />
+95-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:77:17-73
+95-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:77:27-70
+96                <category android:name="android.intent.category.DEFAULT" />
+96-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:78:17-76
+96-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:78:27-73
+97            </intent-filter>
+98        </activity>
+99
+100        <!-- Device Admin Receiver -->
+101        <receiver
+101-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:9-93:20
+102            android:name="com.mdm.launcher.DeviceAdminReceiver"
+102-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-48
+103            android:exported="true"
+103-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:85:13-36
+104            android:permission="android.permission.BIND_DEVICE_ADMIN" >
+104-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:86:13-70
+105            <meta-data
+105-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:87:13-89:56
+106                android:name="android.app.device_admin"
+106-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:17-56
+107                android:resource="@xml/device_admin" />
+107-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:89:17-53
 108
-109        <!-- Serviço de comunicação WebSocket -->
-110        <service
-110-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:9-97:56
-111            android:name="com.mdm.launcher.service.WebSocketService"
-111-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:13-53
-112            android:enabled="true"
-112-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:13-35
-113            android:exported="false"
-113-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:13-37
-114            android:foregroundServiceType="dataSync" />
-114-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:13-53
-115
-116        <!-- Serviço de localização em tempo real -->
-117        <service
-117-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:100:9-104:56
-118            android:name="com.mdm.launcher.service.LocationService"
-118-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:13-52
-119            android:enabled="true"
-119-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:13-35
-120            android:exported="false"
-120-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:103:13-37
-121            android:foregroundServiceType="location" />
-121-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:104:13-53
-122
-123        <!-- Broadcast Receiver para mudanças de apps -->
-124        <receiver
-124-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:9-117:20
-125            android:name="com.mdm.launcher.AppChangeReceiver"
-125-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:13-46
-126            android:enabled="true"
-126-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:109:13-35
-127            android:exported="false" >
-127-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:110:13-37
-128            <intent-filter>
-128-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:111:13-116:29
-129                <action android:name="android.intent.action.PACKAGE_ADDED" />
-129-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:17-78
-129-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:25-75
-130                <action android:name="android.intent.action.PACKAGE_REMOVED" />
-130-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:17-80
-130-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:25-77
-131                <action android:name="android.intent.action.PACKAGE_REPLACED" />
-131-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:17-81
-131-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:25-78
-132
-133                <data android:scheme="package" />
-133-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-50
-133-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:23-47
-134            </intent-filter>
-135        </receiver>
-136
-137        <!-- Broadcast Receiver para manter launcher padrão -->
-138        <receiver
-138-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:120:9-136:20
-139            android:name="com.mdm.launcher.receivers.DefaultLauncherReceiver"
-139-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:121:13-62
-140            android:enabled="true"
-140-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:122:13-35
-141            android:exported="false" >
-141-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:13-37
-142            <intent-filter android:priority="1000" >
-142-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:13-132:29
-142-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:28-51
-143                <action android:name="android.intent.action.PACKAGE_ADDED" />
-143-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:17-78
-143-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:25-75
-144                <action android:name="android.intent.action.PACKAGE_REMOVED" />
-144-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:17-80
-144-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:25-77
-145                <action android:name="android.intent.action.PACKAGE_REPLACED" />
-145-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:17-81
-145-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:25-78
-146                <action android:name="android.intent.action.PACKAGE_CHANGED" />
-146-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:128:17-80
-146-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:128:25-77
-147                <action android:name="android.intent.action.BOOT_COMPLETED" />
-147-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:17-79
-147-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:25-76
-148                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-148-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:130:17-84
-148-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:130:25-81
-149
-150                <data android:scheme="package" />
-150-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-50
-150-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:23-47
-151            </intent-filter>
-152            <intent-filter android:priority="1000" >
-152-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:13-135:29
-152-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:28-51
-153                <action android:name="android.intent.action.BOOT_COMPLETED" />
-153-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:17-79
-153-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:25-76
-154            </intent-filter>
-155        </receiver>
-156
-157        <!-- Activity para configuração inicial -->
-158        <activity
-158-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:9-142:62
-159            android:name="com.mdm.launcher.SetupActivity"
-159-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:140:13-42
-160            android:exported="false"
-160-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:141:13-37
-161            android:theme="@style/Theme.MDMLauncher.Setup" />
-161-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:13-59
-162
-163        <provider
-163-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
-164            android:name="androidx.startup.InitializationProvider"
-164-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
-165            android:authorities="com.mdm.launcher.androidx-startup"
-165-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
-166            android:exported="false" >
-166-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
-167            <meta-data
-167-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
-168                android:name="androidx.emoji2.text.EmojiCompatInitializer"
-168-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
-169                android:value="androidx.startup" />
-169-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
-170            <meta-data
-170-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
-171                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
-171-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
-172                android:value="androidx.startup" />
-172-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
-173            <meta-data
-173-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
-174                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
-174-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
-175                android:value="androidx.startup" />
-175-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
-176        </provider>
-177
-178        <receiver
-178-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
-179            android:name="androidx.profileinstaller.ProfileInstallReceiver"
-179-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
-180            android:directBootAware="false"
-180-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
-181            android:enabled="true"
-181-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
-182            android:exported="true"
-182-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
-183            android:permission="android.permission.DUMP" >
-183-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
-184            <intent-filter>
-184-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
-185                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
-185-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
-185-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
-186            </intent-filter>
-187            <intent-filter>
-187-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
-188                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
-188-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
-188-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
-189            </intent-filter>
-190            <intent-filter>
-190-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
-191                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
-191-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
-191-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
-192            </intent-filter>
-193            <intent-filter>
-193-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
-194                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
-194-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
-194-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
-195            </intent-filter>
-196        </receiver>
-197    </application>
-198
-199</manifest>
+109            <intent-filter>
+109-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:90:13-92:29
+110                <action android:name="android.app.action.DEVICE_ADMIN_ENABLED" />
+110-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:91:17-82
+110-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:91:25-79
+111            </intent-filter>
+112        </receiver>
+113
+114        <!-- Serviço de comunicação WebSocket -->
+115        <service
+115-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:9-100:56
+116            android:name="com.mdm.launcher.service.WebSocketService"
+116-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:13-53
+117            android:enabled="true"
+117-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:98:13-35
+118            android:exported="false"
+118-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:13-37
+119            android:foregroundServiceType="dataSync" />
+119-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:100:13-53
+120
+121        <!-- Serviço de localização em tempo real -->
+122        <service
+122-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:103:9-107:56
+123            android:name="com.mdm.launcher.service.LocationService"
+123-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:104:13-52
+124            android:enabled="true"
+124-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:105:13-35
+125            android:exported="false"
+125-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:106:13-37
+126            android:foregroundServiceType="location" />
+126-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:13-53
+127
+128        <!-- Broadcast Receiver para mudanças de apps -->
+129        <receiver
+129-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:110:9-120:20
+130            android:name="com.mdm.launcher.AppChangeReceiver"
+130-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:111:13-46
+131            android:enabled="true"
+131-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:13-35
+132            android:exported="false" >
+132-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:13-37
+133            <intent-filter>
+133-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:13-119:29
+134                <action android:name="android.intent.action.PACKAGE_ADDED" />
+134-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-78
+134-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:25-75
+135                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+135-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:116:17-80
+135-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:116:25-77
+136                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+136-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:17-81
+136-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:25-78
+137
+138                <data android:scheme="package" />
+138-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:118:17-50
+138-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:118:23-47
+139            </intent-filter>
+140        </receiver>
+141
+142        <!-- Broadcast Receiver para manter launcher padrão -->
+143        <receiver
+143-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:9-139:20
+144            android:name="com.mdm.launcher.receivers.DefaultLauncherReceiver"
+144-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:13-62
+145            android:enabled="true"
+145-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:125:13-35
+146            android:exported="false" >
+146-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:126:13-37
+147            <intent-filter android:priority="1000" >
+147-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:127:13-135:29
+147-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:127:28-51
+148                <action android:name="android.intent.action.PACKAGE_ADDED" />
+148-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-78
+148-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:25-75
+149                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+149-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:116:17-80
+149-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:116:25-77
+150                <action android:name="android.intent.action.PACKAGE_REPLACED" />
+150-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:17-81
+150-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:25-78
+151                <action android:name="android.intent.action.PACKAGE_CHANGED" />
+151-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:131:17-80
+151-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:131:25-77
+152                <action android:name="android.intent.action.BOOT_COMPLETED" />
+152-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:17-79
+152-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:25-76
+153                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+153-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:17-84
+153-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:25-81
+154
+155                <data android:scheme="package" />
+155-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:118:17-50
+155-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:118:23-47
+156            </intent-filter>
+157            <intent-filter android:priority="1000" >
+157-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:13-138:29
+157-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:28-51
+158                <action android:name="android.intent.action.BOOT_COMPLETED" />
+158-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:17-79
+158-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:25-76
+159            </intent-filter>
+160        </receiver>
+161
+162        <!-- Activity para configuração inicial -->
+163        <activity
+163-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:9-145:62
+164            android:name="com.mdm.launcher.SetupActivity"
+164-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:143:13-42
+165            android:exported="false"
+165-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:144:13-37
+166            android:theme="@style/Theme.MDMLauncher.Setup" />
+166-->C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:145:13-59
+167
+168        <provider
+168-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+169            android:name="androidx.startup.InitializationProvider"
+169-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:25:13-67
+170            android:authorities="com.mdm.launcher.androidx-startup"
+170-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:26:13-68
+171            android:exported="false" >
+171-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:27:13-37
+172            <meta-data
+172-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:29:13-31:52
+173                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+173-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+174                android:value="androidx.startup" />
+174-->[androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
+175            <meta-data
+175-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
+176                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+176-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:30:17-78
+177                android:value="androidx.startup" />
+177-->[androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:31:17-49
+178            <meta-data
+178-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
+179                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+179-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:30:17-85
+180                android:value="androidx.startup" />
+180-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:31:17-49
+181        </provider>
+182
+183        <receiver
+183-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:34:9-52:20
+184            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+184-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:35:13-76
+185            android:directBootAware="false"
+185-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:36:13-44
+186            android:enabled="true"
+186-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:37:13-35
+187            android:exported="true"
+187-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:38:13-36
+188            android:permission="android.permission.DUMP" >
+188-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:39:13-57
+189            <intent-filter>
+189-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:40:13-42:29
+190                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+190-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:17-91
+190-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:41:25-88
+191            </intent-filter>
+192            <intent-filter>
+192-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:43:13-45:29
+193                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+193-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:17-85
+193-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:44:25-82
+194            </intent-filter>
+195            <intent-filter>
+195-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:46:13-48:29
+196                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+196-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:17-88
+196-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:47:25-85
+197            </intent-filter>
+198            <intent-filter>
+198-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:49:13-51:29
+199                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+199-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:17-95
+199-->[androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:50:25-92
+200            </intent-filter>
+201        </receiver>
+202    </application>
+203
+204</manifest>

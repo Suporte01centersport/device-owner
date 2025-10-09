@@ -6,7 +6,7 @@ const dbConfig = {
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
     database: process.env.DB_NAME || 'mdmweb',
-    password: process.env.DB_PASSWORD || '2486',
+    password: process.env.DB_PASSWORD || '',
     port: process.env.DB_PORT || 5432,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     max: 20, // Máximo de conexões no pool
@@ -111,7 +111,7 @@ const insertInitialData = async () => {
             
             // Criar usuário admin padrão
             const bcrypt = require('bcrypt');
-            const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
+            const adminPassword = process.env.ADMIN_PASSWORD || 'admin@123';
             const hashedPassword = await bcrypt.hash(adminPassword, 10);
             
             await query(`

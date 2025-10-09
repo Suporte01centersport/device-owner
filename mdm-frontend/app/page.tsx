@@ -395,8 +395,8 @@ export default function Home() {
   }, [loadUnreadSupportCount])
 
   const handleDeviceDeleted = useCallback((deviceId: string) => {
-    setDevices(prevDevices => prevDevices.filter(device => device.deviceId !== deviceId))
-  }, [])
+    updateDevices(prevDevices => prevDevices.filter(device => device.deviceId !== deviceId))
+  }, [updateDevices])
 
   const handleSetAdminPasswordAll = useCallback(() => {
     const passwordInput = document.getElementById('adminPassword') as HTMLInputElement
