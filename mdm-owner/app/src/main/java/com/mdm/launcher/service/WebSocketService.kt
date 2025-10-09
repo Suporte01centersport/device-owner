@@ -106,13 +106,22 @@ class WebSocketService : Service() {
     
     private suspend fun initializeWebSocket() {
         try {
-            Log.d(TAG, "Inicializando WebSocket em background")
+            Log.d(TAG, "🔧 Inicializando WebSocket em background")
             
-            val serverUrl = "ws://10.0.2.2:3002" // IP do emulador para localhost
+            // Descobrir servidor automaticamente
+            val serverUrl = com.mdm.launcher.utils.ServerDiscovery.discoverServer(this)
+            Log.d(TAG, "🔍 Servidor descoberto no Service: $serverUrl")
+            
             val deviceId = android.provider.Settings.Secure.getString(
                 contentResolver,
                 android.provider.Settings.Secure.ANDROID_ID
             ) ?: "unknown-device"
+            
+            Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(4)}")
+            
+            // Destruir instância antiga se existir
+            WebSocketClient.destroyInstance()
+            Log.d(TAG, "🗑️ Instância antiga destruída")
             
             webSocketClient = WebSocketClient.getInstance(
                 serverUrl = serverUrl,
@@ -125,13 +134,20 @@ class WebSocketService : Service() {
                 onConnectionChange = { isConnected ->
                     Log.d(TAG, "Status da conexão em background: $isConnected")
                     updateNotification(isConnected)
+                    
+                    // Quando conectar, coletar e enviar dados completos
+                    if (isConnected) {
+                        Log.d(TAG, "📤 Conexão estabelecida no Service - enviando dados completos...")
+                        sendDeviceStatusWithRealData()
+                    }
                 }
             )
             
+            Log.d(TAG, "🚀 Iniciando conexão WebSocket...")
             webSocketClient?.connect()
             
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao inicializar WebSocket em background", e)
+            Log.e(TAG, "❌ Erro ao inicializar WebSocket em background", e)
         }
     }
     
@@ -153,14 +169,29 @@ class WebSocketService : Service() {
                     Log.d(TAG, "Ping recebido em background")
                     webSocketClient?.sendMessage("""{"type":"pong","timestamp":${System.currentTimeMillis()}}""")
                 }
+                "update_app_permissions" -> {
+                    Log.d(TAG, "📱 UPDATE_APP_PERMISSIONS recebido no Service")
+                    // Encaminhar para MainActivity processar
+                    val intent = Intent("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
+                    intent.putExtra("message", message)
+                    sendBroadcast(intent)
+                    Log.d(TAG, "Broadcast enviado para MainActivity processar permissões")
+                }
                 "request_location" -> {
                     Log.d(TAG, "Localização solicitada em background")
                     // Implementar envio de localização em background
                 }
                 "show_notification" -> {
-                    Log.d(TAG, "Notificação recebida em background")
-                    val title = jsonObject["title"] as? String ?: "MDM Launcher"
-                    val body = jsonObject["body"] as? String ?: "Nova notificação"
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "📬 SHOW_NOTIFICATION RECEBIDO (SERVICE)")
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    
+                    val dataMap = jsonObject["data"] as? Map<*, *> ?: jsonObject
+                    val title = dataMap["title"] as? String ?: "MDM Launcher"
+                    val body = dataMap["body"] as? String ?: "Nova notificação"
+                    
+                    Log.d(TAG, "Título: $title")
+                    Log.d(TAG, "Corpo: $body")
                     
                     // Mostrar notificação em background
                     showBackgroundNotification(title, body)
@@ -177,17 +208,42 @@ class WebSocketService : Service() {
                         "timestamp" to System.currentTimeMillis()
                     )
                     webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
+                    Log.d(TAG, "✅ Confirmação de notificação enviada")
+                    Log.d(TAG, "═══════════════════════════════════════════")
                 }
                 "set_admin_password" -> {
-                    Log.d(TAG, "Senha de administrador recebida em background")
+                    Log.d(TAG, "🔐 === RECEBENDO SENHA DE ADMINISTRADOR (SERVICE) ===")
+                    Log.d(TAG, "Mensagem completa: $message")
+                    
                     val data = jsonObject["data"] as? Map<*, *>
                     val password = data?.get("password") as? String
-                    if (password != null) {
+                    
+                    Log.d(TAG, "Data extraída: $data")
+                    Log.d(TAG, "Password extraída: $password")
+                    Log.d(TAG, "Password é null? ${password == null}")
+                    Log.d(TAG, "Password vazia? ${password?.isEmpty()}")
+                    
+                    if (password != null && password.isNotEmpty()) {
                         // Salvar senha em SharedPreferences
                         val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                         prefs.edit().putString("admin_password", password).apply()
-                        Log.d(TAG, "Senha de administrador salva em background")
+                        Log.d(TAG, "✅ Senha de administrador salva em background: $password")
+                        
+                        // Mostrar notificação
+                        showBackgroundNotification("Senha Configurada", "Senha de administrador foi configurada com sucesso!")
+                    } else {
+                        Log.e(TAG, "❌ ERRO: Password é null ou vazia no Service")
                     }
+                    Log.d(TAG, "===============================================")
+                }
+                "support_message_received" -> {
+                    Log.d(TAG, "✅ Confirmação de mensagem de suporte recebida")
+                    // Mostrar notificação de confirmação
+                    showBackgroundNotification("Mensagem Enviada", "Sua mensagem foi recebida pelo servidor!")
+                }
+                "support_message_error" -> {
+                    Log.e(TAG, "❌ Erro ao enviar mensagem de suporte")
+                    showBackgroundNotification("Erro", "Não foi possível enviar a mensagem")
                 }
                 else -> {
                     Log.d(TAG, "Tipo de mensagem não processado em background: $type")
@@ -249,6 +305,32 @@ class WebSocketService : Service() {
                 
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao enviar status do dispositivo em background", e)
+            }
+        }
+    }
+    
+    private fun sendDeviceStatusWithRealData() {
+        serviceScope.launch {
+            try {
+                Log.d(TAG, "📊 Coletando dados REAIS do dispositivo no Service...")
+                val deviceInfo = com.mdm.launcher.utils.DeviceInfoCollector.collectDeviceInfo(
+                    this@WebSocketService, 
+                    customName = null
+                )
+                
+                Log.d(TAG, "=== DADOS REAIS COLETADOS (SERVICE) ===")
+                Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
+                Log.d(TAG, "Apps: ${deviceInfo.installedAppsCount}")
+                Log.d(TAG, "Storage: ${deviceInfo.storageTotal / (1024*1024*1024)}GB")
+                Log.d(TAG, "DeviceId: ${deviceInfo.deviceId.takeLast(4)}")
+                Log.d(TAG, "Device Owner: ${deviceInfo.isDeviceOwner}")
+                Log.d(TAG, "======================================")
+                
+                webSocketClient?.sendDeviceStatus(deviceInfo)
+                Log.d(TAG, "✅ Dados reais enviados com sucesso do Service!")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao enviar dados reais do dispositivo", e)
             }
         }
     }
@@ -321,12 +403,17 @@ class WebSocketService : Service() {
             }
             
             // Intent para abrir o app quando clicar na notificação
-            val intent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            // IMPORTANTE: Usar FLAG_ACTIVITY_SINGLE_TOP para não recriar Activity
+            val intent = Intent(this, com.mdm.launcher.MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("show_message_modal", true)
+                putExtra("message_content", body)
             }
             
             val pendingIntent = PendingIntent.getActivity(
-                this, 0, intent,
+                this, 
+                System.currentTimeMillis().toInt(), // ID único para cada notificação
+                intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             

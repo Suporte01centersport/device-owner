@@ -85,11 +85,89 @@ npm run dev
 5. **Ativar Device Owner**
    ```bash
    # Ativar Device Owner (dispositivo deve estar sem conta Google)
-   adb shell dpm set-device-owner com.mdm.launcher/.device.MDMDeviceAdminReceiver
+   adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
    
    # Verificar se foi ativado
    adb shell dpm list-owners
    ```
+
+6. **Remover Device Owner (Para Testes/Debug)**
+   
+   ⚠️ **Via App (Recomendado):**
+   - Abra o app no dispositivo
+   - Toque **10 vezes rapidamente** no botão de configurações (⚙️)
+   - Confirme a remoção no dialog que aparece
+   - O app abrirá as configurações para desinstalar
+   
+   **Via ADB (Alternativa):**
+   ```bash
+   # Isso só funciona se o app não for Device Owner ou em modo de teste
+   adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
+   adb uninstall com.mdm.launcher
+   
+   # Se não funcionar, use a opção via app ou factory reset
+   ```
+
+### 🔍 **Descoberta Automática do Servidor**
+
+O sistema MDM implementa **descoberta automática do servidor** - não é necessário configurar IP manualmente em cada dispositivo!
+
+#### Como Funciona
+
+O app Android tenta descobrir o servidor automaticamente usando 4 estratégias:
+
+1. **DNS Local** (mdm.local) - Para produção com DNS configurado
+2. **Broadcast UDP** - O servidor responde a broadcasts na rede local
+3. **IPs Comuns** - Testa IPs típicos (.1, .100, .10, etc)
+4. **Configuração Manual** - Fallback para IP configurado
+
+#### No Servidor (Automático)
+
+O servidor já inicia automaticamente o sistema de descoberta:
+
+```bash
+cd mdm-frontend
+npm run dev
+
+# Você verá:
+# 🔍 ═══════════════════════════════════════════════
+#    SERVIDOR DE DESCOBERTA MDM INICIADO
+# ═══════════════════════════════════════════════
+# 📡 Porta UDP de descoberta: 3003
+# 🌐 WebSocket será anunciado na porta: 3002
+# 📍 IPs disponíveis para conexão:
+#    - ws://192.168.1.100:3002  (exemplo)
+```
+
+#### No Dispositivo (Automático)
+
+O app Android descobre e conecta automaticamente ao servidor:
+
+```
+2025-10-09 09:20:00.000 MainActivity  D  Servidor descoberto: ws://192.168.1.100:3002
+2025-10-09 09:20:01.000 WebSocketClient  D  WebSocket conectado
+```
+
+#### Configuração Manual (Opcional)
+
+Se a descoberta automática falhar, você pode configurar manualmente:
+
+1. Abra o app no dispositivo
+2. Toque no ícone de configurações (⚙️)
+3. Digite a URL: `ws://SEU_IP:3002`
+4. Salvar
+
+#### Para Ambientes Corporativos
+
+Configure um DNS local para `mdm.local` apontando para o servidor MDM:
+
+```bash
+# Windows (hosts file): C:\Windows\System32\drivers\etc\hosts
+192.168.1.100  mdm.local
+
+# Linux/Mac: /etc/hosts
+192.168.1.100  mdm.local
+```
 
 #### 🖥️ **Configurar Emulador Android**
 

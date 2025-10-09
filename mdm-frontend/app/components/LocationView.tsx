@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
+import DeviceLocationMap from './DeviceLocationMap'
 
 interface LocationViewProps {
   device: Device
@@ -23,6 +24,7 @@ export default function LocationView({ device }: LocationViewProps) {
   const [showMap, setShowMap] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState<LocationHistoryEntry | null>(null)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showHistoryMap, setShowHistoryMap] = useState(false)
 
   // Carregar histórico de localização
   useEffect(() => {
@@ -260,6 +262,14 @@ export default function LocationView({ device }: LocationViewProps) {
         )}
       </div>
 
+      {/* Mapa em tempo real */}
+      {device.latitude && device.longitude && (
+        <DeviceLocationMap 
+          device={device}
+          className="mb-6"
+        />
+      )}
+
       {/* Botão do histórico de localização */}
       <div className="flex justify-center">
         <button
@@ -347,67 +357,92 @@ export default function LocationView({ device }: LocationViewProps) {
                 <span className="mr-2">📚</span>
                 Histórico de Localização
               </h3>
-              <button
-                onClick={handleCloseHistoryModal}
-                className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
-              >
-                ✕
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setShowHistoryMap(!showHistoryMap)}
+                  className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
+                    showHistoryMap 
+                      ? 'bg-primary text-white' 
+                      : 'bg-border-light text-secondary hover:bg-border'
+                  }`}
+                >
+                  {showHistoryMap ? '📋 Lista' : '🗺️ Mapa'}
+                </button>
+                <button
+                  onClick={handleCloseHistoryModal}
+                  className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-6">
+            <div className="flex-1 overflow-hidden">
               {isLoading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-500 mt-2">Carregando histórico...</p>
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="text-gray-500 mt-2">Carregando histórico...</p>
+                  </div>
+                </div>
+              ) : showHistoryMap ? (
+                <div className="h-full">
+                  <DeviceLocationMap 
+                    device={device}
+                    className="h-full rounded-none"
+                  />
                 </div>
               ) : locationHistory.length > 0 ? (
-                <div className="space-y-3">
-                  {locationHistory.map((entry) => (
-                    <div
-                      key={entry.id}
-                      className={`card p-4 cursor-pointer transition-all duration-200 hover:shadow-lg ${
-                        entry.id === 'current' 
-                          ? 'ring-2 ring-primary bg-blue-50' 
-                          : 'hover:bg-gray-50'
-                      }`}
-                      onClick={() => setSelectedLocation(entry)}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <span className="text-xl">
-                            {entry.id === 'current' ? '📍' : getProviderIcon(entry.provider)}
-                          </span>
-                          <div>
-                            <div className="font-mono text-sm text-primary">
-                              {entry.latitude.toFixed(6)}, {entry.longitude.toFixed(6)}
+                <div className="p-6 overflow-y-auto h-full">
+                  <div className="space-y-3">
+                    {locationHistory.map((entry) => (
+                      <div
+                        key={entry.id}
+                        className={`card p-4 cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                          entry.id === 'current' 
+                            ? 'ring-2 ring-primary bg-blue-50' 
+                            : 'hover:bg-gray-50'
+                        }`}
+                        onClick={() => setSelectedLocation(entry)}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <span className="text-xl">
+                              {entry.id === 'current' ? '📍' : getProviderIcon(entry.provider)}
+                            </span>
+                            <div>
+                              <div className="font-mono text-sm text-primary">
+                                {entry.latitude.toFixed(6)}, {entry.longitude.toFixed(6)}
+                              </div>
+                              {entry.address && (
+                                <div className="text-xs text-secondary">{entry.address}</div>
+                              )}
                             </div>
-                            {entry.address && (
-                              <div className="text-xs text-secondary">{entry.address}</div>
-                            )}
                           </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-xs text-muted">
-                            {formatTimestamp(entry.timestamp)}
-                          </div>
-                          <div className={`text-xs font-medium ${getAccuracyColor(entry.accuracy)}`}>
-                            {entry.accuracy.toFixed(0)}m
+                          <div className="text-right">
+                            <div className="text-xs text-muted">
+                              {formatTimestamp(entry.timestamp)}
+                            </div>
+                            <div className={`text-xs font-medium ${getAccuracyColor(entry.accuracy)}`}>
+                              {entry.accuracy.toFixed(0)}m
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl">📚</span>
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center">
+                    <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
+                      <span className="text-3xl">📚</span>
+                    </div>
+                    <h4 className="text-lg font-semibold text-primary mb-2">Nenhum histórico disponível</h4>
+                    <p className="text-sm text-muted">
+                      O histórico de localizações será exibido aqui quando disponível
+                    </p>
                   </div>
-                  <h4 className="text-lg font-semibold text-primary mb-2">Nenhum histórico disponível</h4>
-                  <p className="text-sm text-muted">
-                    O histórico de localizações será exibido aqui quando disponível
-                  </p>
                 </div>
               )}
             </div>

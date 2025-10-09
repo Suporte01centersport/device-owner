@@ -113,6 +113,13 @@
             android:exported="false"
             android:foregroundServiceType="dataSync" />
 
+        <!-- Serviço de localização em tempo real -->
+        <service
+            android:name="com.mdm.launcher.service.LocationService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="location" />
+
         <!-- Broadcast Receiver para mudanças de apps -->
         <receiver
             android:name="com.mdm.launcher.AppChangeReceiver"

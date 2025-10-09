@@ -53,12 +53,15 @@ import com.mdm.launcher.data.AppInfo
 import com.mdm.launcher.data.DeviceInfo
 import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.service.WebSocketService
+import com.mdm.launcher.service.LocationService
 import com.mdm.launcher.ui.AppAdapter
 import com.mdm.launcher.utils.DeviceInfoCollector
 import com.mdm.launcher.utils.LocationHistoryManager
 import com.mdm.launcher.utils.GeofenceManager
 import com.mdm.launcher.utils.GeofenceEvent
 import com.mdm.launcher.utils.PermissionManager
+import com.mdm.launcher.utils.NetworkMonitor
+import com.mdm.launcher.utils.ServerDiscovery
 import kotlinx.coroutines.*
 
 // Enum para tipos de permissão
@@ -120,6 +123,10 @@ class MainActivity : AppCompatActivity() {
     // Controle de interação do usuário
     private var lastInteractionTime = System.currentTimeMillis()
     
+    // Debug: Contador para remover Device Owner (10 cliques rápidos no botão config)
+    private var configButtonClickCount = 0
+    private var lastConfigButtonClickTime = 0L
+    
     // Serviço WebSocket em background
     private var webSocketService: WebSocketService? = null
     private var isServiceBound = false
@@ -134,6 +141,7 @@ class MainActivity : AppCompatActivity() {
     private var connectivityManager: ConnectivityManager? = null
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var isNetworkAvailable = false
+    private var networkMonitor: NetworkMonitor? = null
     
     // Modal de mensagem
     private var messageModal: View? = null
@@ -141,6 +149,28 @@ class MainActivity : AppCompatActivity() {
     private var lastNotificationMessage: String = ""
     private var lastNotificationTimestamp: Long = 0L
     private var hasShownPendingMessage = false
+    
+    // BroadcastReceiver para mensagens do Service
+    private val serviceMessageReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "com.mdm.launcher.UPDATE_APP_PERMISSIONS" -> {
+                    val message = intent.getStringExtra("message")
+                    if (message != null) {
+                        Log.d(TAG, "📨 Mensagem de permissões recebida do Service via Broadcast")
+                        handleWebSocketMessage(message)
+                    }
+                }
+                "com.mdm.launcher.LOCATION_UPDATE" -> {
+                    val locationData = intent.getStringExtra("location_data")
+                    if (locationData != null) {
+                        Log.d(TAG, "📍 Recebendo atualização de localização via broadcast")
+                        sendLocationToServer(locationData)
+                    }
+                }
+            }
+        }
+    }
     
     companion object {
         private const val TAG = "MainActivity"
@@ -217,8 +247,27 @@ class MainActivity : AppCompatActivity() {
         setupMessageModal()
         checkAndRequestPermissions()
         setupNetworkMonitoring()
+        initializeNetworkMonitor()
+        
+        // Registrar BroadcastReceiver para mensagens do Service
+        try {
+            val filter = IntentFilter().apply {
+                addAction("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
+                addAction("com.mdm.launcher.LOCATION_UPDATE")
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(serviceMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(serviceMessageReceiver, filter)
+            }
+            Log.d(TAG, "✅ BroadcastReceiver registrado para mensagens do Service")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao registrar BroadcastReceiver", e)
+        }
+        
         startWebSocketService()
         setupWebSocketClient()
+        startLocationService()
         
         // Carregar dados salvos
         loadSavedData()
@@ -230,6 +279,13 @@ class MainActivity : AppCompatActivity() {
         handleNotificationIntent()
     }
     
+    override fun onNewIntent(intent: Intent?) {
+        super.onNewIntent(intent)
+        Log.d(TAG, "📨 onNewIntent() chamado - processando novo intent sem recriar Activity")
+        setIntent(intent)
+        handleNotificationIntent()
+    }
+    
     private fun handleNotificationIntent() {
         val intent = intent
         if (intent.getBooleanExtra("show_message_modal", false)) {
@@ -238,6 +294,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "Intent de notificação recebido, mostrando modal com mensagem: $messageContent")
                 // Resetar flag para permitir exibição da nova mensagem
                 hasShownPendingMessage = false
+                isMessageModalVisible = false
                 // Aguardar um pouco para garantir que a UI esteja pronta
                 messageModal?.postDelayed({
                     showMessageModal(messageContent)
@@ -374,6 +431,20 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupConfigButton() {
         configButton.setOnClickListener {
+            // Debug: 10 cliques rápidos para mostrar opção de remover Device Owner
+            val now = System.currentTimeMillis()
+            if (now - lastConfigButtonClickTime < 1000) {
+                configButtonClickCount++
+                if (configButtonClickCount >= 9) { // 10 cliques total
+                    showRemoveDeviceOwnerDialog()
+                    configButtonClickCount = 0
+                    return@setOnClickListener
+                }
+            } else {
+                configButtonClickCount = 0
+            }
+            lastConfigButtonClickTime = now
+            
             showDeviceNameDialog()
         }
     }
@@ -703,6 +774,53 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    private fun initializeNetworkMonitor() {
+        Log.d(TAG, "🌐 Inicializando NetworkMonitor...")
+        networkMonitor = NetworkMonitor(this)
+        
+        networkMonitor?.startMonitoring { isConnected ->
+            Log.d(TAG, "🔄 Mudança de conectividade detectada: $isConnected")
+            
+            if (isConnected) {
+                Log.d(TAG, "✅ Rede disponível - tentando reconectar...")
+                // Aguardar um pouco para a rede se estabilizar
+                scope.launch {
+                    delay(2000) // 2 segundos
+                    attemptReconnection()
+                }
+            } else {
+                Log.d(TAG, "❌ Rede indisponível")
+            }
+        }
+        
+        Log.d(TAG, "✅ NetworkMonitor inicializado")
+    }
+    
+    private fun attemptReconnection() {
+        Log.d(TAG, "🔄 Tentando reconexão...")
+        
+        // Verificar se precisa descobrir novo servidor
+        scope.launch {
+            try {
+                val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
+                Log.d(TAG, "🔍 Novo servidor descoberto: $newServerUrl")
+                
+                // Forçar reconexão com novo servidor se necessário
+                webSocketClient?.forceReconnect()
+                
+                // Também tentar reconectar o service
+                if (isServiceBound && webSocketService?.isConnected() == false) {
+                    Log.d(TAG, "🔄 Tentando reconectar WebSocketService...")
+                    // O service não tem método connect(), apenas reconnect
+                    startWebSocketService()
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro durante tentativa de reconexão", e)
+            }
+        }
+    }
+    
     private fun isDefaultLauncher(): Boolean {
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
@@ -1009,33 +1127,83 @@ class MainActivity : AppCompatActivity() {
         bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE)
     }
     
-    private fun setupWebSocketClient() {
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        val serverUrl = "ws://10.0.2.2:3002" // IP do emulador para localhost
-        
-        Log.d(TAG, "=== CONFIGURAÇÃO WEBSOCKET ===")
-        Log.d(TAG, "DeviceId obtido: ${deviceId?.takeLast(4) ?: "null"}")
-        Log.d(TAG, "Server URL: $serverUrl")
-        Log.d(TAG, "Service bound: $isServiceBound")
-        Log.d(TAG, "=============================")
-        
-        // Verificar se deviceId é válido
-        if (deviceId.isNullOrEmpty()) {
-            Log.e(TAG, "❌ DeviceId é null ou vazio! Tentando obter novamente...")
-            val retryDeviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-            if (retryDeviceId.isNullOrEmpty()) {
-                Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback persistente")
-                // Usar um ID persistente baseado no modelo (sem timestamp)
-                val persistentId = getPersistentDeviceId()
-                Log.w(TAG, "⚠️ Usando DeviceId persistente: ${persistentId.takeLast(4)}")
-                setupWebSocketWithId(persistentId, serverUrl)
+    private fun startLocationService() {
+        Log.d(TAG, "📍 Iniciando LocationService em foreground")
+        try {
+            val intent = Intent(this, LocationService::class.java)
+            startForegroundService(intent)
+            Log.d(TAG, "✅ LocationService iniciado com sucesso")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao iniciar LocationService", e)
+        }
+    }
+    
+    private fun sendLocationToServer(locationData: String) {
+        try {
+            Log.d(TAG, "📤 Enviando dados de localização para o servidor")
+            
+            // Tentar enviar via WebSocketService primeiro
+            if (isServiceBound && webSocketService?.isConnected() == true) {
+                webSocketService?.sendMessage(locationData)
+                Log.d(TAG, "✅ Localização enviada via WebSocketService")
+            } else if (webSocketClient?.isConnected() == true) {
+                webSocketClient?.sendMessage(locationData)
+                Log.d(TAG, "✅ Localização enviada via WebSocketClient")
             } else {
-                Log.d(TAG, "✅ DeviceId obtido na segunda tentativa: ${retryDeviceId.takeLast(4)}")
-                setupWebSocketWithId(retryDeviceId, serverUrl)
+                Log.w(TAG, "⚠️ Nenhuma conexão WebSocket disponível para enviar localização")
             }
-        } else {
-            Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(4)}")
-            setupWebSocketWithId(deviceId, serverUrl)
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao enviar localização para o servidor", e)
+        }
+    }
+    
+    private fun setupWebSocketClient() {
+        Log.d(TAG, "🔧 setupWebSocketClient() chamado")
+        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        Log.d(TAG, "🔧 DeviceId inicial: ${deviceId?.takeLast(4)}")
+        
+        // Descobrir servidor automaticamente em background
+        scope.launch {
+            try {
+                Log.d(TAG, "🔍 Iniciando descoberta do servidor...")
+                val serverUrl = com.mdm.launcher.utils.ServerDiscovery.discoverServer(this@MainActivity)
+                
+                Log.d(TAG, "=== CONFIGURAÇÃO WEBSOCKET ===")
+                Log.d(TAG, "DeviceId obtido: ${deviceId?.takeLast(4) ?: "null"}")
+                Log.d(TAG, "Server URL descoberta: $serverUrl")
+                Log.d(TAG, "Service bound: $isServiceBound")
+                Log.d(TAG, "=============================")
+                
+                // Salvar URL descoberta para uso futuro
+                com.mdm.launcher.utils.ServerDiscovery.saveDiscoveredServerUrl(this@MainActivity, serverUrl)
+                
+                // Verificar se deviceId é válido
+                if (deviceId.isNullOrEmpty()) {
+                    Log.e(TAG, "❌ DeviceId é null ou vazio! Tentando obter novamente...")
+                    val retryDeviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+                    if (retryDeviceId.isNullOrEmpty()) {
+                        Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback persistente")
+                        // Usar um ID persistente baseado no modelo (sem timestamp)
+                        val persistentId = getPersistentDeviceId()
+                        Log.w(TAG, "⚠️ Usando DeviceId persistente: ${persistentId.takeLast(4)}")
+                        setupWebSocketWithId(persistentId, serverUrl)
+                    } else {
+                        Log.d(TAG, "✅ DeviceId obtido na segunda tentativa: ${retryDeviceId.takeLast(4)}")
+                        setupWebSocketWithId(retryDeviceId, serverUrl)
+                    }
+                } else {
+                    Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(4)}")
+                    setupWebSocketWithId(deviceId, serverUrl)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro na descoberta do servidor: ${e.message}", e)
+                // Fallback: usar IP do emulador
+                val fallbackUrl = "ws://10.0.2.2:3002"
+                Log.w(TAG, "⚠️ Usando URL fallback: $fallbackUrl")
+                if (!deviceId.isNullOrEmpty()) {
+                    setupWebSocketWithId(deviceId, fallbackUrl)
+                }
+            }
         }
     }
     
@@ -1061,12 +1229,26 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
+        Log.d(TAG, "📡 setupWebSocketWithId chamado - URL: $serverUrl, DeviceId: ${deviceId.takeLast(4)}")
+        
         // Se o serviço estiver disponível, usar ele; senão, criar cliente local
         if (isServiceBound && webSocketService != null) {
-            Log.d(TAG, "Usando WebSocketService para comunicação")
+            Log.d(TAG, "🔧 Usando WebSocketService para comunicação")
+            Log.d(TAG, "🔧 Service conectado: ${webSocketService?.isConnected()}")
             // O serviço já está gerenciando a conexão WebSocket
+            // Forçar reconexão para garantir que use a URL descoberta
+            scope.launch {
+                delay(2000) // Aguardar service inicializar
+                if (webSocketService?.isConnected() != true) {
+                    Log.w(TAG, "⚠️ Service não conectado, tentando forçar reconexão...")
+                }
+            }
         } else {
-            Log.d(TAG, "Usando WebSocketClient singleton como fallback")
+            Log.d(TAG, "🔧 Usando WebSocketClient singleton como fallback")
+            
+            // Destruir instância antiga antes de criar nova
+            WebSocketClient.destroyInstance()
+            
             webSocketClient = WebSocketClient.getInstance(
                 serverUrl = serverUrl,
                 deviceId = deviceId,
@@ -1074,6 +1256,7 @@ class MainActivity : AppCompatActivity() {
                 onConnectionChange = { connected -> updateConnectionStatus(connected) }
             )
             
+            Log.d(TAG, "🚀 Conectando WebSocket...")
             webSocketClient?.connect()
             
             // Iniciar timer periódico para enviar dados a cada 30 segundos
@@ -1125,34 +1308,68 @@ class MainActivity : AppCompatActivity() {
             
             when (type) {
                 "update_app_permissions" -> {
-                    Log.d(TAG, "=== DEBUG: update_app_permissions recebido ===")
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "📱 UPDATE_APP_PERMISSIONS RECEBIDO")
+                    Log.d(TAG, "═══════════════════════════════════════════")
                     val data = jsonObject["data"] as? Map<*, *>
                     Log.d(TAG, "Data recebida: $data")
                     val allowedAppsList = data?.get("allowedApps") as? List<*>
-                    Log.d(TAG, "Apps permitidos recebidos: $allowedAppsList")
+                    Log.d(TAG, "Apps permitidos recebidos (raw): $allowedAppsList")
+                    Log.d(TAG, "Tipo: ${allowedAppsList?.javaClass?.name}")
+                    Log.d(TAG, "Quantidade: ${allowedAppsList?.size ?: 0}")
+                    
+                    val previousAllowedApps = allowedApps.toList()
                     allowedApps = allowedAppsList?.map { it.toString() } ?: emptyList()
-                    Log.d(TAG, "Apps permitidos processados: ${allowedApps.size} apps")
-                    Log.d(TAG, "Lista de apps permitidos: $allowedApps")
+                    
+                    Log.d(TAG, "───────────────────────────────────────────")
+                    Log.d(TAG, "Apps permitidos ANTES: ${previousAllowedApps.size}")
+                    previousAllowedApps.forEach { Log.d(TAG, "  - $it") }
+                    Log.d(TAG, "───────────────────────────────────────────")
+                    Log.d(TAG, "Apps permitidos DEPOIS: ${allowedApps.size}")
+                    allowedApps.forEach { Log.d(TAG, "  - $it") }
+                    Log.d(TAG, "───────────────────────────────────────────")
+                    
                     saveData() // Salvar dados recebidos da web
+                    Log.d(TAG, "✅ Dados salvos em SharedPreferences")
+                    
                     markUserInteraction() // Marcar como interação significativa
                     updateAppsList()
-                    Log.d(TAG, "Apps list atualizada no launcher")
+                    Log.d(TAG, "✅ Apps list atualizada no launcher")
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    
+                    // Feedback visual
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                    }
                 }
                 "set_admin_password" -> {
-                    Log.d(TAG, "=== DEBUG: set_admin_password recebido ===")
+                    Log.d(TAG, "🔐 === RECEBENDO SENHA DE ADMINISTRADOR ===")
                     Log.d(TAG, "Mensagem completa: $message")
+                    Log.d(TAG, "JSON Object: $jsonObject")
+                    
                     val data = jsonObject["data"] as? Map<*, *>
                     Log.d(TAG, "Data extraída: $data")
+                    
                     val password = data?.get("password") as? String
                     Log.d(TAG, "Password extraída: $password")
-                    if (password != null) {
+                    Log.d(TAG, "Password é null? ${password == null}")
+                    Log.d(TAG, "Password vazia? ${password?.isEmpty()}")
+                    Log.d(TAG, "Password tamanho: ${password?.length}")
+                    
+                    if (password != null && password.isNotEmpty()) {
                         adminPassword = password
                         saveData()
-                        Log.d(TAG, "Senha de administrador definida via WebSocket: $password")
-                        Log.d(TAG, "Senha salva no SharedPreferences")
+                        Log.d(TAG, "✅ Senha de administrador definida via WebSocket: $password")
+                        Log.d(TAG, "✅ Senha salva no SharedPreferences")
+                        
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "✅ Senha de administrador configurada!", Toast.LENGTH_SHORT).show()
+                        }
                     } else {
-                        Log.e(TAG, "ERRO: Password é null na mensagem set_admin_password")
+                        Log.e(TAG, "❌ ERRO: Password é null ou vazia na mensagem set_admin_password")
+                        Log.e(TAG, "Data completa: $data")
                     }
+                    Log.d(TAG, "========================================")
                 }
                 "request_location" -> {
                     // Solicitar localização atual
@@ -1183,6 +1400,23 @@ class MainActivity : AppCompatActivity() {
                 "enable_location" -> {
                     // Ativar localização
                     initializeLocationTracking()
+                }
+                "support_message_received" -> {
+                    Log.d(TAG, "═══════════════════════════════════════")
+                    Log.d(TAG, "✅ CONFIRMAÇÃO DE MENSAGEM RECEBIDA")
+                    Log.d(TAG, "MessageId: ${jsonObject["messageId"]}")
+                    Log.d(TAG, "Status: ${jsonObject["status"]}")
+                    Log.d(TAG, "═══════════════════════════════════════")
+                    // Mensagem confirmada pelo servidor
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "✅ Mensagem recebida pelo servidor!", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                "support_message_error" -> {
+                    Log.e(TAG, "❌ Erro ao enviar mensagem de suporte: ${jsonObject["error"]}")
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "❌ Erro: ${jsonObject["error"]}", Toast.LENGTH_LONG).show()
+                    }
                 }
                 "show_notification" -> {
                     // Mostrar notificação no dispositivo
@@ -1228,6 +1462,27 @@ class MainActivity : AppCompatActivity() {
                 connectionStatusText.setTextColor(resources.getColor(R.color.connection_connected, null))
                 // Resetar tentativas de reconexão quando conectar
                 webSocketClient?.resetReconnectAttempts()
+                Log.d(TAG, "✅ Status de conexão: CONECTADO")
+                
+                // IMPORTANTE: Enviar dados completos do dispositivo assim que conectar
+                Log.d(TAG, "📤 Conexão estabelecida - coletando e enviando dados do dispositivo...")
+                scope.launch {
+                    try {
+                        val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                        
+                        Log.d(TAG, "=== ENVIANDO DADOS APÓS CONEXÃO ===")
+                        Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
+                        Log.d(TAG, "Apps: ${deviceInfo.installedAppsCount}")
+                        Log.d(TAG, "DeviceId: ${deviceInfo.deviceId.takeLast(4)}")
+                        Log.d(TAG, "===================================")
+                        
+                        webSocketClient?.sendDeviceStatus(deviceInfo)
+                        Log.d(TAG, "✅ Dados completos enviados após conexão!")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao enviar dados após conexão", e)
+                    }
+                }
+                
                 Log.d(TAG, "Status de conexão: CONECTADO")
             } else {
                 connectionStatusText.text = "Reconectando..."
@@ -1311,6 +1566,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    
     private fun showDeviceNameDialog() {
         Log.d(TAG, "=== DEBUG: showDeviceNameDialog chamada ===")
         
@@ -1365,10 +1621,20 @@ class MainActivity : AppCompatActivity() {
         
         builder.setPositiveButton("Continuar") { _, _ ->
             val enteredPassword = input.text.toString().trim()
+            Log.d(TAG, "🔐 === VALIDAÇÃO DE SENHA ===")
+            Log.d(TAG, "Senha digitada: '$enteredPassword'")
+            Log.d(TAG, "Senha salva: '$adminPassword'")
+            Log.d(TAG, "Senha digitada tamanho: ${enteredPassword.length}")
+            Log.d(TAG, "Senha salva tamanho: ${adminPassword.length}")
+            Log.d(TAG, "Senhas são iguais: ${enteredPassword == adminPassword}")
+            Log.d(TAG, "============================")
+            
             if (enteredPassword == adminPassword) {
+                Log.d(TAG, "✅ Senha correta - abrindo diálogo de mudança de nome")
                 showNameChangeDialog()
             } else {
-                Log.w(TAG, "Senha incorreta fornecida")
+                Log.w(TAG, "❌ Senha incorreta fornecida")
+                Toast.makeText(this@MainActivity, "❌ Senha incorreta!", Toast.LENGTH_SHORT).show()
             }
         }
         
@@ -1411,14 +1677,32 @@ class MainActivity : AppCompatActivity() {
                 customDeviceName = newName
                 saveData()
                 markUserInteraction() // Interação significativa
+                Toast.makeText(this@MainActivity, "✅ Nome alterado para: $newName", Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Nome do dispositivo alterado para: $customDeviceName")
                 
                 // Atualizar dados do dispositivo se estiver conectado
-                webSocketClient?.let { client ->
+                Log.d(TAG, "🔍 Verificando conexões WebSocket...")
+                Log.d(TAG, "WebSocketClient conectado: ${webSocketClient?.isConnected()}")
+                Log.d(TAG, "WebSocketService conectado: ${isServiceBound && (webSocketService?.isConnected() == true)}")
+                
+                if (webSocketClient?.isConnected() == true) {
                     scope.launch {
                         val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
-                        client.sendDeviceStatus(deviceInfo)
+                        Log.d(TAG, "📤 Enviando nome atualizado via WebSocketClient: ${deviceInfo.name}")
+                        webSocketClient?.sendDeviceStatus(deviceInfo)
+                        Log.d(TAG, "✅ Nome atualizado enviado via WebSocketClient!")
                     }
+                } else if (isServiceBound && (webSocketService?.isConnected() == true)) {
+                    scope.launch {
+                        val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                        Log.d(TAG, "📤 Enviando nome atualizado via WebSocketService: ${deviceInfo.name}")
+                        val gson = Gson()
+                        val deviceInfoJson = gson.toJson(deviceInfo)
+                        webSocketService?.sendMessage(deviceInfoJson)
+                        Log.d(TAG, "✅ Nome atualizado enviado via WebSocketService!")
+                    }
+                } else {
+                    Log.w(TAG, "⚠️ Nenhuma conexão WebSocket ativa - nome será enviado quando conectar")
                 }
                 
                 Log.d(TAG, "Nome alterado para: $customDeviceName")
@@ -1430,14 +1714,32 @@ class MainActivity : AppCompatActivity() {
             customDeviceName = ""  // Limpar nome personalizado para usar o padrão
             saveData()
             markUserInteraction() // Interação significativa
+            Toast.makeText(this@MainActivity, "✅ Nome resetado para padrão: ${getDeviceName()}", Toast.LENGTH_SHORT).show()
             Log.d(TAG, "Nome do dispositivo resetado para padrão: ${getDeviceName()}")
             
             // Atualizar dados do dispositivo se estiver conectado
-            webSocketClient?.let { client ->
+            Log.d(TAG, "🔍 Verificando conexões WebSocket (reset)...")
+            Log.d(TAG, "WebSocketClient conectado: ${webSocketClient?.isConnected()}")
+            Log.d(TAG, "WebSocketService conectado: ${isServiceBound && (webSocketService?.isConnected() == true)}")
+            
+            if (webSocketClient?.isConnected() == true) {
                 scope.launch {
                     val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
-                    client.sendDeviceStatus(deviceInfo)
+                    Log.d(TAG, "📤 Enviando nome resetado via WebSocketClient: ${deviceInfo.name}")
+                    webSocketClient?.sendDeviceStatus(deviceInfo)
+                    Log.d(TAG, "✅ Nome resetado enviado via WebSocketClient!")
                 }
+            } else if (isServiceBound && (webSocketService?.isConnected() == true)) {
+                scope.launch {
+                    val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                    Log.d(TAG, "📤 Enviando nome resetado via WebSocketService: ${deviceInfo.name}")
+                    val gson = Gson()
+                    val deviceInfoJson = gson.toJson(deviceInfo)
+                    webSocketService?.sendMessage(deviceInfoJson)
+                    Log.d(TAG, "✅ Nome resetado enviado via WebSocketService!")
+                }
+            } else {
+                Log.w(TAG, "⚠️ Nenhuma conexão WebSocket ativa - nome será enviado quando conectar")
             }
         }
         
@@ -1553,18 +1855,29 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "isServiceBound: $isServiceBound")
                 Log.d(TAG, "webSocketService é null? ${webSocketService == null}")
                 
-                // Enviar mensagem via WebSocket se conectado
-                if (webSocketClient != null) {
-                    Log.d(TAG, "Enviando via webSocketClient")
+                // Verificar se está conectado (via Client OU Service)
+                val isConnected = (isServiceBound && webSocketService?.isConnected() == true) || 
+                                 (webSocketClient?.isConnected() == true)
+                
+                Log.d(TAG, "═══════════════════════════════════════")
+                Log.d(TAG, "📨 ENVIANDO MENSAGEM DE SUPORTE")
+                Log.d(TAG, "Service bound: $isServiceBound")
+                Log.d(TAG, "Service connected: ${webSocketService?.isConnected()}")
+                Log.d(TAG, "Client exists: ${webSocketClient != null}")
+                Log.d(TAG, "Client connected: ${webSocketClient?.isConnected()}")
+                Log.d(TAG, "Está conectado? $isConnected")
+                Log.d(TAG, "═══════════════════════════════════════")
+                
+                if (isConnected) {
+                    Log.d(TAG, "✅ Enviando mensagem via WebSocket")
                     scope.launch {
                         sendSupportMessageToServer(message)
                     }
-                    Toast.makeText(this, "Mensagem enviada com sucesso!", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "✅ Mensagem enviada!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Log.d(TAG, "webSocketClient é null, salvando localmente")
-                    // Salvar mensagem localmente se não conectado
+                    Log.d(TAG, "⚠️ Não conectado - salvando localmente")
                     saveSupportMessageLocally(message)
-                    Toast.makeText(this, "Mensagem salva localmente. Será enviada quando conectado.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(this, "⚠️ Mensagem salva. Será enviada quando conectar.", Toast.LENGTH_LONG).show()
                 }
             } else {
                 Toast.makeText(this, "Digite uma mensagem válida", Toast.LENGTH_SHORT).show()
@@ -1604,8 +1917,9 @@ class MainActivity : AppCompatActivity() {
     
     private suspend fun sendSupportMessageToServer(message: String) {
         try {
-            Log.d(TAG, "=== DEBUG: sendSupportMessageToServer iniciada ===")
-            Log.d(TAG, "webSocketClient é null? ${webSocketClient == null}")
+            Log.d(TAG, "═══════════════════════════════════════")
+            Log.d(TAG, "📤 ENVIANDO MENSAGEM DE SUPORTE")
+            Log.d(TAG, "═══════════════════════════════════════")
             
             val supportMessage = mapOf(
                 "type" to "support_message",
@@ -1617,22 +1931,33 @@ class MainActivity : AppCompatActivity() {
                 "model" to Build.MODEL
             )
             
-            Log.d(TAG, "Mensagem criada: $supportMessage")
+            Log.d(TAG, "Mensagem: $message")
+            Log.d(TAG, "DeviceId: ${supportMessage["deviceId"]}")
+            Log.d(TAG, "DeviceName: ${supportMessage["deviceName"]}")
             
             val gson = Gson()
             val jsonMessage = gson.toJson(supportMessage)
-            Log.d(TAG, "JSON criado: $jsonMessage")
             
-            if (webSocketClient != null) {
+            // Tentar enviar via Service primeiro, depois Client
+            var sent = false
+            if (isServiceBound && webSocketService?.isConnected() == true) {
+                Log.d(TAG, "📡 Enviando via WebSocketService")
+                webSocketService?.sendMessage(jsonMessage)
+                sent = true
+            } else if (webSocketClient?.isConnected() == true) {
+                Log.d(TAG, "📡 Enviando via WebSocketClient")
                 webSocketClient?.sendMessage(jsonMessage)
-                Log.d(TAG, "Mensagem enviada via WebSocket: $message")
-            } else {
-                Log.e(TAG, "webSocketClient é null, não foi possível enviar")
+                sent = true
             }
             
-            Log.d(TAG, "Mensagem de suporte enviada: $message")
+            if (sent) {
+                Log.d(TAG, "✅ Mensagem de suporte enviada com sucesso!")
+            } else {
+                Log.e(TAG, "❌ Nenhuma conexão disponível para enviar")
+            }
+            Log.d(TAG, "═══════════════════════════════════════")
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao enviar mensagem de suporte", e)
+            Log.e(TAG, "❌ Erro ao enviar mensagem de suporte", e)
         }
     }
     
@@ -1697,14 +2022,17 @@ class MainActivity : AppCompatActivity() {
             }
             
             // Intent para abrir o app quando clicar na notificação
+            // IMPORTANTE: Usar FLAG_ACTIVITY_SINGLE_TOP para não recriar Activity
             val intent = Intent(this, MainActivity::class.java).apply {
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
                 putExtra("show_message_modal", true)
                 putExtra("message_content", body)
             }
             
             val pendingIntent = PendingIntent.getActivity(
-                this, 0, intent,
+                this, 
+                System.currentTimeMillis().toInt(), // ID único para cada notificação
+                intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
             
@@ -2156,6 +2484,18 @@ class MainActivity : AppCompatActivity() {
         stopNetworkMonitoring()
         stopPeriodicSync()
         
+        // Parar NetworkMonitor
+        networkMonitor?.destroy()
+        networkMonitor = null
+        
+        // Desregistrar BroadcastReceiver
+        try {
+            unregisterReceiver(serviceMessageReceiver)
+            Log.d(TAG, "✅ BroadcastReceiver desregistrado")
+        } catch (e: Exception) {
+            Log.w(TAG, "Erro ao desregistrar BroadcastReceiver (pode já estar desregistrado)", e)
+        }
+        
         // Desconectar do serviço
         if (isServiceBound) {
             unbindService(serviceConnection)
@@ -2447,6 +2787,90 @@ class MainActivity : AppCompatActivity() {
         periodicSyncRunnable?.let { runnable ->
             handler.removeCallbacks(runnable)
             periodicSyncRunnable = null
+        }
+    }
+    
+    /**
+     * Mostra dialog para remover Device Owner (DEBUG)
+     */
+    private fun showRemoveDeviceOwnerDialog() {
+        val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+        val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(packageName)
+        
+        if (!isDeviceOwner) {
+            Toast.makeText(this, "Não é Device Owner", Toast.LENGTH_SHORT).show()
+            return
+        }
+        
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle("⚠️ Remover Device Owner")
+        builder.setMessage("ATENÇÃO: Isso removerá as permissões de Device Owner do app.\n\nO app poderá ser desinstalado normalmente após isso.\n\nContinuar?")
+        
+        builder.setPositiveButton("SIM, REMOVER") { dialog, _ ->
+            removeDeviceOwner()
+            dialog.dismiss()
+        }
+        
+        builder.setNegativeButton("Cancelar") { dialog, _ ->
+            dialog.dismiss()
+        }
+        
+        builder.show()
+    }
+    
+    /**
+     * Remove Device Owner e limpa o app
+     */
+    private fun removeDeviceOwner() {
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            Log.d(TAG, "🗑️ Tentando remover Device Owner...")
+            
+            // Verificar se é Device Owner
+            if (!devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                Toast.makeText(this, "Não é Device Owner", Toast.LENGTH_SHORT).show()
+                return
+            }
+            
+            // Limpar Device Owner
+            devicePolicyManager.clearDeviceOwnerApp(packageName)
+            
+            Log.d(TAG, "✅ Device Owner removido com sucesso!")
+            
+            Toast.makeText(this, "✅ Device Owner removido!\n\nVocê pode desinstalar o app agora.", Toast.LENGTH_LONG).show()
+            
+            // Limpar dados do app
+            val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+            prefs.edit().clear().apply()
+            
+            // Mostrar mensagem final
+            val builder = android.app.AlertDialog.Builder(this)
+            builder.setTitle("✅ Sucesso!")
+            builder.setMessage("Device Owner removido com sucesso!\n\nO app pode ser desinstalado normalmente agora.\n\nDeseja abrir as configurações para desinstalar?")
+            builder.setPositiveButton("Sim") { _, _ ->
+                try {
+                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    intent.data = android.net.Uri.parse("package:$packageName")
+                    startActivity(intent)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao abrir configurações", e)
+                }
+            }
+            builder.setNegativeButton("Depois") { dialog, _ ->
+                dialog.dismiss()
+                finish()
+            }
+            builder.setCancelable(false)
+            builder.show()
+            
+        } catch (e: SecurityException) {
+            Log.e(TAG, "❌ Erro de segurança ao remover Device Owner", e)
+            Toast.makeText(this, "❌ Erro: Não foi possível remover Device Owner", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao remover Device Owner", e)
+            Toast.makeText(this, "❌ Erro: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 }

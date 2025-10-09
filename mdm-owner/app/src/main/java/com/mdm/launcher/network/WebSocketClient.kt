@@ -23,21 +23,23 @@ class WebSocketClient private constructor(
     
     // Sistema de reconexão automática melhorado
     private var reconnectAttempts = 0
-    private var maxReconnectAttempts = 20 // Aumentado para ser mais persistente
+    private var maxReconnectAttempts = 50 // Muito mais persistente para WiFi
     private var reconnectDelay = 1000L // 1s inicial
-    private var maxReconnectDelay = 30000L // 30 segundos máximo
+    private var maxReconnectDelay = 10000L // 10 segundos máximo - mais rápido
     private var isReconnecting = false
     private var heartbeatJob: Job? = null
     private var lastHeartbeat = 0L
     private var lastSuccessfulMessage = 0L
-    private val heartbeatInterval = 30000L // 30 segundos - mais frequente para detectar desconexões
-    private val connectionTimeout = 15000L // 15 segundos timeout - mais tolerante
+    private val heartbeatInterval = 15000L // 15 segundos - mais frequente para detectar desconexões
+    private val connectionTimeout = 10000L // 10 segundos timeout - mais rápido
     private var lastConnectionAttempt = 0L
-    private val minReconnectInterval = 2000L // Mínimo 2s entre tentativas
+    private val minReconnectInterval = 1000L // Mínimo 1s entre tentativas - mais agressivo
     
     private val webSocketListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log.d(TAG, "WebSocket conectado")
+            Log.d(TAG, "🎉 WebSocket CONECTADO com sucesso!")
+            Log.d(TAG, "🌐 URL: $serverUrl")
+            Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(4)}")
             isConnected = true
             isReconnecting = false
             reconnectAttempts = 0
@@ -47,8 +49,8 @@ class WebSocketClient private constructor(
             // Iniciar sistema de heartbeat
             startHeartbeat()
             
-            // Enviar identificação como dispositivo
-            sendDeviceStatus()
+            // NÃO enviar device_status vazio aqui - aguardar o MainActivity coletar dados reais
+            Log.d(TAG, "✅ Conexão estabelecida - aguardando MainActivity enviar dados completos")
         }
         
         override fun onMessage(webSocket: WebSocket, text: String) {
@@ -70,18 +72,29 @@ class WebSocketClient private constructor(
         }
         
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log.e(TAG, "Falha no WebSocket", t)
+            Log.e(TAG, "❌ Falha no WebSocket", t)
+            Log.e(TAG, "Response: ${response?.code} - ${response?.message}")
             isConnected = false
             onConnectionChange(false)
             
             // Parar heartbeat
             stopHeartbeat()
             
-            // Tentar reconectar automaticamente imediatamente
-            if (!isReconnecting) {
+            // Tentar reconectar automaticamente - ser mais agressivo
+            if (!isReconnecting && reconnectAttempts < maxReconnectAttempts) {
+                Log.d(TAG, "🔄 Agendando reconexão após falha...")
                 scheduleReconnect()
             } else if (reconnectAttempts >= maxReconnectAttempts) {
-                Log.w(TAG, "Máximo de tentativas de reconexão atingido")
+                Log.w(TAG, "⚠️ Máximo de tentativas atingido, resetando em 30s...")
+                // Reset mais rápido para WiFi
+                scope.launch {
+                    delay(30000L) // 30 segundos
+                    Log.d(TAG, "🔄 Resetando tentativas de reconexão...")
+                    reconnectAttempts = 0
+                    if (!isConnected) {
+                        scheduleReconnect()
+                    }
+                }
             }
         }
     }
@@ -366,9 +379,9 @@ class WebSocketClient private constructor(
         
         if (reconnectAttempts >= maxReconnectAttempts) {
             Log.w(TAG, "Máximo de tentativas de reconexão atingido ($maxReconnectAttempts)")
-            // Reset após um tempo para permitir novas tentativas
+            // Reset mais rápido para WiFi - 30 segundos em vez de 1 minuto
             scope.launch {
-                delay(60000L) // 1 minuto
+                delay(30000L) // 30 segundos
                 Log.d(TAG, "Resetando tentativas de reconexão após timeout")
                 reconnectAttempts = 0
                 if (!isConnected) {
@@ -379,10 +392,14 @@ class WebSocketClient private constructor(
         }
         
         reconnectAttempts++
-        // Backoff exponencial com jitter para evitar thundering herd
-        val baseDelay = minOf(reconnectDelay * (1 shl (reconnectAttempts - 1)), maxReconnectDelay)
-        val jitter = (Math.random() * 1000).toLong()
-        val delay = baseDelay + jitter
+        
+        // Backoff menos agressivo para WiFi - começar mais rápido
+        val delay = when {
+            reconnectAttempts <= 5 -> 1000L // Primeiras 5 tentativas: 1s
+            reconnectAttempts <= 10 -> 2000L // Próximas 5: 2s
+            reconnectAttempts <= 20 -> 3000L // Próximas 10: 3s
+            else -> 5000L // Resto: 5s
+        }
         
         Log.d(TAG, "Agendando reconexão em ${delay}ms (tentativa $reconnectAttempts/$maxReconnectAttempts)")
         
@@ -462,8 +479,20 @@ class WebSocketClient private constructor(
             onMessage: (String) -> Unit,
             onConnectionChange: (Boolean) -> Unit
         ): WebSocketClient {
-            return INSTANCE ?: synchronized(this) {
-                INSTANCE ?: WebSocketClient(serverUrl, deviceId, onMessage, onConnectionChange).also { INSTANCE = it }
+            return synchronized(this) {
+                val instance = INSTANCE
+                
+                // Se a URL mudou, destruir instância antiga e criar nova
+                if (instance != null && instance.serverUrl != serverUrl) {
+                    Log.d(TAG, "URL mudou de ${instance.serverUrl} para $serverUrl - recriando instância")
+                    instance.disconnect()
+                    INSTANCE = null
+                }
+                
+                INSTANCE ?: WebSocketClient(serverUrl, deviceId, onMessage, onConnectionChange).also { 
+                    INSTANCE = it 
+                    Log.d(TAG, "Nova instância criada com URL: $serverUrl")
+                }
             }
         }
         

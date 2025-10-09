@@ -146,7 +146,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
         
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Bateria</span>
-          {isDataLoading() ? (
+          {device.status === 'offline' ? (
+            <span className="text-sm text-secondary">N/D</span>
+          ) : isDataLoading() ? (
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-500">
                 Carregando...
@@ -173,7 +175,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
 
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Armazenamento</span>
-          {isDataLoading() ? (
+          {device.status === 'offline' ? (
+            <span className="text-sm text-secondary">N/D</span>
+          ) : isDataLoading() ? (
             <div className="text-right">
               <div className="text-sm font-medium text-gray-500">
                 Carregando...

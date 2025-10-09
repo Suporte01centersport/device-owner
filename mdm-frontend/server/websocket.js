@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 
 const config = require('./config');
+const DiscoveryServer = require('./discovery-server');
 
 // PostgreSQL imports
 const DeviceModel = require('./database/models/Device');
@@ -552,6 +553,24 @@ wss.on('connection', ws => {
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
                 
+                // Limpar dados sensíveis quando desconectado
+                if (persistentDevices.has(deviceId)) {
+                    const device = persistentDevices.get(deviceId);
+                    persistentDevices.set(deviceId, {
+                        ...device,
+                        status: 'offline',
+                        lastSeen: Date.now(),
+                        // Limpar dados sensíveis - manter apenas identificação básica
+                        batteryLevel: 0,
+                        storageTotal: 0,
+                        storageUsed: 0,
+                        installedAppsCount: 0,
+                        allowedApps: [],
+                        isCharging: false
+                    });
+                    log.info('Dados limpos para dispositivo offline', { deviceId });
+                }
+                
                 // Notificar clientes web IMEDIATAMENTE sobre desconexão
                 notifyWebClients({
                     type: 'device_disconnected',
@@ -713,12 +732,13 @@ function handleDeviceStatus(ws, data) {
     
     console.log('=== DEVICE STATUS RECEBIDO ===');
     console.log('Device ID:', deviceId);
+    console.log('Device Name:', data.data.name);
+    console.log('Device Model:', data.data.model);
     console.log('Device Owner:', data.data.isDeviceOwner);
     console.log('Profile Owner:', data.data.isProfileOwner);
     console.log('Apps instalados:', data.data.installedApps?.length || 0);
     console.log('Apps permitidos:', data.data.allowedApps?.length || 0);
     console.log('Bateria:', data.data.batteryLevel);
-    console.log('Modelo:', data.data.model);
     console.log('Android Version:', data.data.androidVersion);
     console.log('===============================');
     
@@ -796,14 +816,27 @@ function handleDeviceStatus(ws, data) {
     // Notificar todos os clientes web sobre o novo dispositivo conectado
     const connectedDeviceData = persistentDevices.get(deviceId);
     if (connectedDeviceData) {
+        console.log('📤 Notificando clientes web sobre dispositivo conectado...');
+        console.log('Número de clientes web:', webClients.size);
+        console.log('Dados a enviar:', {
+            deviceId: connectedDeviceData.deviceId,
+            batteryLevel: connectedDeviceData.batteryLevel,
+            installedAppsCount: connectedDeviceData.installedAppsCount
+        });
+        
+        let sentCount = 0;
         webClients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                     type: 'device_connected',
                     device: connectedDeviceData
                 }));
+                sentCount++;
             }
         });
+        console.log(`✅ Notificação enviada para ${sentCount} clientes web`);
+    } else {
+        console.warn('⚠️ connectedDeviceData é null para deviceId:', deviceId);
     }
     
     // Debug: verificar se installedApps está sendo recebido
@@ -1520,11 +1553,18 @@ setInterval(() => {
                     reason: !isConnected ? 'WebSocket desconectado' : 'Timeout de inatividade'
                 });
                 
-                // Atualizar status para offline
+                // Atualizar status para offline e limpar dados sensíveis
                 persistentDevices.set(deviceId, {
                     ...device,
                     status: 'offline',
-                    lastSeen: device.lastSeen // Manter o último timestamp visto
+                    lastSeen: device.lastSeen, // Manter o último timestamp visto
+                    // Limpar dados sensíveis quando offline
+                    batteryLevel: 0,
+                    storageTotal: 0,
+                    storageUsed: 0,
+                    installedAppsCount: 0,
+                    allowedApps: [],
+                    isCharging: false
                 });
                 
                 // Notificar clientes web sobre mudança de status
@@ -1846,15 +1886,39 @@ server.listen(3002, '0.0.0.0', () => {
             'POST /api/devices/{deviceId}/admin-password'
         ]
     });
+    
+    // Iniciar servidor de descoberta automática
+    const discoveryServer = new DiscoveryServer();
+    console.log('✓ Servidor de descoberta automática iniciado');
+    
+    // Graceful shutdown do discovery server
+    process.on('SIGINT', () => {
+        discoveryServer.close();
+        process.exit(0);
+    });
+    
+    process.on('SIGTERM', () => {
+        discoveryServer.close();
+        process.exit(0);
+    });
 });
 
 // Função para definir senha de administrador
 function handleSetAdminPassword(ws, data) {
+    console.log('=== DEBUG: handleSetAdminPassword chamada ===');
+    console.log('Data recebida:', data);
+    console.log('Tipo do cliente:', ws.isWebClient ? 'Web' : 'Dispositivo');
+    
     // Extrair password de data.data se existir, senão de data
     const passwordData = data.data || data;
     const { password, deviceId } = passwordData;
     
+    console.log('PasswordData extraído:', passwordData);
+    console.log('Password:', password);
+    console.log('DeviceId:', deviceId);
+    
     if (!password) {
+        console.log('ERRO: Password é obrigatório');
         ws.send(JSON.stringify({
             type: 'error',
             message: 'Senha de administrador é obrigatória'
@@ -1865,39 +1929,45 @@ function handleSetAdminPassword(ws, data) {
     // Salvar senha globalmente
     globalAdminPassword = password;
     saveAdminPasswordToFile();
-    console.log('Senha de administrador definida globalmente e salva no arquivo');
+    console.log('✅ Senha de administrador definida globalmente e salva no arquivo');
+    console.log('Senha definida:', password);
     
     // Enviar comando para o dispositivo específico
     if (deviceId) {
+        console.log(`🎯 Enviando senha para dispositivo específico: ${deviceId}`);
         const deviceWs = connectedDevices.get(deviceId);
         if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
-            deviceWs.send(JSON.stringify({
+            const message = {
                 type: 'set_admin_password',
                 data: { password }
-            }));
-            console.log(`Senha de administrador enviada para dispositivo ${deviceId}`);
+            };
+            deviceWs.send(JSON.stringify(message));
+            console.log(`✅ Senha enviada para dispositivo ${deviceId}:`, message);
         } else {
-            console.log(`Dispositivo ${deviceId} não encontrado ou desconectado`);
+            console.log(`❌ Dispositivo ${deviceId} não encontrado ou desconectado (readyState: ${deviceWs?.readyState})`);
         }
     } else {
         // Enviar para todos os dispositivos conectados
-        console.log(`=== DEBUG: Enviando senha para ${connectedDevices.size} dispositivos conectados ===`);
+        console.log(`📡 Enviando senha para ${connectedDevices.size} dispositivos conectados`);
         console.log('Dispositivos conectados:', Array.from(connectedDevices.keys()));
         
+        let sentCount = 0;
         connectedDevices.forEach((deviceWs, id) => {
-            console.log(`Dispositivo ${id}: readyState=${deviceWs.readyState}, isDevice=${deviceWs.isDevice}`);
+            console.log(`🔍 Verificando dispositivo ${id}: readyState=${deviceWs.readyState}, isDevice=${deviceWs.isDevice}`);
             if (deviceWs.readyState === WebSocket.OPEN) {
                 const message = {
                     type: 'set_admin_password',
                     data: { password }
                 };
-                console.log(`Enviando senha para dispositivo ${id}:`, message);
+                console.log(`📤 Enviando senha para dispositivo ${id}:`, message);
                 deviceWs.send(JSON.stringify(message));
-                console.log(`Senha de administrador enviada para dispositivo ${id}:`, message);
+                console.log(`✅ Senha enviada para dispositivo ${id}`);
+                sentCount++;
             } else {
-                console.log(`Dispositivo ${id} não está pronto (readyState: ${deviceWs.readyState})`);
+                console.log(`❌ Dispositivo ${id} não está pronto (readyState: ${deviceWs.readyState})`);
             }
         });
+        console.log(`📊 Total de senhas enviadas: ${sentCount}/${connectedDevices.size}`);
     }
 }
 
