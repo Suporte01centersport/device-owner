@@ -192,10 +192,12 @@ export default function LocationView({ device }: LocationViewProps) {
 
   const handleOpenHistoryModal = () => {
     setShowHistoryModal(true)
+    setShowHistoryMap(false) // Sempre abrir no modo lista
   }
 
   const handleCloseHistoryModal = () => {
     setShowHistoryModal(false)
+    setShowHistoryMap(false) // Reset para modo lista quando fechar
   }
 
   return (
@@ -262,8 +264,8 @@ export default function LocationView({ device }: LocationViewProps) {
         )}
       </div>
 
-      {/* Mapa em tempo real */}
-      {device.latitude && device.longitude && (
+      {/* Mapa em tempo real - apenas na aba principal, não no modal */}
+      {device.latitude && device.longitude && !showHistoryModal && (
         <DeviceLocationMap 
           device={device}
           className="mb-6"
@@ -386,11 +388,44 @@ export default function LocationView({ device }: LocationViewProps) {
                   </div>
                 </div>
               ) : showHistoryMap ? (
-                <div className="h-full">
-                  <DeviceLocationMap 
-                    device={device}
-                    className="h-full rounded-none"
-                  />
+                <div className="h-full flex flex-col gap-4 p-4">
+                  <div className="flex-1 min-h-0">
+                    <DeviceLocationMap 
+                      device={device}
+                      className="h-full rounded-lg"
+                    />
+                  </div>
+                  {locationHistory.length > 0 && (
+                    <div className="flex-shrink-0 bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto">
+                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                        <span className="mr-2">📋</span>
+                        Entradas de Localização ({locationHistory.length})
+                      </h4>
+                      <div className="space-y-2">
+                        {locationHistory.slice(0, 3).map((entry, index) => (
+                          <div key={entry.id} className="text-xs bg-white rounded p-2 border border-gray-200">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center space-x-2">
+                                <span className="text-sm">{index === 0 ? '📍' : getProviderIcon(entry.provider)}</span>
+                                <span className="font-mono text-gray-800">{entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}</span>
+                              </div>
+                              <span className="text-gray-500">{formatTimestamp(entry.timestamp)}</span>
+                            </div>
+                            {entry.address && (
+                              <div className="text-gray-600 truncate" title={entry.address}>
+                                {entry.address}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        {locationHistory.length > 3 && (
+                          <div className="text-xs text-gray-500 text-center py-1">
+                            +{locationHistory.length - 3} entradas adicionais
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : locationHistory.length > 0 ? (
                 <div className="p-6 overflow-y-auto h-full">
