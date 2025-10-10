@@ -4,24 +4,24 @@
         "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_service_notification.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-hdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-hdpi\\ic_launcher_round.xml"
-    },
-    {
         "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xhdpi_ic_launcher.xml.flat",
         "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xhdpi\\ic_launcher.xml"
+    },
+    {
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-hdpi_ic_launcher_round.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-hdpi\\ic_launcher_round.xml"
     },
     {
         "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxxhdpi_ic_launcher_round.xml.flat",
         "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_data_extraction_rules.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\data_extraction_rules.xml"
-    },
-    {
         "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxhdpi_ic_launcher_round.xml.flat",
         "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxhdpi\\ic_launcher_round.xml"
+    },
+    {
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_data_extraction_rules.xml.flat",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\data_extraction_rules.xml"
     },
     {
         "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xhdpi_ic_launcher_round.xml.flat",

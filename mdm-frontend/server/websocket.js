@@ -1,3 +1,6 @@
+// Carregar variáveis de ambiente do arquivo .env
+require('dotenv').config();
+
 const WebSocket = require('ws');
 const http = require('http');
 const url = require('url');
@@ -263,7 +266,7 @@ const server = http.createServer((req, res) => {
             body += chunk.toString();
         });
         
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
                 const deviceId = path.split('/')[3];
@@ -277,7 +280,7 @@ const server = http.createServer((req, res) => {
                 } else if (path.includes('/unlock')) {
                     handleUnlockDevice({ deviceId }, { connectionId: 'http_api' });
                 } else if (path.includes('/delete')) {
-                    handleDeleteDevice({ deviceId }, { connectionId: 'http_api' });
+                    await handleDeleteDevice({ deviceId }, { connectionId: 'http_api' });
                 }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -360,6 +363,21 @@ async function loadDevicesFromDatabase() {
         
         // Converter array para Map para compatibilidade
         devices.forEach(device => {
+            // Debug: verificar deviceId
+            console.log('🔍 Dispositivo carregado:', {
+                id: device.id,
+                deviceId: device.deviceId,
+                name: device.name,
+                model: device.model,
+                deviceIdType: typeof device.deviceId,
+                deviceIdLength: device.deviceId ? device.deviceId.length : 'N/A'
+            });
+            
+            if (!device.deviceId || device.deviceId === 'null' || device.deviceId === 'undefined') {
+                console.warn('⚠️ DeviceId inválido encontrado:', device.deviceId);
+                return; // Pular dispositivos com deviceId inválido
+            }
+            
             persistentDevices.set(device.deviceId, device);
         });
         
@@ -482,7 +500,7 @@ wss.on('connection', ws => {
         activeConnections: serverStats.activeConnections
     });
 
-    ws.on('message', message => {
+    ws.on('message', async (message) => {
         try {
             ws.lastActivity = Date.now();
             ws.messageCount++;
@@ -500,7 +518,7 @@ wss.on('connection', ws => {
                 size: message.length
             });
             
-            handleMessage(ws, data);
+            await handleMessage(ws, data);
         } catch (error) {
             log.error('Erro ao processar mensagem', {
                 connectionId: ws.connectionId,
@@ -629,7 +647,7 @@ wss.on('connection', ws => {
     }, 10 * 60 * 1000); // 10 minutos - mais tempo para dispositivos
 });
 
-function handleMessage(ws, data) {
+async function handleMessage(ws, data) {
     console.log('Processando tipo:', data.type);
     console.log('É dispositivo?', ws.isDevice);
     console.log('Device ID:', ws.deviceId);
@@ -657,7 +675,7 @@ function handleMessage(ws, data) {
             handleWebClient(ws, data);
             break;
         case 'delete_device':
-            handleDeleteDevice(ws, data);
+            await handleDeleteDevice(ws, data);
             break;
         case 'update_app_permissions':
             handleUpdateAppPermissions(ws, data);
@@ -676,6 +694,9 @@ function handleMessage(ws, data) {
             break;
         case 'enable_location':
             handleEnableLocation(ws, data);
+            break;
+        case 'clear_location_history':
+            handleClearLocationHistory(ws, data);
             break;
         case 'send_test_notification':
             handleSendTestNotification(ws, data);
@@ -725,6 +746,15 @@ function handleDeviceStatus(ws, data) {
     const deviceId = data.data.deviceId;
     const now = Date.now();
     
+    console.log('📥 ═══════════════════════════════════════════════');
+    console.log('📥 DEVICE_STATUS RECEBIDO DO LAUNCHER');
+    console.log('📥 ═══════════════════════════════════════════════');
+    console.log(`   DeviceId: ${deviceId}`);
+    console.log(`   Nome recebido: "${data.data.name}"`);
+    console.log(`   Modelo: ${data.data.model}`);
+    console.log(`   🔢 SERIAL NUMBER: "${data.data.serialNumber}"`);
+    console.log('📥 ═══════════════════════════════════════════════');
+    
     log.info(`Device status received`, {
         deviceId,
         name: data.data.name,
@@ -754,10 +784,31 @@ function handleDeviceStatus(ws, data) {
     
     // Verificar se dispositivo já existe
     const existingDevice = persistentDevices.get(deviceId);
-    if (existingDevice) {
-        console.log('✅ Dispositivo já existe - atualizando status para online');
+    const isReconnection = existingDevice !== undefined;
+    
+    if (isReconnection) {
+        console.log('🔄 ═══════════════════════════════════════════════');
+        console.log('🔄 RECONEXÃO DETECTADA');
+        console.log('🔄 ═══════════════════════════════════════════════');
+        console.log(`   DeviceId: ${deviceId}`);
+        console.log(`   Nome ANTERIOR: "${existingDevice.name}"`);
+        console.log(`   Nome NOVO: "${data.data.name}"`);
+        console.log(`   Nome mudou? ${existingDevice.name !== data.data.name ? 'SIM' : 'NÃO'}`);
+        console.log(`   Modelo: ${data.data.model}`);
+        console.log(`   Status anterior: ${existingDevice.status}`);
+        console.log(`   Última vez visto: ${existingDevice.lastSeen ? new Date(existingDevice.lastSeen).toISOString() : 'nunca'}`);
+        console.log(`   Tempo offline: ${existingDevice.lastSeen ? Math.round((now - existingDevice.lastSeen) / 1000) + 's' : 'desconhecido'}`);
+        console.log('🔄 ═══════════════════════════════════════════════');
     } else {
-        console.log('🆕 Novo dispositivo detectado');
+        console.log('🆕 ═══════════════════════════════════════════════');
+        console.log('🆕 NOVO DISPOSITIVO DETECTADO');
+        console.log('🆕 ═══════════════════════════════════════════════');
+        console.log(`   DeviceId: ${deviceId}`);
+        console.log(`   Nome: ${data.data.name}`);
+        console.log(`   Modelo: ${data.data.model}`);
+        console.log(`   Fabricante: ${data.data.manufacturer}`);
+        console.log(`   Android: ${data.data.androidVersion}`);
+        console.log('🆕 ═══════════════════════════════════════════════');
     }
     
     // Armazenar dispositivo conectado
@@ -774,10 +825,49 @@ function handleDeviceStatus(ws, data) {
     
     console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
     
+    // Verificar se o nome mudou (sempre, não apenas em reconexões)
+    const nameChanged = existingDevice && existingDevice.name !== data.data.name;
+    
+    if (nameChanged) {
+        console.log('🔔 Nome mudou durante atualização de status!');
+        console.log(`   Nome anterior: "${existingDevice.name}"`);
+        console.log(`   Nome novo: "${data.data.name}"`);
+    }
+    
     persistentDevices.set(deviceId, deviceData);
     
     // Salvar no PostgreSQL
     saveDeviceToDatabase(deviceData);
+    
+    // Se o nome mudou, notificar especificamente sobre a mudança
+    if (nameChanged) {
+        console.log('📝 ═══════════════════════════════════════════════');
+        console.log('📝 NOME DO DISPOSITIVO ALTERADO!');
+        console.log('📝 ═══════════════════════════════════════════════');
+        console.log(`   DeviceId: ${deviceId}`);
+        console.log(`   Nome anterior: "${existingDevice.name}"`);
+        console.log(`   Nome novo: "${data.data.name}"`);
+        console.log('📝 ═══════════════════════════════════════════════');
+        
+        // Notificar clientes web sobre mudança de nome COM OS DADOS COMPLETOS DO DISPOSITIVO
+        notifyWebClients({
+            type: 'device_name_changed',
+            deviceId: deviceId,
+            oldName: existingDevice.name,
+            newName: data.data.name,
+            device: deviceData,
+            timestamp: now
+        });
+        
+        // TAMBÉM enviar device_connected para garantir atualização imediata na UI
+        notifyWebClients({
+            type: 'device_connected',
+            device: deviceData,
+            timestamp: now
+        });
+        
+        console.log('📤 Notificações de mudança de nome enviadas aos clientes web');
+    }
     
     // Enviar senha de administrador se estiver definida
     if (globalAdminPassword) {
@@ -1064,36 +1154,103 @@ function handleWebClient(ws, data) {
 
 
 
-function handleDeleteDevice(ws, data) {
+async function handleDeleteDevice(ws, data) {
     const { deviceId } = data;
+    
+    // Validar deviceId
+    if (!deviceId || deviceId === 'null' || deviceId === 'undefined' || deviceId === null) {
+        log.error(`DeviceId inválido recebido para deleção`, {
+            deviceId: deviceId,
+            deviceIdType: typeof deviceId,
+            connectionId: ws.connectionId,
+            dataReceived: data
+        });
+        
+        // Enviar resposta de erro para o cliente
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'delete_device_response',
+                success: false,
+                error: 'ID do dispositivo inválido ou não fornecido',
+                deviceId: deviceId
+            }));
+        }
+        return;
+    }
     
     // Verificar se o dispositivo existe
     if (!persistentDevices.has(deviceId)) {
         log.warn(`Dispositivo não encontrado para deleção`, {
             deviceId: deviceId,
-            connectionId: ws.connectionId
+            connectionId: ws.connectionId,
+            availableDevices: Array.from(persistentDevices.keys())
         });
+        
+        // Enviar resposta de erro para o cliente
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'delete_device_response',
+                success: false,
+                error: 'Dispositivo não encontrado no servidor',
+                deviceId: deviceId
+            }));
+        }
         return;
     }
     
-    // Remover das listas
-    persistentDevices.delete(deviceId);
-    connectedDevices.delete(deviceId);
-    
-    // Salvar no PostgreSQL
-    saveDeviceToDatabase(deviceData);
-    
-    log.info(`Dispositivo deletado permanentemente`, {
-        deviceId: deviceId,
-        connectionId: ws.connectionId
-    });
-    
-    // Notificar clientes web
-    notifyWebClients({
-        type: 'device_deleted',
-        deviceId: deviceId,
-        timestamp: Date.now()
-    });
+    try {
+        // Obter dados do dispositivo antes de deletar (para logs)
+        const deviceData = persistentDevices.get(deviceId);
+        
+        // Deletar do banco PostgreSQL PRIMEIRO
+        await DeviceModel.delete(deviceId);
+        log.info(`Dispositivo deletado do PostgreSQL`, { deviceId });
+        
+        // Remover das listas em memória
+        persistentDevices.delete(deviceId);
+        connectedDevices.delete(deviceId);
+        
+        log.info(`Dispositivo deletado permanentemente`, {
+            deviceId: deviceId,
+            deviceName: deviceData?.name || 'desconhecido',
+            connectionId: ws.connectionId
+        });
+        
+        // Enviar confirmação para o cliente que solicitou a deleção
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'delete_device_response',
+                success: true,
+                message: 'Dispositivo deletado com sucesso',
+                deviceId: deviceId
+            }));
+        }
+        
+        // Notificar TODOS os clientes web sobre a deleção
+        notifyWebClients({
+            type: 'device_deleted',
+            deviceId: deviceId,
+            deviceName: deviceData?.name || 'desconhecido',
+            timestamp: Date.now()
+        });
+        
+    } catch (error) {
+        log.error(`Erro ao deletar dispositivo`, {
+            deviceId: deviceId,
+            error: error.message,
+            connectionId: ws.connectionId
+        });
+        
+        // Enviar erro para o cliente
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'delete_device_response',
+                success: false,
+                error: 'Erro interno do servidor',
+                deviceId: deviceId
+            }));
+        }
+    }
 }
 
 function handleUpdateAppPermissions(ws, data) {
@@ -1329,6 +1486,47 @@ function handleEnableLocation(ws, data) {
     }
 }
 
+function handleClearLocationHistory(ws, data) {
+    const { deviceId } = data;
+    
+    console.log('🗑️ ═══════════════════════════════════════════════');
+    console.log('🗑️ COMANDO: LIMPAR HISTÓRICO DE LOCALIZAÇÃO');
+    console.log('🗑️ ═══════════════════════════════════════════════');
+    console.log(`   DeviceId: ${deviceId}`);
+    console.log('🗑️ ═══════════════════════════════════════════════');
+    
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        const message = {
+            type: 'clear_location_history',
+            timestamp: Date.now()
+        };
+        
+        deviceWs.send(JSON.stringify(message));
+        
+        console.log('✅ Comando de limpeza de histórico enviado para o dispositivo');
+        
+        log.info(`Comando de limpeza de histórico de localização enviado`, {
+            deviceId: deviceId,
+            connectionId: ws.connectionId
+        });
+        
+        // Notificar clientes web sobre a limpeza
+        notifyWebClients({
+            type: 'location_history_cleared',
+            deviceId: deviceId,
+            timestamp: Date.now()
+        });
+        
+    } else {
+        console.error('❌ Dispositivo não encontrado ou desconectado');
+        log.warn(`Dispositivo não encontrado ou desconectado para limpeza de histórico`, {
+            deviceId: deviceId,
+            connectionId: ws.connectionId
+        });
+    }
+}
+
 function handleSendTestNotification(ws, data) {
     const { deviceId, message } = data;
     
@@ -1463,13 +1661,23 @@ function notifyWebClients(message) {
     console.log('Número de clientes web:', webClients.size);
     
     if (message.type === 'device_connected' && message.device) {
-        console.log('Dados do dispositivo sendo enviados:', {
+        console.log('📤 Enviando device_connected aos clientes web:', {
             deviceId: message.device.deviceId,
+            name: message.device.name,
             batteryLevel: message.device.batteryLevel,
             installedAppsCount: message.device.installedAppsCount,
             allowedAppsCount: message.device.allowedApps?.length || 0,
             storageTotal: message.device.storageTotal,
             storageUsed: message.device.storageUsed
+        });
+    }
+    
+    if (message.type === 'device_name_changed') {
+        console.log('📝 Enviando device_name_changed aos clientes web:', {
+            deviceId: message.deviceId,
+            oldName: message.oldName,
+            newName: message.newName,
+            hasDevice: !!message.device
         });
     }
     
@@ -1933,7 +2141,12 @@ function handleSetAdminPassword(ws, data) {
                 type: 'set_admin_password',
                 data: { password }
             };
-            deviceWs.send(JSON.stringify(message));
+            const messageStr = JSON.stringify(message);
+            console.log(`📤 Enviando mensagem para dispositivo ${deviceId}:`, messageStr);
+            console.log(`📤 Tamanho da mensagem: ${messageStr.length} caracteres`);
+            console.log(`📤 Password na mensagem: '${password}'`);
+            console.log(`📤 Password tamanho: ${password.length}`);
+            deviceWs.send(messageStr);
             console.log(`✅ Senha enviada para dispositivo ${deviceId}:`, message);
         } else {
             console.log(`❌ Dispositivo ${deviceId} não encontrado ou desconectado (readyState: ${deviceWs?.readyState})`);
@@ -1951,8 +2164,10 @@ function handleSetAdminPassword(ws, data) {
                     type: 'set_admin_password',
                     data: { password }
                 };
-                console.log(`📤 Enviando senha para dispositivo ${id}:`, message);
-                deviceWs.send(JSON.stringify(message));
+                const messageStr = JSON.stringify(message);
+                console.log(`📤 Enviando senha para dispositivo ${id}:`, messageStr);
+                console.log(`📤 Password enviada: '${password}' (tamanho: ${password.length})`);
+                deviceWs.send(messageStr);
                 console.log(`✅ Senha enviada para dispositivo ${id}`);
                 sentCount++;
             } else {

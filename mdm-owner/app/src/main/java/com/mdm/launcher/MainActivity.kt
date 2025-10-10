@@ -168,6 +168,20 @@ class MainActivity : AppCompatActivity() {
                         sendLocationToServer(locationData)
                     }
                 }
+                "com.mdm.launcher.SET_KIOSK_MODE" -> {
+                    val message = intent.getStringExtra("message")
+                    if (message != null) {
+                        Log.d(TAG, "📱 SET_KIOSK_MODE recebido via Broadcast")
+                        handleWebSocketMessage(message)
+                    }
+                }
+                "com.mdm.launcher.UEM_COMMAND" -> {
+                    val message = intent.getStringExtra("message")
+                    if (message != null) {
+                        Log.d(TAG, "📱 UEM_COMMAND recebido via Broadcast")
+                        handleWebSocketMessage(message)
+                    }
+                }
             }
         }
     }
@@ -178,8 +192,8 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_CODE_USAGE_STATS = 1002
         private const val REQUEST_CODE_LOCATION = 1003
         private const val REQUEST_CODE_NOTIFICATIONS = 1004
-        private const val LOCATION_UPDATE_INTERVAL = 15000L // 15 segundos - mais frequente
-        private const val LOCATION_UPDATE_DISTANCE = 5f // 5 metros - mais preciso
+        private const val LOCATION_UPDATE_INTERVAL = 10000L // 10 segundos - mais frequente para melhor precisão
+        private const val LOCATION_UPDATE_DISTANCE = 1f // 1 metro - máxima precisão
     }
     
     // ServiceConnection para o WebSocketService
@@ -254,6 +268,8 @@ class MainActivity : AppCompatActivity() {
             val filter = IntentFilter().apply {
                 addAction("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
                 addAction("com.mdm.launcher.LOCATION_UPDATE")
+                addAction("com.mdm.launcher.SET_KIOSK_MODE")
+                addAction("com.mdm.launcher.UEM_COMMAND")
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(serviceMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -266,7 +282,7 @@ class MainActivity : AppCompatActivity() {
         }
         
         startWebSocketService()
-        setupWebSocketClient()
+        // setupWebSocketClient() - REMOVIDO: usar apenas WebSocketService para evitar conexões duplicadas
         startLocationService()
         
         // Carregar dados salvos
@@ -374,7 +390,7 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "=== DEBUG: saveData ===")
         Log.d(TAG, "AllowedApps: $allowedApps")
         Log.d(TAG, "AllowedApps JSON: $allowedAppsJson")
-        Log.d(TAG, "Dados salvos: ${allowedApps.size} apps permitidos, nome: $customDeviceName, senha: ${if (adminPassword.isNotEmpty()) "***" else "não definida"}")
+        Log.d(TAG, "Dados salvos: ${allowedApps.size} apps permitidos, nome: $customDeviceName")
         Log.d(TAG, "======================")
     }
     
@@ -402,17 +418,14 @@ class MainActivity : AppCompatActivity() {
         
         // Carregar senha de administrador
         adminPassword = sharedPreferences.getString("admin_password", "") ?: ""
-        Log.d(TAG, "=== DEBUG: Carregando senha de administrador ===")
-        Log.d(TAG, "Valor do SharedPreferences: ${sharedPreferences.getString("admin_password", "null")}")
-        Log.d(TAG, "Senha de administrador carregada: ${if (adminPassword.isNotEmpty()) "***" else "não definida"}")
-        Log.d(TAG, "Tamanho da senha: ${adminPassword.length}")
         
         // Não carregar apps instalados salvos pois contêm Drawable que não pode ser serializado
         // Os apps instalados serão coletados novamente no onResume()
         Log.d(TAG, "Apps instalados serão coletados novamente no onResume()")
         
-        // Atualizar a interface com os dados carregados (sempre, mesmo se lista estiver vazia)
-        updateAppsList()
+        // NÃO chamar updateAppsList() aqui pois installedApps ainda está vazio!
+        // updateAppsList() será chamado no onResume() após coletar installedApps
+        Log.d(TAG, "updateAppsList() será chamado no onResume() após coletar apps instalados")
     }
     
     private fun setupRecyclerView() {
@@ -527,6 +540,9 @@ class MainActivity : AppCompatActivity() {
     private fun checkAndRequestPermissions() {
         Log.d(TAG, "Verificando permissões essenciais...")
         
+        // Verificar se o app foi reinstalado e precisa verificar todas as permissões
+        checkForAppReinstall()
+        
         // Solicitar permissões essenciais para funcionamento da web
         val essentialPermissions = arrayOf(
             Manifest.permission.INTERNET,
@@ -553,6 +569,41 @@ class MainActivity : AppCompatActivity() {
         } else {
             Log.d(TAG, "Todas as permissões essenciais já foram concedidas")
             onPermissionsComplete()
+        }
+    }
+    
+    private fun checkForAppReinstall() {
+        try {
+            val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val packageInfo = packageManager.getPackageInfo(packageName, 0)
+            val currentInstallTime = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                packageInfo.longVersionCode
+            } else {
+                @Suppress("DEPRECATION")
+                packageInfo.versionCode.toLong()
+            }
+            
+            val lastInstallTime = sharedPreferences.getLong("last_install_time", 0L)
+            val wasReinstalled = lastInstallTime != currentInstallTime
+            
+            if (wasReinstalled) {
+                Log.d(TAG, "🔄 APP REINSTALADO DETECTADO!")
+                Log.d(TAG, "   Instalação anterior: $lastInstallTime")
+                Log.d(TAG, "   Instalação atual: $currentInstallTime")
+                
+                // Marcar que precisa verificar todas as permissões
+                sharedPreferences.edit()
+                    .putBoolean("force_permission_check", true)
+                    .putLong("last_install_time", currentInstallTime)
+                    .putInt("permission_check_count", 0) // Resetar contador
+                    .apply()
+                
+                Log.d(TAG, "✅ Flag de verificação de permissões ativada para reinstalação")
+            } else {
+                Log.d(TAG, "📱 App não foi reinstalado, continuando normalmente")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao verificar reinstalação", e)
         }
     }
     
@@ -615,10 +666,21 @@ class MainActivity : AppCompatActivity() {
     private fun checkPermissions() {
         val currentTime = System.currentTimeMillis()
         
-        // Evitar solicitações de permissão muito frequentes
-        if (permissionRequestCount > 3 && (currentTime - lastPermissionRequestTime) < 30000) {
-            Log.w(TAG, "Muitas solicitações de permissão recentes ($permissionRequestCount), aguardando 30s")
-            return
+        // Verificar se precisa forçar verificação completa (após reinstalação)
+        val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+        val forcePermissionCheck = sharedPreferences.getBoolean("force_permission_check", false)
+        
+        if (forcePermissionCheck) {
+            Log.d(TAG, "🔄 FORÇANDO VERIFICAÇÃO COMPLETA DE PERMISSÕES (reinstalação detectada)")
+            // Resetar contadores para permitir solicitações
+            permissionRequestCount = 0
+            lastPermissionRequestTime = 0L
+        } else {
+            // Evitar solicitações de permissão muito frequentes (comportamento normal)
+            if (permissionRequestCount > 3 && (currentTime - lastPermissionRequestTime) < 30000) {
+                Log.w(TAG, "Muitas solicitações de permissão recentes ($permissionRequestCount), aguardando 30s")
+                return
+            }
         }
         
         // Sistema de permissões sequencial e organizado
@@ -690,6 +752,16 @@ class MainActivity : AppCompatActivity() {
             showPermissionDialog(permissionsToCheck)
         } else {
             // Todas as permissões concedidas, inicializar funcionalidades
+            Log.d(TAG, "✅ TODAS AS PERMISSÕES CONCEDIDAS")
+            
+            // Remover flag de verificação forçada se estava ativa
+            if (forcePermissionCheck) {
+                sharedPreferences.edit()
+                    .putBoolean("force_permission_check", false)
+                    .apply()
+                Log.d(TAG, "✅ Flag de verificação forçada removida - todas as permissões OK")
+            }
+            
             initializeAllFeatures()
         }
     }
@@ -805,10 +877,7 @@ class MainActivity : AppCompatActivity() {
                 val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
                 Log.d(TAG, "🔍 Novo servidor descoberto: $newServerUrl")
                 
-                // Forçar reconexão com novo servidor se necessário
-                webSocketClient?.forceReconnect()
-                
-                // Também tentar reconectar o service
+                // Forçar reconexão com novo servidor se necessário - reiniciar Service
                 if (isServiceBound && webSocketService?.isConnected() == false) {
                     Log.d(TAG, "🔄 Tentando reconectar WebSocketService...")
                     // O service não tem método connect(), apenas reconnect
@@ -916,10 +985,28 @@ class MainActivity : AppCompatActivity() {
             
             locationListener = object : LocationListener {
                 override fun onLocationChanged(location: Location) {
-                    // Verificar se a localização é válida e mais precisa que a anterior
-                    if (location.accuracy > 0 && (lastKnownLocation == null || 
+                    Log.d(TAG, "📍 Nova localização recebida:")
+                    Log.d(TAG, "   Provider: ${location.provider}")
+                    Log.d(TAG, "   Precisão: ${location.accuracy}m")
+                    Log.d(TAG, "   Coordenadas: ${location.latitude}, ${location.longitude}")
+                    
+                    // Verificar se a localização é válida
+                    if (location.accuracy <= 0) {
+                        Log.w(TAG, "⚠️ Localização inválida - precisão <= 0")
+                        return
+                    }
+                    
+                    // Aceitar apenas localizações com precisão razoável (máximo 50m para GPS, 100m para Network)
+                    val maxAccuracy = if (location.provider == LocationManager.GPS_PROVIDER) 50f else 100f
+                    if (location.accuracy > maxAccuracy) {
+                        Log.w(TAG, "⚠️ Localização ignorada - precisão muito baixa (${location.accuracy}m > ${maxAccuracy}m)")
+                        return
+                    }
+                    
+                    // Verificar se é mais precisa que a anterior
+                    if (lastKnownLocation == null || 
                         location.accuracy < lastKnownLocation!!.accuracy || 
-                        location.time > lastKnownLocation!!.time)) {
+                        (location.provider == LocationManager.GPS_PROVIDER && lastKnownLocation!!.provider == LocationManager.NETWORK_PROVIDER)) {
                         
                         lastKnownLocation = location
                         isLocationTrackingEnabled = true
@@ -927,9 +1014,9 @@ class MainActivity : AppCompatActivity() {
                         // Enviar localização via WebSocket
                         sendLocationUpdate(location)
                         
-                        Log.d(TAG, "Localização atualizada: ${location.latitude}, ${location.longitude} (precisão: ${location.accuracy}m)")
+                        Log.d(TAG, "✅ Localização aceita: ${location.latitude}, ${location.longitude} (precisão: ${location.accuracy}m, provider: ${location.provider})")
                     } else {
-                        Log.d(TAG, "Localização ignorada - menos precisa que a anterior")
+                        Log.d(TAG, "⚠️ Localização ignorada - menos precisa que a anterior (${location.accuracy}m vs ${lastKnownLocation!!.accuracy}m)")
                     }
                 }
                 
@@ -994,7 +1081,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun sendLocationUpdate(location: Location) {
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
         
         // Salvar no histórico de localização
         LocationHistoryManager.saveLocation(this, location)
@@ -1024,16 +1111,13 @@ class MainActivity : AppCompatActivity() {
         if (isServiceBound && webSocketService?.isConnected() == true) {
             webSocketService?.sendMessage(jsonMessage)
             Log.d(TAG, "Localização enviada via WebSocketService")
-        } else if (webSocketClient?.isConnected() == true) {
-            webSocketClient?.sendMessage(jsonMessage)
-            Log.d(TAG, "Localização enviada via WebSocketClient local")
         } else {
             Log.w(TAG, "WebSocket não conectado, localização não enviada")
         }
     }
     
     private fun sendGeofenceEvent(event: GeofenceEvent) {
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
+        val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
         val eventData = mapOf(
             "type" to "geofence_event",
             "deviceId" to deviceId,
@@ -1053,9 +1137,6 @@ class MainActivity : AppCompatActivity() {
         if (isServiceBound && webSocketService?.isConnected() == true) {
             webSocketService?.sendMessage(jsonMessage)
             Log.d(TAG, "Evento de geofencing enviado via WebSocketService")
-        } else if (webSocketClient?.isConnected() == true) {
-            webSocketClient?.sendMessage(jsonMessage)
-            Log.d(TAG, "Evento de geofencing enviado via WebSocketClient local")
         } else {
             Log.w(TAG, "WebSocket não conectado, evento de geofencing não enviado")
         }
@@ -1098,8 +1179,7 @@ class MainActivity : AppCompatActivity() {
                 
                 // Mostrar mensagem de confirmação
                 runOnUiThread {
-                    connectionStatusText.text = "Launcher MDM ativo como padrão"
-                    connectionStatusText.setTextColor(resources.getColor(R.color.connection_connected, null))
+                    Toast.makeText(this, "✅ Launcher MDM ativo como padrão", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Log.w(TAG, "App não é Device Owner, não é possível definir como launcher padrão automaticamente")
@@ -1142,15 +1222,12 @@ class MainActivity : AppCompatActivity() {
         try {
             Log.d(TAG, "📤 Enviando dados de localização para o servidor")
             
-            // Tentar enviar via WebSocketService primeiro
+            // Usar apenas WebSocketService (conexão unificada)
             if (isServiceBound && webSocketService?.isConnected() == true) {
                 webSocketService?.sendMessage(locationData)
                 Log.d(TAG, "✅ Localização enviada via WebSocketService")
-            } else if (webSocketClient?.isConnected() == true) {
-                webSocketClient?.sendMessage(locationData)
-                Log.d(TAG, "✅ Localização enviada via WebSocketClient")
             } else {
-                Log.w(TAG, "⚠️ Nenhuma conexão WebSocket disponível para enviar localização")
+                Log.w(TAG, "⚠️ WebSocketService não disponível para enviar localização")
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao enviar localização para o servidor", e)
@@ -1159,8 +1236,8 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupWebSocketClient() {
         Log.d(TAG, "🔧 setupWebSocketClient() chamado")
-        val deviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-        Log.d(TAG, "🔧 DeviceId inicial: ${deviceId?.takeLast(4)}")
+        val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
+        Log.d(TAG, "🔧 DeviceId inicial: ${deviceId.takeLast(8)}")
         
         // Descobrir servidor automaticamente em background
         scope.launch {
@@ -1168,8 +1245,11 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "🔍 Iniciando descoberta do servidor...")
                 val serverUrl = com.mdm.launcher.utils.ServerDiscovery.discoverServer(this@MainActivity)
                 
+                val deviceIdInfo = com.mdm.launcher.utils.DeviceIdManager.getDeviceIdInfo(this@MainActivity)
+                
                 Log.d(TAG, "=== CONFIGURAÇÃO WEBSOCKET ===")
-                Log.d(TAG, "DeviceId obtido: ${deviceId?.takeLast(4) ?: "null"}")
+                Log.d(TAG, "DeviceId obtido: ${deviceId.takeLast(8)}")
+                Log.d(TAG, "Fonte do DeviceId: ${deviceIdInfo["source"]}")
                 Log.d(TAG, "Server URL descoberta: $serverUrl")
                 Log.d(TAG, "Service bound: $isServiceBound")
                 Log.d(TAG, "=============================")
@@ -1177,59 +1257,21 @@ class MainActivity : AppCompatActivity() {
                 // Salvar URL descoberta para uso futuro
                 com.mdm.launcher.utils.ServerDiscovery.saveDiscoveredServerUrl(this@MainActivity, serverUrl)
                 
-                // Verificar se deviceId é válido
-                if (deviceId.isNullOrEmpty()) {
-                    Log.e(TAG, "❌ DeviceId é null ou vazio! Tentando obter novamente...")
-                    val retryDeviceId = Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)
-                    if (retryDeviceId.isNullOrEmpty()) {
-                        Log.e(TAG, "❌ Falha ao obter DeviceId - usando fallback persistente")
-                        // Usar um ID persistente baseado no modelo (sem timestamp)
-                        val persistentId = getPersistentDeviceId()
-                        Log.w(TAG, "⚠️ Usando DeviceId persistente: ${persistentId.takeLast(4)}")
-                        setupWebSocketWithId(persistentId, serverUrl)
-                    } else {
-                        Log.d(TAG, "✅ DeviceId obtido na segunda tentativa: ${retryDeviceId.takeLast(4)}")
-                        setupWebSocketWithId(retryDeviceId, serverUrl)
-                    }
-                } else {
-                    Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(4)}")
-                    setupWebSocketWithId(deviceId, serverUrl)
-                }
+                // DeviceIdManager sempre retorna um ID válido
+                Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(8)}")
+                setupWebSocketWithId(deviceId, serverUrl)
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Erro na descoberta do servidor: ${e.message}", e)
                 // Fallback: usar IP do emulador
                 val fallbackUrl = "ws://10.0.2.2:3002"
                 Log.w(TAG, "⚠️ Usando URL fallback: $fallbackUrl")
-                if (!deviceId.isNullOrEmpty()) {
-                    setupWebSocketWithId(deviceId, fallbackUrl)
-                }
+                setupWebSocketWithId(deviceId, fallbackUrl)
             }
         }
     }
     
-    private fun getPersistentDeviceId(): String {
-        // Gerar um ID persistente baseado em características que não mudam
-        val model = Build.MODEL.replace(" ", "_")
-        val brand = Build.BRAND.replace(" ", "_")
-        val device = Build.DEVICE.replace(" ", "_")
-        val hardware = Build.HARDWARE.replace(" ", "_")
-        
-        // Combinar características estáveis para criar um ID único e persistente
-        val stableId = "${brand}_${model}_${device}_${hardware}".hashCode().toString()
-        
-        Log.d(TAG, "=== GERANDO DEVICE ID PERSISTENTE ===")
-        Log.d(TAG, "Brand: $brand")
-        Log.d(TAG, "Modelo: $model")
-        Log.d(TAG, "Device: $device")
-        Log.d(TAG, "Hardware: $hardware")
-        Log.d(TAG, "ID Persistente: ${stableId.takeLast(4)}")
-        Log.d(TAG, "===================================")
-        
-        return stableId
-    }
-    
     private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
-        Log.d(TAG, "📡 setupWebSocketWithId chamado - URL: $serverUrl, DeviceId: ${deviceId.takeLast(4)}")
+        Log.d(TAG, "📡 setupWebSocketWithId chamado - URL: $serverUrl, DeviceId: ${deviceId.takeLast(8)}")
         
         // Se o serviço estiver disponível, usar ele; senão, criar cliente local
         if (isServiceBound && webSocketService != null) {
@@ -1291,10 +1333,26 @@ class MainActivity : AppCompatActivity() {
                 saveData()
                 updateAppsList()
                 
+                // Testar serialização antes de enviar
+                try {
+                    val jsonTest = gson.toJson(deviceInfo)
+                    Log.d(TAG, "=== TESTE SERIALIZAÇÃO ===")
+                    Log.d(TAG, "JSON length: ${jsonTest.length}")
+                    Log.d(TAG, "JSON preview: ${jsonTest.take(200)}...")
+                    Log.d(TAG, "========================")
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ ERRO NA SERIALIZAÇÃO: ${e.message}")
+                }
+                
                 // Enviar status completo do dispositivo
                 webSocketClient?.sendDeviceStatus(deviceInfo)
                 
                 Log.d(TAG, "Informações do dispositivo enviadas: ${deviceInfo.installedApps.size} apps")
+                Log.d(TAG, "=== DEBUG: Apps sendo enviados ===")
+                deviceInfo.installedApps.take(5).forEach { app ->
+                    Log.d(TAG, "  App: ${app.appName} (${app.packageName})")
+                }
+                Log.d(TAG, "=====================================")
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao coletar informações do dispositivo", e)
             }
@@ -1328,19 +1386,48 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "Apps permitidos DEPOIS: ${allowedApps.size}")
                     allowedApps.forEach { Log.d(TAG, "  - $it") }
                     Log.d(TAG, "───────────────────────────────────────────")
+                    Log.d(TAG, "Apps instalados ATUAIS: ${installedApps.size}")
+                    Log.d(TAG, "───────────────────────────────────────────")
                     
                     saveData() // Salvar dados recebidos da web
                     Log.d(TAG, "✅ Dados salvos em SharedPreferences")
                     
-                    markUserInteraction() // Marcar como interação significativa
-                    updateAppsList()
-                    Log.d(TAG, "✅ Apps list atualizada no launcher")
-                    Log.d(TAG, "═══════════════════════════════════════════")
-                    
-                    // Feedback visual
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                    // FORÇAR RECARGA dos apps instalados se lista estiver vazia ou desatualizada
+                    if (installedApps.isEmpty()) {
+                        Log.w(TAG, "⚠️ Lista de apps instalados está vazia! Recarregando...")
+                        scope.launch {
+                            try {
+                                val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                                installedApps = deviceInfo.installedApps
+                                lastAppUpdateTime = System.currentTimeMillis()
+                                Log.d(TAG, "✅ Apps instalados recarregados: ${installedApps.size}")
+                                
+                                // Agora atualizar a lista
+                                markUserInteraction()
+                                updateAppsList()
+                                Log.d(TAG, "✅ Apps list atualizada no launcher após recarga")
+                                
+                                // Feedback visual
+                                runOnUiThread {
+                                    Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ Erro ao recarregar apps instalados", e)
+                            }
+                        }
+                    } else {
+                        // Apps instalados já existem, apenas atualizar filtro
+                        markUserInteraction()
+                        updateAppsList()
+                        Log.d(TAG, "✅ Apps list atualizada no launcher")
+                        
+                        // Feedback visual
+                        runOnUiThread {
+                            Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                        }
                     }
+                    
+                    Log.d(TAG, "═══════════════════════════════════════════")
                 }
                 "set_admin_password" -> {
                     Log.d(TAG, "🔐 === RECEBENDO SENHA DE ADMINISTRADOR ===")
@@ -1351,20 +1438,22 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "Data extraída: $data")
                     
                     val password = data?.get("password") as? String
-                    Log.d(TAG, "Password extraída: $password")
+                    Log.d(TAG, "Password extraída: '$password'")
                     Log.d(TAG, "Password é null? ${password == null}")
                     Log.d(TAG, "Password vazia? ${password?.isEmpty()}")
                     Log.d(TAG, "Password tamanho: ${password?.length}")
+                    Log.d(TAG, "Password hashCode: ${password?.hashCode()}")
+                    Log.d(TAG, "Password bytes: ${password?.toByteArray()?.contentToString()}")
+                    Log.d(TAG, "Password trim: '${password?.trim()}'")
                     
                     if (password != null && password.isNotEmpty()) {
-                        adminPassword = password
+                        val trimmedPassword = password.trim()
+                        adminPassword = trimmedPassword
                         saveData()
-                        Log.d(TAG, "✅ Senha de administrador definida via WebSocket: $password")
+                        Log.d(TAG, "✅ Senha de administrador definida via WebSocket: '$trimmedPassword'")
                         Log.d(TAG, "✅ Senha salva no SharedPreferences")
+                        Log.d(TAG, "✅ adminPassword atualizado para: '$adminPassword'")
                         
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "✅ Senha de administrador configurada!", Toast.LENGTH_SHORT).show()
-                        }
                     } else {
                         Log.e(TAG, "❌ ERRO: Password é null ou vazia na mensagem set_admin_password")
                         Log.e(TAG, "Data completa: $data")
@@ -1439,15 +1528,62 @@ class MainActivity : AppCompatActivity() {
                     if (isServiceBound && webSocketService?.isConnected() == true) {
                         webSocketService?.sendMessage(gson.toJson(confirmationMessage))
                         Log.d(TAG, "Confirmação de notificação enviada via WebSocketService")
-                    } else if (webSocketClient?.isConnected() == true) {
-                        webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
-                        Log.d(TAG, "Confirmação de notificação enviada via WebSocketClient")
                     }
                 }
                 "reboot_device" -> {
                     // Reiniciar dispositivo
                     Log.d(TAG, "Comando de reinicialização recebido")
                     rebootDevice()
+                }
+                "lock_device" -> {
+                    // Bloquear dispositivo
+                    Log.d(TAG, "Comando de bloqueio recebido")
+                    lockDevice()
+                }
+                "wipe_device" -> {
+                    // Factory reset (apenas com Device Owner)
+                    Log.d(TAG, "Comando de wipe recebido")
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val confirmCode = data?.get("confirmCode") as? String
+                    wipeDevice(confirmCode)
+                }
+                "clear_app_cache" -> {
+                    // Limpar cache de app específico
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val packageName = data?.get("packageName") as? String
+                    if (packageName != null) {
+                        clearAppCache(packageName)
+                    }
+                }
+                "disable_camera" -> {
+                    // Desabilitar câmera
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val disabled = data?.get("disabled") as? Boolean ?: true
+                    setCameraDisabled(disabled)
+                }
+                "set_kiosk_mode" -> {
+                    // Ativar/desativar modo quiosque
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val packageName = data?.get("packageName") as? String ?: ""
+                    val enabled = data?.get("enabled") as? Boolean ?: false
+                    setKioskMode(packageName, enabled)
+                }
+                "install_app" -> {
+                    // Instalar app remoto
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val url = data?.get("url") as? String
+                    if (url != null) {
+                        Log.d(TAG, "Comando de instalação de app: $url")
+                        // Implementar download e instalação
+                    }
+                }
+                "uninstall_app" -> {
+                    // Desinstalar app
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val packageName = data?.get("packageName") as? String
+                    if (packageName != null) {
+                        uninstallApp(packageName)
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -1460,8 +1596,6 @@ class MainActivity : AppCompatActivity() {
             if (connected) {
                 connectionStatusText.text = "Conectado"
                 connectionStatusText.setTextColor(resources.getColor(R.color.connection_connected, null))
-                // Resetar tentativas de reconexão quando conectar
-                webSocketClient?.resetReconnectAttempts()
                 Log.d(TAG, "✅ Status de conexão: CONECTADO")
                 
                 // IMPORTANTE: Enviar dados completos do dispositivo assim que conectar
@@ -1476,8 +1610,15 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "DeviceId: ${deviceInfo.deviceId.takeLast(4)}")
                         Log.d(TAG, "===================================")
                         
-                        webSocketClient?.sendDeviceStatus(deviceInfo)
-                        Log.d(TAG, "✅ Dados completos enviados após conexão!")
+                        webSocketService?.sendDeviceStatus(deviceInfo)
+                        Log.d(TAG, "✅ Dados completos enviados após conexão via WebSocketService!")
+                        Log.d(TAG, "=== DEBUG: Apps após conexão ===")
+                        Log.d(TAG, "  Total apps: ${deviceInfo.installedApps.size}")
+                        Log.d(TAG, "  Apps count: ${deviceInfo.installedAppsCount}")
+                        deviceInfo.installedApps.take(3).forEach { app ->
+                            Log.d(TAG, "    App: ${app.appName} (${app.packageName})")
+                        }
+                        Log.d(TAG, "=================================")
                     } catch (e: Exception) {
                         Log.e(TAG, "❌ Erro ao enviar dados após conexão", e)
                     }
@@ -1491,8 +1632,8 @@ class MainActivity : AppCompatActivity() {
                 
                 // Forçar reconexão apenas se necessário
                 if (!isServiceBound || webSocketService?.isConnected() != true) {
-                    Log.d(TAG, "Tentando reconectar WebSocket")
-                    webSocketClient?.connect()
+                    Log.d(TAG, "Tentando reconectar WebSocketService")
+                    startWebSocketService()
                 }
             }
         }
@@ -1549,21 +1690,23 @@ class MainActivity : AppCompatActivity() {
             if (filteredApps.isEmpty()) {
                 emptyLayout.visibility = View.VISIBLE
                 appsRecyclerView.visibility = View.GONE
-                connectionStatusText.visibility = View.VISIBLE
             } else {
                 emptyLayout.visibility = View.GONE
                 appsRecyclerView.visibility = View.VISIBLE
-                connectionStatusText.visibility = View.GONE
             }
         }
     }
     
     private fun getDeviceName(): String {
-        return if (customDeviceName.isNotEmpty()) {
+        val deviceName = if (customDeviceName.isNotEmpty()) {
             customDeviceName
         } else {
             "${Build.MANUFACTURER} ${Build.MODEL}"
         }
+        Log.d(TAG, "📝 getDeviceName() chamado:")
+        Log.d(TAG, "   customDeviceName: \"$customDeviceName\"")
+        Log.d(TAG, "   deviceName final: \"$deviceName\"")
+        return deviceName
     }
     
     
@@ -1627,6 +1770,13 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Senha digitada tamanho: ${enteredPassword.length}")
             Log.d(TAG, "Senha salva tamanho: ${adminPassword.length}")
             Log.d(TAG, "Senhas são iguais: ${enteredPassword == adminPassword}")
+            Log.d(TAG, "Senha digitada hashCode: ${enteredPassword.hashCode()}")
+            Log.d(TAG, "Senha salva hashCode: ${adminPassword.hashCode()}")
+            Log.d(TAG, "Senha digitada bytes: ${enteredPassword.toByteArray().contentToString()}")
+            Log.d(TAG, "Senha salva bytes: ${adminPassword.toByteArray().contentToString()}")
+            Log.d(TAG, "Senha digitada trim: '${enteredPassword.trim()}'")
+            Log.d(TAG, "Senha salva trim: '${adminPassword.trim()}'")
+            Log.d(TAG, "Senhas são iguais após trim: ${enteredPassword.trim() == adminPassword.trim()}")
             Log.d(TAG, "============================")
             
             if (enteredPassword == adminPassword) {
@@ -1682,23 +1832,16 @@ class MainActivity : AppCompatActivity() {
                 
                 // Atualizar dados do dispositivo se estiver conectado
                 Log.d(TAG, "🔍 Verificando conexões WebSocket...")
-                Log.d(TAG, "WebSocketClient conectado: ${webSocketClient?.isConnected()}")
                 Log.d(TAG, "WebSocketService conectado: ${isServiceBound && (webSocketService?.isConnected() == true)}")
                 
-                if (webSocketClient?.isConnected() == true) {
-                    scope.launch {
-                        val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
-                        Log.d(TAG, "📤 Enviando nome atualizado via WebSocketClient: ${deviceInfo.name}")
-                        webSocketClient?.sendDeviceStatus(deviceInfo)
-                        Log.d(TAG, "✅ Nome atualizado enviado via WebSocketClient!")
-                    }
-                } else if (isServiceBound && (webSocketService?.isConnected() == true)) {
+                if (isServiceBound && (webSocketService?.isConnected() == true)) {
                     scope.launch {
                         val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
                         Log.d(TAG, "📤 Enviando nome atualizado via WebSocketService: ${deviceInfo.name}")
-                        val gson = Gson()
-                        val deviceInfoJson = gson.toJson(deviceInfo)
-                        webSocketService?.sendMessage(deviceInfoJson)
+                        
+                        // Enviar via método do service que adiciona o wrapper correto
+                        webSocketService?.sendDeviceStatus(deviceInfo)
+                        
                         Log.d(TAG, "✅ Nome atualizado enviado via WebSocketService!")
                     }
                 } else {
@@ -1719,23 +1862,16 @@ class MainActivity : AppCompatActivity() {
             
             // Atualizar dados do dispositivo se estiver conectado
             Log.d(TAG, "🔍 Verificando conexões WebSocket (reset)...")
-            Log.d(TAG, "WebSocketClient conectado: ${webSocketClient?.isConnected()}")
             Log.d(TAG, "WebSocketService conectado: ${isServiceBound && (webSocketService?.isConnected() == true)}")
             
-            if (webSocketClient?.isConnected() == true) {
-                scope.launch {
-                    val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
-                    Log.d(TAG, "📤 Enviando nome resetado via WebSocketClient: ${deviceInfo.name}")
-                    webSocketClient?.sendDeviceStatus(deviceInfo)
-                    Log.d(TAG, "✅ Nome resetado enviado via WebSocketClient!")
-                }
-            } else if (isServiceBound && (webSocketService?.isConnected() == true)) {
+            if (isServiceBound && (webSocketService?.isConnected() == true)) {
                 scope.launch {
                     val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
                     Log.d(TAG, "📤 Enviando nome resetado via WebSocketService: ${deviceInfo.name}")
-                    val gson = Gson()
-                    val deviceInfoJson = gson.toJson(deviceInfo)
-                    webSocketService?.sendMessage(deviceInfoJson)
+                    
+                    // Enviar via método do service que adiciona o wrapper correto
+                    webSocketService?.sendDeviceStatus(deviceInfo)
+                    
                     Log.d(TAG, "✅ Nome resetado enviado via WebSocketService!")
                 }
             } else {
@@ -1855,16 +1991,13 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "isServiceBound: $isServiceBound")
                 Log.d(TAG, "webSocketService é null? ${webSocketService == null}")
                 
-                // Verificar se está conectado (via Client OU Service)
-                val isConnected = (isServiceBound && webSocketService?.isConnected() == true) || 
-                                 (webSocketClient?.isConnected() == true)
+                // Verificar se está conectado (via Service)
+                val isConnected = (isServiceBound && webSocketService?.isConnected() == true)
                 
                 Log.d(TAG, "═══════════════════════════════════════")
                 Log.d(TAG, "📨 ENVIANDO MENSAGEM DE SUPORTE")
                 Log.d(TAG, "Service bound: $isServiceBound")
                 Log.d(TAG, "Service connected: ${webSocketService?.isConnected()}")
-                Log.d(TAG, "Client exists: ${webSocketClient != null}")
-                Log.d(TAG, "Client connected: ${webSocketClient?.isConnected()}")
                 Log.d(TAG, "Está conectado? $isConnected")
                 Log.d(TAG, "═══════════════════════════════════════")
                 
@@ -1923,7 +2056,7 @@ class MainActivity : AppCompatActivity() {
             
             val supportMessage = mapOf(
                 "type" to "support_message",
-                "deviceId" to Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID),
+                "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this),
                 "deviceName" to getDeviceName(),
                 "message" to message,
                 "timestamp" to System.currentTimeMillis(),
@@ -1943,10 +2076,6 @@ class MainActivity : AppCompatActivity() {
             if (isServiceBound && webSocketService?.isConnected() == true) {
                 Log.d(TAG, "📡 Enviando via WebSocketService")
                 webSocketService?.sendMessage(jsonMessage)
-                sent = true
-            } else if (webSocketClient?.isConnected() == true) {
-                Log.d(TAG, "📡 Enviando via WebSocketClient")
-                webSocketClient?.sendMessage(jsonMessage)
                 sent = true
             }
             
@@ -2140,6 +2269,141 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "=== FIM rebootDevice ===")
     }
     
+    private fun lockDevice() {
+        Log.d(TAG, "=== INÍCIO lockDevice ===")
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                // Bloquear tela imediatamente
+                devicePolicyManager.lockNow()
+                Log.d(TAG, "✅ Dispositivo bloqueado")
+            } else {
+                Log.w(TAG, "❌ Não é Device Owner - não pode bloquear dispositivo")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao bloquear dispositivo", e)
+        }
+        Log.d(TAG, "=== FIM lockDevice ===")
+    }
+    
+    private fun wipeDevice(confirmCode: String?) {
+        Log.d(TAG, "=== INÍCIO wipeDevice ===")
+        Log.d(TAG, "Código de confirmação: $confirmCode")
+        
+        // Código de segurança para evitar wipe acidental
+        val currentDeviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
+        if (confirmCode != "CONFIRM_WIPE_${currentDeviceId.takeLast(8)}") {
+            Log.e(TAG, "❌ Código de confirmação inválido - wipe cancelado por segurança")
+            return
+        }
+        
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                Log.w(TAG, "⚠️ EXECUTANDO FACTORY RESET EM 5 SEGUNDOS...")
+                
+                showNotification(
+                    "⚠️ ATENÇÃO",
+                    "Dispositivo será resetado em 5 segundos! Todos os dados serão apagados!"
+                )
+                
+                scope.launch {
+                    delay(5000)
+                    try {
+                        // Factory reset completo
+                        devicePolicyManager.wipeData(0)
+                        Log.d(TAG, "Factory reset executado")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao executar factory reset", e)
+                    }
+                }
+            } else {
+                Log.e(TAG, "❌ Não é Device Owner - não pode fazer factory reset")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao executar wipe", e)
+        }
+        Log.d(TAG, "=== FIM wipeDevice ===")
+    }
+    
+    private fun clearAppCache(packageName: String) {
+        Log.d(TAG, "=== INÍCIO clearAppCache: $packageName ===")
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                // Limpar cache do app
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    devicePolicyManager.setApplicationHidden(adminComponent, packageName, true)
+                    devicePolicyManager.setApplicationHidden(adminComponent, packageName, false)
+                }
+                Log.d(TAG, "✅ Cache do app $packageName limpo")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar cache do app", e)
+        }
+        Log.d(TAG, "=== FIM clearAppCache ===")
+    }
+    
+    private fun setCameraDisabled(disabled: Boolean) {
+        Log.d(TAG, "=== INÍCIO setCameraDisabled: $disabled ===")
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
+                devicePolicyManager.setCameraDisabled(adminComponent, disabled)
+                Log.d(TAG, "✅ Câmera ${if (disabled) "desabilitada" else "habilitada"}")
+                
+                runOnUiThread {
+                    Toast.makeText(this, 
+                        "Câmera ${if (disabled) "desabilitada" else "habilitada"}", 
+                        Toast.LENGTH_SHORT).show()
+                }
+            } else {
+                Log.w(TAG, "❌ Não é Device Owner - não pode controlar câmera")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao controlar câmera", e)
+        }
+        Log.d(TAG, "=== FIM setCameraDisabled ===")
+    }
+    
+    private fun uninstallApp(packageName: String) {
+        Log.d(TAG, "=== INÍCIO uninstallApp: $packageName ===")
+        try {
+            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (devicePolicyManager.isDeviceOwnerApp(this.packageName)) {
+                // Desinstalar app silenciosamente (apenas com Device Owner)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    scope.launch {
+                        try {
+                            val intent = Intent(Intent.ACTION_DELETE)
+                            intent.data = android.net.Uri.parse("package:$packageName")
+                            intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                            startActivity(intent)
+                            Log.d(TAG, "✅ Desinstalação de $packageName iniciada")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao desinstalar app", e)
+                        }
+                    }
+                }
+            } else {
+                Log.w(TAG, "❌ Não é Device Owner - não pode desinstalar app silenciosamente")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desinstalar app", e)
+        }
+        Log.d(TAG, "=== FIM uninstallApp ===")
+    }
+    
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         // Processar resultado através do PermissionManager
         permissionManager.onSpecialPermissionResult(requestCode)
@@ -2233,9 +2497,35 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
+        // SEMPRE recarregar allowedApps do SharedPreferences quando voltar ao foreground
+        // Isso garante que mudanças feitas enquanto app estava em background sejam aplicadas
+        val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
+        if (savedAllowedApps != null) {
+            try {
+                val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
+                val newAllowedApps = gson.fromJson<List<String>>(savedAllowedApps, type)
+                
+                // Só atualizar se mudou
+                if (newAllowedApps != allowedApps) {
+                    Log.d(TAG, "🔄 Detectada mudança em allowedApps no onResume!")
+                    Log.d(TAG, "   ANTES: ${allowedApps.size} apps")
+                    Log.d(TAG, "   DEPOIS: ${newAllowedApps.size} apps")
+                    allowedApps = newAllowedApps
+                    
+                    // Forçar atualização da UI
+                    if (installedApps.isNotEmpty()) {
+                        updateAppsList()
+                        Log.d(TAG, "✅ UI atualizada com novos apps permitidos")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao recarregar allowedApps no onResume", e)
+            }
+        }
+        
         // Evitar processamento muito frequente (menos de 1 segundo)
         if (timeSinceLastResume < 1000) {
-            Log.d(TAG, "onResume muito frequente, ignorando processamento")
+            Log.d(TAG, "onResume muito frequente, ignorando processamento adicional")
             return
         }
         
@@ -2252,6 +2542,15 @@ class MainActivity : AppCompatActivity() {
         if (timeSinceLastResume > 5000) {
             pauseResumeCount = 0
             Log.d(TAG, "Activity estável, resetando contador de ciclos")
+        }
+        
+        // Verificar se o app foi reinstalado e precisa verificar permissões imediatamente
+        val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+        val forcePermissionCheck = sharedPreferences.getBoolean("force_permission_check", false)
+        if (forcePermissionCheck) {
+            Log.d(TAG, "🔄 REINSTALAÇÃO DETECTADA NO onResume - verificando permissões imediatamente")
+            checkPermissions()
+            return // Interromper processamento normal para focar nas permissões
         }
         
         // Marcar como interação significativa se foi um resume após pausa longa
@@ -2431,11 +2730,8 @@ class MainActivity : AppCompatActivity() {
                 val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
                 
                 if (isServiceBound && webSocketService?.isConnected() == true) {
-                    webSocketService?.sendMessage(gson.toJson(deviceInfo))
+                    webSocketService?.sendDeviceStatus(deviceInfo)
                     Log.d(TAG, "Informações enviadas imediatamente após interação (WebSocketService)")
-                } else if (webSocketClient?.isConnected() == true) {
-                    webSocketClient?.sendDeviceStatus(deviceInfo)
-                    Log.d(TAG, "Informações enviadas imediatamente após interação (WebSocketClient)")
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao enviar informações após interação", e)
@@ -2502,10 +2798,7 @@ class MainActivity : AppCompatActivity() {
             isServiceBound = false
         }
         
-        // Desconectar cliente local se existir e limpar singleton
-        webSocketClient?.disconnect()
-        webSocketClient = null
-        WebSocketClient.destroyInstance()
+        // WebSocketClient removido - usando apenas WebSocketService
         scope.cancel()
         
         // Limpar modal de mensagem

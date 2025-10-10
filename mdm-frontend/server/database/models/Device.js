@@ -115,15 +115,11 @@ class DeviceModel {
     // Listar todos os dispositivos
     static async findAll(organizationId = null, filters = {}) {
         try {
+            // Query simplificada - primeiro buscar apenas os dispositivos
             let queryText = `
-                SELECT d.*, dr.*, o.name as organization_name,
-                       COUNT(ia.id) as installed_apps_count,
-                       COUNT(dgm.id) as group_count
+                SELECT d.*, o.name as organization_name
                 FROM devices d
-                LEFT JOIN device_restrictions dr ON d.id = dr.device_id
                 LEFT JOIN organizations o ON d.organization_id = o.id
-                LEFT JOIN installed_apps ia ON d.id = ia.device_id
-                LEFT JOIN device_group_memberships dgm ON d.id = dgm.device_id
                 WHERE 1=1
             `;
             let params = [];
@@ -147,10 +143,7 @@ class DeviceModel {
                 params.push(`%${filters.search}%`);
             }
 
-            queryText += `
-                GROUP BY d.id, dr.id, o.id
-                ORDER BY d.last_seen DESC
-            `;
+            queryText += ` ORDER BY d.last_seen DESC`;
 
             if (filters.limit) {
                 paramCount++;
@@ -206,7 +199,7 @@ class DeviceModel {
                 country: device.country,
                 status: device.status,
                 lastSeen: device.last_seen,
-                installedAppsCount: parseInt(device.installed_apps_count) || 0,
+                installedAppsCount: 0,
                 installedApps: [],
                 allowedApps: [],
                 restrictions: {

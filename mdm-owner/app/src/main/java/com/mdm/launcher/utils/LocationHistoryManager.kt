@@ -23,11 +23,44 @@ object LocationHistoryManager {
     private const val MAX_ENTRIES = 1000 // Máximo de 1000 entradas
     private const val MAX_AGE_DAYS = 30 // Manter apenas 30 dias de histórico
     
+    // Distâncias inteligentes baseadas no contexto
+    private const val MIN_DISTANCE_METERS = 25f // Distância mínima para salvar (25 metros)
+    private const val URBAN_DISTANCE_METERS = 50f // Área urbana (50 metros)
+    private const val SUBURBAN_DISTANCE_METERS = 100f // Área suburbana (100 metros)
+    private const val RURAL_DISTANCE_METERS = 200f // Área rural (200 metros)
+    private const val HIGHWAY_DISTANCE_METERS = 500f // Rodovia (500 metros)
+    
+    // Thresholds de velocidade para determinar contexto
+    private const val WALKING_SPEED_KMH = 8f // < 8 km/h = caminhando
+    private const val URBAN_SPEED_KMH = 30f // 8-30 km/h = área urbana
+    private const val SUBURBAN_SPEED_KMH = 60f // 30-60 km/h = área suburbana
+    private const val HIGHWAY_SPEED_KMH = 80f // > 80 km/h = rodovia
+    
     private val gson = Gson()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     
     fun saveLocation(context: Context, location: Location, address: String? = null) {
         try {
+            val history = loadLocationHistory(context)
+            val lastLocation = history.maxByOrNull { it.timestamp }
+            
+            // Verificar se deve salvar baseado na distância inteligente
+            if (lastLocation != null) {
+                val distance = calculateDistance(
+                    lastLocation.latitude, lastLocation.longitude,
+                    location.latitude, location.longitude
+                )
+                
+                val requiredDistance = getRequiredDistance(location, lastLocation)
+                
+                if (distance < requiredDistance) {
+                    Log.d(TAG, "Localização não salva - distância insuficiente: ${distance}m < ${requiredDistance}m")
+                    return
+                }
+                
+                Log.d(TAG, "✅ Localização salva - distância suficiente: ${distance}m >= ${requiredDistance}m")
+            }
+            
             val entry = LocationEntry(
                 latitude = location.latitude,
                 longitude = location.longitude,
@@ -37,7 +70,6 @@ object LocationHistoryManager {
                 address = address
             )
             
-            val history = loadLocationHistory(context)
             history.add(entry)
             
             // Manter apenas as entradas mais recentes
@@ -55,7 +87,7 @@ object LocationHistoryManager {
                 .putString("history", json)
                 .apply()
             
-            Log.d(TAG, "Localização salva no histórico: ${entry.latitude}, ${entry.longitude}")
+            Log.d(TAG, "📍 Localização salva no histórico: ${entry.latitude}, ${entry.longitude} (${history.size} entradas)")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao salvar localização no histórico", e)
         }
@@ -131,9 +163,27 @@ object LocationHistoryManager {
                 .remove("history")
                 .apply()
             
-            Log.d(TAG, "Histórico de localização limpo")
+            Log.d(TAG, "🗑️ Histórico de localização completamente limpo")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao limpar histórico", e)
+        }
+    }
+    
+    /**
+     * Força a limpeza completa do histórico e reinicia o sistema inteligente
+     */
+    fun resetLocationHistory(context: Context) {
+        try {
+            clearAllHistory(context)
+            Log.d(TAG, "🔄 Sistema de histórico de localização reiniciado")
+            Log.d(TAG, "📍 Próximas localizações serão salvas com distância inteligente:")
+            Log.d(TAG, "   🚶 Caminhando: ${MIN_DISTANCE_METERS}m")
+            Log.d(TAG, "   🏙️ Área urbana: ${URBAN_DISTANCE_METERS}m")
+            Log.d(TAG, "   🏘️ Área suburbana: ${SUBURBAN_DISTANCE_METERS}m")
+            Log.d(TAG, "   🌾 Área rural: ${RURAL_DISTANCE_METERS}m")
+            Log.d(TAG, "   🛣️ Rodovia: ${HIGHWAY_DISTANCE_METERS}m")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao resetar histórico", e)
         }
     }
     
@@ -141,5 +191,53 @@ object LocationHistoryManager {
         val date = Date(entry.timestamp)
         val formattedDate = dateFormat.format(date)
         return "📍 ${entry.latitude}, ${entry.longitude} (${entry.accuracy}m) - $formattedDate"
+    }
+    
+    /**
+     * Calcula a distância entre dois pontos em metros usando fórmula de Haversine
+     */
+    private fun calculateDistance(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Float {
+        val results = FloatArray(1)
+        Location.distanceBetween(lat1, lon1, lat2, lon2, results)
+        return results[0]
+    }
+    
+    /**
+     * Determina a distância mínima necessária baseada no contexto de movimento
+     */
+    private fun getRequiredDistance(currentLocation: Location, lastLocation: LocationEntry): Float {
+        val timeDiff = (currentLocation.time - lastLocation.timestamp) / 1000f // segundos
+        if (timeDiff <= 0) return MIN_DISTANCE_METERS
+        
+        // Calcular velocidade média em km/h
+        val distance = calculateDistance(
+            lastLocation.latitude, lastLocation.longitude,
+            currentLocation.latitude, currentLocation.longitude
+        )
+        val speedKmh = (distance / timeDiff) * 3.6f // m/s para km/h
+        
+        // Determinar distância baseada na velocidade
+        return when {
+            speedKmh < WALKING_SPEED_KMH -> {
+                Log.d(TAG, "🚶 Contexto: Caminhando (${speedKmh} km/h) - Distância: ${MIN_DISTANCE_METERS}m")
+                MIN_DISTANCE_METERS
+            }
+            speedKmh < URBAN_SPEED_KMH -> {
+                Log.d(TAG, "🏙️ Contexto: Área urbana (${speedKmh} km/h) - Distância: ${URBAN_DISTANCE_METERS}m")
+                URBAN_DISTANCE_METERS
+            }
+            speedKmh < SUBURBAN_SPEED_KMH -> {
+                Log.d(TAG, "🏘️ Contexto: Área suburbana (${speedKmh} km/h) - Distância: ${SUBURBAN_DISTANCE_METERS}m")
+                SUBURBAN_DISTANCE_METERS
+            }
+            speedKmh < HIGHWAY_SPEED_KMH -> {
+                Log.d(TAG, "🌾 Contexto: Área rural (${speedKmh} km/h) - Distância: ${RURAL_DISTANCE_METERS}m")
+                RURAL_DISTANCE_METERS
+            }
+            else -> {
+                Log.d(TAG, "🛣️ Contexto: Rodovia (${speedKmh} km/h) - Distância: ${HIGHWAY_DISTANCE_METERS}m")
+                HIGHWAY_DISTANCE_METERS
+            }
+        }
     }
 }

@@ -63,12 +63,28 @@ class WebSocketClient private constructor(
             Log.d(TAG, "WebSocket fechando: $code - $reason")
             isConnected = false
             onConnectionChange(false)
+            
+            // Parar heartbeat imediatamente
+            stopHeartbeat()
         }
         
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
             Log.d(TAG, "WebSocket fechado: $code - $reason")
             isConnected = false
             onConnectionChange(false)
+            
+            // Parar heartbeat
+            stopHeartbeat()
+            
+            // Se foi fechamento inesperado (não foi código 1000 = normal), tentar reconectar
+            if (code != 1000) {
+                Log.d(TAG, "🔄 Fechamento inesperado (código $code), tentando reconectar...")
+                if (!isReconnecting && reconnectAttempts < maxReconnectAttempts) {
+                    scheduleReconnect()
+                }
+            } else {
+                Log.d(TAG, "✅ Fechamento normal (código 1000), não tentando reconectar automaticamente")
+            }
         }
         
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -393,15 +409,16 @@ class WebSocketClient private constructor(
         
         reconnectAttempts++
         
-        // Backoff menos agressivo para WiFi - começar mais rápido
+        // Backoff otimizado - muito rápido no início para reconexão após restart do servidor
         val delay = when {
-            reconnectAttempts <= 5 -> 1000L // Primeiras 5 tentativas: 1s
-            reconnectAttempts <= 10 -> 2000L // Próximas 5: 2s
-            reconnectAttempts <= 20 -> 3000L // Próximas 10: 3s
+            reconnectAttempts == 1 -> 500L // Primeira tentativa: 0.5s
+            reconnectAttempts <= 3 -> 1000L // 2-3 tentativas: 1s
+            reconnectAttempts <= 10 -> 2000L // 4-10 tentativas: 2s
+            reconnectAttempts <= 20 -> 3000L // 11-20 tentativas: 3s
             else -> 5000L // Resto: 5s
         }
         
-        Log.d(TAG, "Agendando reconexão em ${delay}ms (tentativa $reconnectAttempts/$maxReconnectAttempts)")
+        Log.d(TAG, "🔄 Agendando reconexão em ${delay}ms (tentativa $reconnectAttempts/$maxReconnectAttempts)")
         
         isReconnecting = true
         lastConnectionAttempt = currentTime

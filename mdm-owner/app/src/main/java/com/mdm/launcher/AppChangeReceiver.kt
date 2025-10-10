@@ -38,8 +38,7 @@ class AppChangeReceiver : BroadcastReceiver() {
         if (packageName == null) return
         
         // Iniciar serviço WebSocket se não estiver rodando
-        val serviceIntent = Intent(context, com.mdm.launcher.network.WebSocketService::class.java)
-        serviceIntent.action = "START"
+        val serviceIntent = Intent(context, com.mdm.launcher.service.WebSocketService::class.java)
         context.startForegroundService(serviceIntent)
         
         // Aqui você pode adicionar lógica para notificar o servidor

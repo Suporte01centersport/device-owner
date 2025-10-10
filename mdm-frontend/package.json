@@ -13,13 +13,20 @@
     "setup-db": "node server/setup-postgresql.js",
     "migrate": "node server/migrate-to-postgresql.js",
     "db:setup": "npm run setup-db && npm run migrate",
-    "configure-existing": "node server/configure-existing-db.js"
+    "configure-existing": "node server/configure-existing-db.js",
+    "cleanup-devices": "node server/cleanup-orphaned-devices.js",
+    "cleanup-devices:confirm": "node server/cleanup-orphaned-devices.js --confirm",
+    "remove-duplicates": "node server/remove-duplicate-devices.js",
+    "remove-duplicates:confirm": "node server/remove-duplicate-devices.js --confirm",
+    "fix-null-device-ids": "node server/fix-null-device-ids.js",
+    "fix-null-device-ids:confirm": "node server/fix-null-device-ids.js --confirm"
   },
   "dependencies": {
     "appwrite": "^12.0.0",
     "axios": "^1.6.0",
     "bcrypt": "^5.1.1",
     "concurrently": "^8.2.0",
+    "dotenv": "^17.2.3",
     "jsonwebtoken": "^9.0.2",
     "next": "^14.0.0",
     "pg": "^8.16.3",

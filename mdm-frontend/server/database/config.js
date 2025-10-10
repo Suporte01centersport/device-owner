@@ -6,8 +6,8 @@ const dbConfig = {
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
     database: process.env.DB_NAME || 'mdmweb',
-    password: process.env.DB_PASSWORD || '',
-    port: process.env.DB_PORT || 5432,
+    password: process.env.DB_PASSWORD, // Deve ser definido no .env - não usar string vazia
+    port: parseInt(process.env.DB_PORT) || 5432,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     max: 20, // Máximo de conexões no pool
     idleTimeoutMillis: 30000, // Tempo para fechar conexões inativas

@@ -446,14 +446,6 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                       <span className="font-mono text-sm text-primary">{device.deviceId}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Serial</span>
-                      <span className="font-mono text-sm text-primary">{device.serialNumber}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-secondary">IMEI</span>
-                      <span className="font-mono text-sm text-primary">{device.imei}</span>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-secondary">Versão do App</span>
                       <span className="text-primary">{device.appVersion}</span>
                     </div>
@@ -845,7 +837,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
           )}
 
           {activeTab === 'map' && (
-            <LocationView device={device} />
+            <LocationView device={device} sendMessage={sendMessage} />
           )}
         </div>
 

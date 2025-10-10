@@ -34,8 +34,8 @@ class LocationService : Service(), LocationListener {
         private const val TAG = "LocationService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "location_service_channel"
-        private const val LOCATION_UPDATE_INTERVAL = 30000L // 30 segundos
-        private const val LOCATION_UPDATE_DISTANCE = 10f // 10 metros
+        private const val LOCATION_UPDATE_INTERVAL = 10000L // 10 segundos - sincronizado com MainActivity
+        private const val LOCATION_UPDATE_DISTANCE = 1f // 1 metro - máxima precisão
     }
     
     private lateinit var locationManager: LocationManager
@@ -246,10 +246,7 @@ class LocationService : Service(), LocationListener {
     
     private fun sendLocationToServer(location: Location, address: String?) {
         try {
-            val deviceId = android.provider.Settings.Secure.getString(
-                contentResolver,
-                android.provider.Settings.Secure.ANDROID_ID
-            ) ?: "unknown"
+            val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
             
             val locationData = mapOf(
                 "type" to "location_update",

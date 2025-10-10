@@ -6,6 +6,7 @@ import DeviceLocationMap from './DeviceLocationMap'
 
 interface LocationViewProps {
   device: Device
+  sendMessage?: (message: any) => void
 }
 
 interface LocationHistoryEntry {
@@ -18,7 +19,7 @@ interface LocationHistoryEntry {
   address?: string
 }
 
-export default function LocationView({ device }: LocationViewProps) {
+export default function LocationView({ device, sendMessage }: LocationViewProps) {
   const [locationHistory, setLocationHistory] = useState<LocationHistoryEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [showMap, setShowMap] = useState(false)
@@ -30,6 +31,20 @@ export default function LocationView({ device }: LocationViewProps) {
   useEffect(() => {
     loadLocationHistory()
   }, [device.deviceId])
+
+  // Função para remover duplicatas do histórico
+  const removeDuplicates = (history: any[]) => {
+    const seen = new Set()
+    return history.filter(entry => {
+      const key = `${entry.deviceId}_${entry.latitude}_${entry.longitude}_${entry.timestamp}`
+      if (seen.has(key)) {
+        console.log('🗑️ Removendo entrada duplicada:', key)
+        return false
+      }
+      seen.add(key)
+      return true
+    })
+  }
 
   // Salvar dados de localização no localStorage quando disponíveis
   useEffect(() => {
@@ -45,16 +60,36 @@ export default function LocationView({ device }: LocationViewProps) {
       }
       
       try {
+        // Verificar se o histórico foi limpo para este dispositivo
+        const clearedKey = `mdm_location_cleared_${device.deviceId}`
+        const wasCleared = localStorage.getItem(clearedKey)
+        
+        if (wasCleared) {
+          console.log('📋 Histórico foi limpo, removendo flag e permitindo novas localizações')
+          localStorage.removeItem(clearedKey) // Remove o flag de limpeza
+        }
+        
         const saved = localStorage.getItem('mdm_location_history')
         const history = saved ? JSON.parse(saved) : []
         
-        // Adicionar nova localização se não existir
+        // Adicionar nova localização se não existir (verificar por coordenadas e timestamp)
         const exists = history.some((entry: any) => 
-          entry.deviceId === device.deviceId && 
-          entry.timestamp === locationData.timestamp
+          entry.deviceId === device.deviceId && (
+            entry.timestamp === locationData.timestamp ||
+            (Math.abs(entry.latitude - locationData.latitude) < 0.0001 && 
+             Math.abs(entry.longitude - locationData.longitude) < 0.0001 &&
+             Math.abs(entry.timestamp - locationData.timestamp) < 30000) // 30 segundos de tolerância
+          )
         )
         
         if (!exists) {
+          console.log('📍 Adicionando nova localização ao histórico:', {
+            deviceId: device.deviceId,
+            coordinates: `${locationData.latitude}, ${locationData.longitude}`,
+            timestamp: new Date(locationData.timestamp).toLocaleString(),
+            accuracy: locationData.accuracy
+          })
+          
           history.unshift(locationData)
           // Manter apenas as últimas 100 localizações por dispositivo
           const deviceHistory = history.filter((entry: any) => entry.deviceId === device.deviceId)
@@ -62,6 +97,12 @@ export default function LocationView({ device }: LocationViewProps) {
           const limitedDeviceHistory = deviceHistory.slice(0, 100)
           
           localStorage.setItem('mdm_location_history', JSON.stringify([...otherDevices, ...limitedDeviceHistory]))
+        } else {
+          console.log('📍 Localização já existe no histórico, não duplicando:', {
+            deviceId: device.deviceId,
+            coordinates: `${locationData.latitude}, ${locationData.longitude}`,
+            timestamp: new Date(locationData.timestamp).toLocaleString()
+          })
         }
       } catch (error) {
         console.error('Erro ao salvar localização no localStorage:', error)
@@ -84,9 +125,9 @@ export default function LocationView({ device }: LocationViewProps) {
         }
       }
       
-      // Filtrar histórico para este dispositivo
-      const deviceHistory = savedHistory
-        .filter(entry => entry.deviceId === device.deviceId)
+      // Filtrar histórico para este dispositivo e remover duplicatas
+      const deviceHistory = removeDuplicates(savedHistory
+        .filter(entry => entry.deviceId === device.deviceId))
         .map(entry => ({
           id: `saved_${entry.timestamp}`,
           latitude: entry.latitude,
@@ -98,27 +139,40 @@ export default function LocationView({ device }: LocationViewProps) {
         }))
         .sort((a, b) => b.timestamp - a.timestamp) // Mais recentes primeiro
       
-      // Se o dispositivo tem localização atual, adicionar no topo
+      // Se o dispositivo tem localização atual, adicionar no topo apenas se não existir no histórico salvo
       if (device.latitude && device.longitude) {
-        const currentLocation = {
-          id: 'current',
-          latitude: device.latitude,
-          longitude: device.longitude,
-          accuracy: device.locationAccuracy || 0,
-          timestamp: device.lastLocationUpdate || Date.now(),
-          provider: device.locationProvider || 'unknown',
-          address: device.address
-        }
+        const currentTimestamp = device.lastLocationUpdate || Date.now()
         
-        // Verificar se já existe uma entrada atual
-        const hasCurrent = deviceHistory.some(entry => entry.id === 'current')
-        if (!hasCurrent) {
+        // Verificar se já existe uma entrada com o mesmo timestamp no histórico salvo
+        const hasCurrentInSaved = deviceHistory.some(entry => 
+          Math.abs(entry.timestamp - currentTimestamp) < 1000 // 1 segundo de tolerância
+        )
+        
+        if (!hasCurrentInSaved) {
+          const currentLocation = {
+            id: 'current',
+            latitude: device.latitude,
+            longitude: device.longitude,
+            accuracy: device.locationAccuracy || 0,
+            timestamp: currentTimestamp,
+            provider: device.locationProvider || 'unknown',
+            address: device.address
+          }
+          
           deviceHistory.unshift(currentLocation)
         }
       }
       
-      // Se não há histórico salvo, usar dados mock para demonstração
-      if (deviceHistory.length === 0) {
+      // Verificar se o histórico foi limpo para este dispositivo
+      const clearedKey = `mdm_location_cleared_${device.deviceId}`
+      const wasCleared = localStorage.getItem(clearedKey)
+      
+      if (wasCleared) {
+        console.log('📋 Histórico foi limpo para este dispositivo, não carregando dados mock')
+        setLocationHistory(deviceHistory) // Mesmo que vazio, não carrega mock
+      } else if (deviceHistory.length === 0) {
+        // Se não há histórico salvo e não foi limpo, usar dados mock para demonstração
+        console.log('📋 Carregando dados mock para demonstração')
         const mockHistory: LocationHistoryEntry[] = [
           {
             id: 'mock_1',
@@ -198,6 +252,79 @@ export default function LocationView({ device }: LocationViewProps) {
   const handleCloseHistoryModal = () => {
     setShowHistoryModal(false)
     setShowHistoryMap(false) // Reset para modo lista quando fechar
+  }
+
+  const handleClearLocationHistory = async () => {
+    if (!device?.deviceId) {
+      console.error('❌ DeviceId não disponível')
+      return
+    }
+    
+    if (!sendMessage) {
+      console.error('❌ Função sendMessage não disponível')
+      alert('Erro: Função de comunicação não disponível. Tente recarregar a página.')
+      return
+    }
+    
+    const confirmed = window.confirm(
+      `Tem certeza que deseja limpar todo o histórico de localização do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita e removerá ${locationHistory.length} entradas.`
+    )
+    
+    if (!confirmed) return
+    
+    try {
+      console.log('🗑️ Limpando histórico de localização...')
+      console.log('   DeviceId:', device.deviceId)
+      console.log('   Entradas a remover:', locationHistory.length)
+      
+      // Enviar comando para o dispositivo limpar o histórico
+      sendMessage({
+        type: 'clear_location_history',
+        deviceId: device.deviceId,
+        timestamp: Date.now()
+      })
+      
+      // Limpar o histórico local imediatamente para feedback visual
+      setLocationHistory([])
+      
+      // Limpar também o localStorage para evitar recarregamento
+      try {
+        const saved = localStorage.getItem('mdm_location_history')
+        if (saved) {
+          const history = JSON.parse(saved)
+          // Remover apenas entradas deste dispositivo
+          const filteredHistory = history.filter((entry: any) => entry.deviceId !== device.deviceId)
+          localStorage.setItem('mdm_location_history', JSON.stringify(filteredHistory))
+          
+          // Marcar que o histórico foi limpo para este dispositivo
+          const clearedKey = `mdm_location_cleared_${device.deviceId}`
+          localStorage.setItem(clearedKey, Date.now().toString())
+          
+          console.log('🗑️ Histórico removido do localStorage para o dispositivo:', device.deviceId)
+        }
+      } catch (error) {
+        console.error('❌ Erro ao limpar localStorage:', error)
+      }
+      
+      console.log('✅ Comando de limpeza de histórico enviado')
+      
+      // Mostrar notificação de sucesso
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification('MDM Launcher', {
+            body: `Histórico de localização limpo para ${device.name}`,
+            icon: '/icon-192.png',
+            tag: 'history-cleared'
+          })
+        } catch (e) {
+          console.error('❌ Erro ao exibir notificação:', e)
+        }
+      }
+      
+    } catch (error) {
+      console.error('❌ Erro ao limpar histórico de localização:', error)
+      alert('Erro ao limpar histórico de localização. Tente novamente.')
+    }
   }
 
   return (
@@ -487,12 +614,23 @@ export default function LocationView({ device }: LocationViewProps) {
                 <span className="text-sm text-muted">
                   {locationHistory.length} entrada{locationHistory.length !== 1 ? 's' : ''} de localização
                 </span>
-                <button
-                  onClick={handleCloseHistoryModal}
-                  className="btn btn-primary"
-                >
-                  Fechar
-                </button>
+                <div className="flex items-center gap-3">
+                  {locationHistory.length > 0 && (
+                    <button
+                      onClick={handleClearLocationHistory}
+                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                    >
+                      <span>🗑️</span>
+                      Limpar Histórico
+                    </button>
+                  )}
+                  <button
+                    onClick={handleCloseHistoryModal}
+                    className="btn btn-primary"
+                  >
+                    Fechar
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -28,6 +28,11 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const [supportDevice, setSupportDevice] = useState<Device | null>(null)
+  
+  // Debug: Monitorar mudanças no estado devices
+  useEffect(() => {
+    console.log('🔄 Estado devices alterado:', devices.map(d => ({ id: d.deviceId, name: d.name })))
+  }, [devices])
   const [supportNotifications, setSupportNotifications] = useState<any[]>([])
   const [unreadSupportCount, setUnreadSupportCount] = useState(0)
   const [isConnected, setIsConnected] = useState(false)
@@ -170,7 +175,18 @@ export default function Home() {
           const existingIndex = prevDevices.findIndex(d => d.deviceId === message.device.deviceId)
           if (existingIndex >= 0) {
             const updated = [...prevDevices]
+            const oldDevice = updated[existingIndex]
             updated[existingIndex] = { ...updated[existingIndex], ...message.device }
+            
+            // Log para verificar se o nome mudou
+            if (oldDevice.name !== message.device.name) {
+              console.log('📝 Nome do dispositivo mudou no status:', {
+                deviceId: message.device.deviceId,
+                oldName: oldDevice.name,
+                newName: message.device.name
+              })
+            }
+            
             console.log('Dispositivo status atualizado:', updated[existingIndex])
             return updated
           } else {
@@ -180,11 +196,11 @@ export default function Home() {
         })
         break
       case 'device_connected':
-        console.log('Dispositivo conectado:', message.device)
+        console.log('🔌 === MENSAGEM DEVICE_CONNECTED RECEBIDA ===')
         
         // Debug: verificar dados específicos
         if (message.device) {
-          console.log('Dados do dispositivo conectado:', {
+          console.log('   Dados do dispositivo:', {
             deviceId: message.device.deviceId,
             name: message.device.name,
             batteryLevel: message.device.batteryLevel,
@@ -194,16 +210,31 @@ export default function Home() {
             storageUsed: message.device.storageUsed
           })
         }
+        console.log('================================================')
         
         updateDevices(prevDevices => {
           const existingIndex = prevDevices.findIndex(d => d.deviceId === message.device.deviceId)
           if (existingIndex >= 0) {
             const updated = [...prevDevices]
+            const oldDevice = updated[existingIndex]
             updated[existingIndex] = { ...updated[existingIndex], ...message.device }
-            console.log('Dispositivo conectado atualizado:', updated[existingIndex])
+            
+            // Log para verificar se o nome mudou
+            if (oldDevice.name !== message.device.name) {
+              console.log('📝 NOME MUDOU NO DEVICE_CONNECTED!', {
+                deviceId: message.device.deviceId,
+                oldName: oldDevice.name,
+                newName: message.device.name
+              })
+            }
+            
+            console.log('✅ Dispositivo conectado atualizado:', {
+              deviceId: updated[existingIndex].deviceId,
+              name: updated[existingIndex].name
+            })
             return updated
           } else {
-            console.log('Novo dispositivo conectado adicionado:', message.device)
+            console.log('🆕 Novo dispositivo conectado adicionado:', message.device)
             return [...prevDevices, message.device]
           }
         })
@@ -242,6 +273,43 @@ export default function Home() {
             return device
           })
         )
+        break
+      case 'device_name_changed':
+        console.log('📝 === MENSAGEM DEVICE_NAME_CHANGED RECEBIDA ===')
+        console.log('   DeviceId:', message.deviceId)
+        console.log('   Nome anterior:', message.oldName)
+        console.log('   Nome novo:', message.newName)
+        console.log('   Tem device completo?', !!message.device)
+        if (message.device) {
+          console.log('   Nome no device completo:', message.device.name)
+        }
+        console.log('================================================')
+        
+        updateDevices(prevDevices => {
+          const updated = prevDevices.map(device => {
+            if (device.deviceId === message.deviceId) {
+              const updatedDevice = { 
+                ...device, 
+                ...message.device  // Atualizar com todos os dados novos
+              }
+              console.log('✅ Dispositivo atualizado na lista:', {
+                deviceId: updatedDevice.deviceId,
+                oldName: device.name,
+                newName: updatedDevice.name
+              })
+              return updatedDevice
+            }
+            return device
+          })
+          
+          console.log('📋 Lista de dispositivos após atualização:', updated.map(d => ({ id: d.deviceId, name: d.name })))
+          return updated
+        })
+        
+        // Mostrar notificação de sucesso
+        if (message.newName && message.oldName !== message.newName) {
+          console.log(`✅ Nome do dispositivo atualizado com sucesso: "${message.oldName}" → "${message.newName}"`)
+        }
         break
       case 'app_permissions_updated':
         console.log('Permissões de aplicativos atualizadas:', message)
@@ -307,13 +375,20 @@ export default function Home() {
   }
 
   const handleDeleteDevice = useCallback((deviceId: string) => {
+    // Validar se deviceId é válido
+    if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
+      console.error('❌ DeviceId inválido para deleção:', deviceId)
+      alert('Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
+      return
+    }
+    
     if (window.confirm('Tem certeza que deseja deletar este dispositivo permanentemente? Esta ação não pode ser desfeita.')) {
+      console.log('🗑️ Enviando requisição de deleção:', deviceId)
       sendMessage({
         type: 'delete_device',
         deviceId: deviceId,
         timestamp: Date.now()
       })
-      console.log('Dispositivo deletado:', deviceId)
     }
   }, [sendMessage])
 
