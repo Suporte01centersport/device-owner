@@ -229,23 +229,9 @@ async function checkRemoteCommands() {
     checks.passed++;
 }
 
-// 5. Verificar provisionamento QR Code
-async function checkQRCodeProvisioning() {
-    logSection('5. Verificando Sistema de Provisionamento QR Code');
-    
-    logInfo('Sistema de QR Code requer:');
-    log('  • URL do servidor WebSocket');
-    log('  • Device ID (gerado automaticamente)');
-    log('  • Descoberta automática de servidor (UDP)');
-    
-    logSuccess('Setup via QR Code: Pronto (via SetupActivity)');
-    logSuccess('Descoberta automática: Implementada');
-    checks.passed++;
-}
-
-// 6. Verificar persistência de dados
+// 5. Verificar persistência de dados
 async function checkDataPersistence() {
-    logSection('6. Verificando Persistência de Dados');
+    logSection('5. Verificando Persistência de Dados');
     
     logInfo('SharedPreferences utilizados:');
     log('  • mdm_launcher - Configurações principais ✅');
@@ -259,9 +245,9 @@ async function checkDataPersistence() {
     checks.passed++;
 }
 
-// 7. Verificar tratamento de erros
+// 6. Verificar tratamento de erros
 async function checkErrorHandling() {
-    logSection('7. Verificando Tratamento de Erros');
+    logSection('6. Verificando Tratamento de Erros');
     
     logSuccess('Reconexão automática WebSocket (backoff exponencial)');
     logSuccess('Fallback HTTP quando WebSocket falha');
@@ -271,9 +257,9 @@ async function checkErrorHandling() {
     checks.passed++;
 }
 
-// 8. Verificar Device Owner
+// 7. Verificar Device Owner
 async function checkDeviceOwner() {
-    logSection('8. Verificando Configuração Device Owner');
+    logSection('7. Verificando Configuração Device Owner');
     
     logInfo('Comandos necessários:');
     log('  adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver');
@@ -299,7 +285,6 @@ async function main() {
     await checkServerDiscovery();
     await checkDataConsistency();
     await checkRemoteCommands();
-    await checkQRCodeProvisioning();
     await checkDataPersistence();
     await checkErrorHandling();
     await checkDeviceOwner();
