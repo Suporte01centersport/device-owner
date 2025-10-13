@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -129,6 +130,12 @@ class MainActivity : AppCompatActivity() {
     
     // Serviço WebSocket em background
     private var webSocketService: WebSocketService? = null
+    
+    // Controle de estado da tela para conexão persistente
+    private var isScreenLocked = false
+    private var lastScreenStateChange = 0L
+    private var screenStateReceiver: BroadcastReceiver? = null
+    private var wakeLock: PowerManager.WakeLock? = null
     private var isServiceBound = false
     
     // Localização
@@ -284,6 +291,9 @@ class MainActivity : AppCompatActivity() {
         startWebSocketService()
         // setupWebSocketClient() - REMOVIDO: usar apenas WebSocketService para evitar conexões duplicadas
         startLocationService()
+        
+        // Configurar controle de tela para conexão persistente
+        setupScreenStateMonitoring()
         
         // Carregar dados salvos
         loadSavedData()
@@ -854,38 +864,137 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "🔄 Mudança de conectividade detectada: $isConnected")
             
             if (isConnected) {
-                Log.d(TAG, "✅ Rede disponível - tentando reconectar...")
+                Log.d(TAG, "✅ Rede disponível - notificando mudança de rede...")
+                
+                // Notificar WebSocketService sobre mudança de rede
+                webSocketService?.onNetworkChanged()
+                
                 // Aguardar um pouco para a rede se estabilizar
                 scope.launch {
-                    delay(2000) // 2 segundos
+                    delay(1000) // Reduzido de 2s para 1s - mais responsivo
                     attemptReconnection()
                 }
             } else {
-                Log.d(TAG, "❌ Rede indisponível")
+                Log.d(TAG, "❌ Rede indisponível - atualizando status de conexão")
+                // Atualizar status imediatamente quando rede é perdida
+                runOnUiThread {
+                    updateConnectionStatus(false)
+                }
             }
         }
         
         Log.d(TAG, "✅ NetworkMonitor inicializado")
+        
+        // Verificação adicional mais frequente para mudanças de rede
+        scope.launch {
+            while (isActive) {
+                delay(1000) // Verificar a cada 1 segundo para mudanças rápidas
+                
+                val hasNetwork = networkMonitor?.isConnected?.value ?: false
+                val currentText = connectionStatusText.text.toString()
+                
+                // Detectar mudança de rede imediatamente
+                if (!hasNetwork && currentText != "Sem Rede") {
+                    Log.d(TAG, "🚨 Mudança de rede detectada: SEM REDE")
+                    runOnUiThread {
+                        updateConnectionStatus(false)
+                    }
+                } else if (hasNetwork && currentText == "Sem Rede") {
+                    Log.d(TAG, "🚨 Mudança de rede detectada: REDE VOLTOU")
+                    runOnUiThread {
+                        updateConnectionStatus(false) // Vai mostrar "Reconectando..."
+                    }
+                }
+            }
+        }
+        
+        // Verificação periódica de conectividade para garantir status correto
+        scope.launch {
+            while (isActive) {
+                delay(3000) // Verificar a cada 3 segundos (era 10s) - mais responsivo
+                
+                val hasNetwork = networkMonitor?.isConnected?.value ?: false
+                val isWebSocketConnected = isServiceBound && webSocketService?.isConnected() == true
+                
+                // Se não há rede, garantir que status seja atualizado
+                if (!hasNetwork && connectionStatusText.text != "Sem Rede") {
+                    Log.d(TAG, "🔄 Verificação periódica: sem rede detectada")
+                    runOnUiThread {
+                        updateConnectionStatus(false)
+                    }
+                }
+                // Se há rede mas WebSocket não está conectado, mostrar "Reconectando"
+                else if (hasNetwork && !isWebSocketConnected && connectionStatusText.text != "Reconectando...") {
+                    Log.d(TAG, "🔄 Verificação periódica: rede OK mas WebSocket desconectado")
+                    runOnUiThread {
+                        updateConnectionStatus(false)
+                    }
+                }
+                // Se há rede e WebSocket conectado, garantir que status seja "Conectado"
+                else if (hasNetwork && isWebSocketConnected && connectionStatusText.text != "Conectado") {
+                    Log.d(TAG, "🔄 Verificação periódica: conexão OK detectada")
+                    runOnUiThread {
+                        updateConnectionStatus(true)
+                    }
+                }
+            }
+        }
     }
     
     private fun attemptReconnection() {
-        Log.d(TAG, "🔄 Tentando reconexão...")
+        Log.d(TAG, "🔄 Tentando reconexão após retorno da rede...")
         
-        // Verificar se precisa descobrir novo servidor
         scope.launch {
             try {
-                val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
-                Log.d(TAG, "🔍 Novo servidor descoberto: $newServerUrl")
+                // Aguardar um pouco para a rede se estabilizar completamente
+                delay(2000) // Reduzido de 3s para 2s - mais responsivo
                 
-                // Forçar reconexão com novo servidor se necessário - reiniciar Service
-                if (isServiceBound && webSocketService?.isConnected() == false) {
-                    Log.d(TAG, "🔄 Tentando reconectar WebSocketService...")
-                    // O service não tem método connect(), apenas reconnect
-                    startWebSocketService()
+                Log.d(TAG, "🔍 Descobrindo servidor após reconexão de rede...")
+                val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
+                Log.d(TAG, "✅ Servidor descoberto: $newServerUrl")
+                
+                // Salvar URL descoberta para uso futuro
+                ServerDiscovery.saveDiscoveredServerUrl(this@MainActivity, newServerUrl)
+                
+                // SEMPRE reiniciar o WebSocketService para garantir nova conexão
+                Log.d(TAG, "🔄 Reiniciando WebSocketService com novo servidor...")
+                
+                // Parar serviço atual se estiver rodando
+                if (isServiceBound) {
+                    Log.d(TAG, "Parando WebSocketService atual...")
+                    stopService(Intent(this@MainActivity, WebSocketService::class.java))
+                    delay(1000) // Aguardar parada completa
+                }
+                
+                // Iniciar novo serviço
+                Log.d(TAG, "Iniciando novo WebSocketService...")
+                startWebSocketService()
+                
+                // Aguardar um pouco e verificar se conectou
+                delay(3000) // Reduzido de 5s para 3s - mais responsivo
+                
+                if (isServiceBound && webSocketService?.isConnected() == true) {
+                    Log.d(TAG, "✅ Reconexão bem-sucedida!")
+                } else {
+                    Log.w(TAG, "⚠️ Reconexão pode ter falhado, tentando novamente...")
+                    // Tentar mais uma vez após 5 segundos (reduzido de 10s)
+                    delay(5000)
+                    if (!isServiceBound || webSocketService?.isConnected() != true) {
+                        Log.d(TAG, "🔄 Segunda tentativa de reconexão...")
+                        startWebSocketService()
+                    }
                 }
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Erro durante tentativa de reconexão", e)
+                Log.e(TAG, "❌ Erro durante tentativa de reconexão", e)
+                
+                // Fallback: tentar reconectar mesmo sem descoberta
+                try {
+                    Log.d(TAG, "🔄 Tentando fallback de reconexão...")
+                    startWebSocketService()
+                } catch (fallbackError: Exception) {
+                    Log.e(TAG, "❌ Fallback de reconexão também falhou", fallbackError)
+                }
             }
         }
     }
@@ -1593,47 +1702,62 @@ class MainActivity : AppCompatActivity() {
     
     private fun updateConnectionStatus(connected: Boolean) {
         runOnUiThread {
+            val currentText = connectionStatusText.text.toString()
+            val hasNetwork = networkMonitor?.isConnected?.value ?: false
+            
             if (connected) {
-                connectionStatusText.text = "Conectado"
-                connectionStatusText.setTextColor(resources.getColor(R.color.connection_connected, null))
-                Log.d(TAG, "✅ Status de conexão: CONECTADO")
-                
-                // IMPORTANTE: Enviar dados completos do dispositivo assim que conectar
-                Log.d(TAG, "📤 Conexão estabelecida - coletando e enviando dados do dispositivo...")
-                scope.launch {
-                    try {
-                        val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
-                        
-                        Log.d(TAG, "=== ENVIANDO DADOS APÓS CONEXÃO ===")
-                        Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
-                        Log.d(TAG, "Apps: ${deviceInfo.installedAppsCount}")
-                        Log.d(TAG, "DeviceId: ${deviceInfo.deviceId.takeLast(4)}")
-                        Log.d(TAG, "===================================")
-                        
-                        webSocketService?.sendDeviceStatus(deviceInfo)
-                        Log.d(TAG, "✅ Dados completos enviados após conexão via WebSocketService!")
-                        Log.d(TAG, "=== DEBUG: Apps após conexão ===")
-                        Log.d(TAG, "  Total apps: ${deviceInfo.installedApps.size}")
-                        Log.d(TAG, "  Apps count: ${deviceInfo.installedAppsCount}")
-                        deviceInfo.installedApps.take(3).forEach { app ->
-                            Log.d(TAG, "    App: ${app.appName} (${app.packageName})")
+                // Só atualizar se realmente mudou
+                if (currentText != "Conectado") {
+                    connectionStatusText.text = "Conectado"
+                    connectionStatusText.setTextColor(resources.getColor(R.color.connection_connected, null))
+                    Log.d(TAG, "✅ Status de conexão: CONECTADO")
+                    
+                    // IMPORTANTE: Enviar dados completos do dispositivo assim que conectar
+                    Log.d(TAG, "📤 Conexão estabelecida - coletando e enviando dados do dispositivo...")
+                    scope.launch {
+                        try {
+                            val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                            
+                            Log.d(TAG, "=== ENVIANDO DADOS APÓS CONEXÃO ===")
+                            Log.d(TAG, "Bateria: ${deviceInfo.batteryLevel}%")
+                            Log.d(TAG, "Apps: ${deviceInfo.installedAppsCount}")
+                            Log.d(TAG, "DeviceId: ${deviceInfo.deviceId.takeLast(4)}")
+                            Log.d(TAG, "===================================")
+                            
+                            webSocketService?.sendDeviceStatus(deviceInfo)
+                            Log.d(TAG, "✅ Dados completos enviados após conexão via WebSocketService!")
+                            Log.d(TAG, "=== DEBUG: Apps após conexão ===")
+                            Log.d(TAG, "  Total apps: ${deviceInfo.installedApps.size}")
+                            Log.d(TAG, "  Apps count: ${deviceInfo.installedAppsCount}")
+                            deviceInfo.installedApps.take(3).forEach { app ->
+                                Log.d(TAG, "    App: ${app.appName} (${app.packageName})")
+                            }
+                            Log.d(TAG, "=================================")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ Erro ao enviar dados após conexão", e)
                         }
-                        Log.d(TAG, "=================================")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "❌ Erro ao enviar dados após conexão", e)
                     }
                 }
-                
-                Log.d(TAG, "Status de conexão: CONECTADO")
             } else {
-                connectionStatusText.text = "Reconectando..."
-                connectionStatusText.setTextColor(resources.getColor(R.color.connection_disconnected, null))
-                Log.d(TAG, "Status de conexão: DESCONECTADO - tentando reconectar")
-                
-                // Forçar reconexão apenas se necessário
-                if (!isServiceBound || webSocketService?.isConnected() != true) {
-                    Log.d(TAG, "Tentando reconectar WebSocketService")
-                    startWebSocketService()
+                // Verificar se é problema de rede ou WebSocket
+                if (!hasNetwork) {
+                    if (currentText != "Sem Rede") {
+                        connectionStatusText.text = "Sem Rede"
+                        connectionStatusText.setTextColor(resources.getColor(R.color.connection_disconnected, null))
+                        Log.d(TAG, "❌ Status de conexão: SEM REDE")
+                    }
+                } else {
+                    if (currentText != "Reconectando...") {
+                        connectionStatusText.text = "Reconectando..."
+                        connectionStatusText.setTextColor(resources.getColor(R.color.connection_disconnected, null))
+                        Log.d(TAG, "🔄 Status de conexão: RECONECTANDO")
+                        
+                        // Forçar reconexão apenas se necessário
+                        if (!isServiceBound || webSocketService?.isConnected() != true) {
+                            Log.d(TAG, "Tentando reconectar WebSocketService")
+                            startWebSocketService()
+                        }
+                    }
                 }
             }
         }
@@ -2497,6 +2621,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
+        // Tela desbloqueada - garantir conexão ativa
+        handleScreenUnlocked()
+        
         // SEMPRE recarregar allowedApps do SharedPreferences quando voltar ao foreground
         // Isso garante que mudanças feitas enquanto app estava em background sejam aplicadas
         val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
@@ -2581,6 +2708,9 @@ class MainActivity : AppCompatActivity() {
         lastPauseTime = System.currentTimeMillis()
         pauseResumeCount++
         Log.d(TAG, "onPause() chamado - Activity pausada (ciclo #$pauseResumeCount)")
+        
+        // Tela pode estar sendo bloqueada - verificar estado
+        checkScreenState()
     }
     
     override fun onStop() {
@@ -3164,6 +3294,246 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao remover Device Owner", e)
             Toast.makeText(this, "❌ Erro: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+    
+    // ==================== CONTROLE DE ESTADO DA TELA ====================
+    
+    private fun setupScreenStateMonitoring() {
+        Log.d(TAG, "🔧 Configurando monitoramento de estado da tela...")
+        
+        try {
+            // Configurar WakeLock para manter CPU ativa quando necessário
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "MDMLauncher::ScreenStateWakeLock"
+            )
+            
+            // Registrar receiver para mudanças de estado da tela
+            screenStateReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        Intent.ACTION_SCREEN_ON -> {
+                            Log.d(TAG, "📱 TELA LIGADA - garantindo conexão ativa")
+                            handleScreenUnlocked()
+                        }
+                        Intent.ACTION_SCREEN_OFF -> {
+                            Log.d(TAG, "📱 TELA DESLIGADA - ajustando conexão")
+                            handleScreenLocked()
+                        }
+                        Intent.ACTION_USER_PRESENT -> {
+                            Log.d(TAG, "📱 USUÁRIO PRESENTE - reconectando imediatamente")
+                            handleScreenUnlocked()
+                        }
+                    }
+                }
+            }
+            
+            val filter = IntentFilter().apply {
+                addAction(Intent.ACTION_SCREEN_ON)
+                addAction(Intent.ACTION_SCREEN_OFF)
+                addAction(Intent.ACTION_USER_PRESENT)
+            }
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(screenStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(screenStateReceiver, filter)
+            }
+            
+            Log.d(TAG, "✅ Monitoramento de estado da tela configurado")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao configurar monitoramento de tela", e)
+        }
+    }
+    
+    private fun cleanupScreenStateMonitoring() {
+        try {
+            screenStateReceiver?.let { receiver ->
+                unregisterReceiver(receiver)
+                Log.d(TAG, "✅ Receiver de estado da tela removido")
+            }
+            
+            wakeLock?.let { lock ->
+                if (lock.isHeld) {
+                    lock.release()
+                    Log.d(TAG, "✅ WakeLock liberado")
+                }
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao limpar monitoramento de tela", e)
+        }
+    }
+    
+    private fun handleScreenUnlocked() {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastScreenStateChange
+        
+        // Evitar processamento muito frequente
+        if (timeSinceLastChange < 1000) {
+            Log.d(TAG, "Mudança de estado muito recente, ignorando")
+            return
+        }
+        
+        lastScreenStateChange = currentTime
+        isScreenLocked = false
+        
+        Log.d(TAG, "🔓 TELA DESBLOQUEADA - ativando conexão persistente")
+        
+        // Ativar WakeLock para manter conexão ativa
+        wakeLock?.let { lock ->
+            if (!lock.isHeld) {
+                lock.acquire(10 * 60 * 1000L) // 10 minutos
+                Log.d(TAG, "🔋 WakeLock ativado para manter conexão")
+            }
+        }
+        
+        // Verificar e garantir conexão WebSocket ativa
+        scope.launch {
+            try {
+                // Aguardar um pouco para garantir que a tela esteja estável
+                delay(500)
+                
+                // Verificar conexão do WebSocketService
+                if (isServiceBound && webSocketService?.isConnected() == true) {
+                    Log.d(TAG, "✅ WebSocketService já conectado")
+                    
+                    // Notificar que tela está ativa
+                    webSocketService?.setScreenActive(true)
+                    
+                    // Enviar ping imediato para confirmar conexão
+                    webSocketService?.sendMessage("""{"type":"ping","timestamp":${System.currentTimeMillis()}}""")
+                    Log.d(TAG, "📤 Ping enviado para confirmar conexão")
+                    
+                } else {
+                    Log.w(TAG, "⚠️ WebSocketService não conectado, tentando reconectar...")
+                    startWebSocketService()
+                    
+                    // Aguardar conexão
+                    delay(2000)
+                    
+                    if (webSocketService?.isConnected() == true) {
+                        Log.d(TAG, "✅ WebSocketService reconectado com sucesso")
+                        webSocketService?.setScreenActive(true)
+                    } else {
+                        Log.w(TAG, "⚠️ Falha ao reconectar WebSocketService")
+                    }
+                }
+                
+                // Verificar conexão do WebSocketClient local
+                webSocketClient?.let { client ->
+                    if (!client.isConnected()) {
+                        Log.w(TAG, "⚠️ WebSocketClient local desconectado, reconectando...")
+                        client.forceReconnect()
+                    } else {
+                        Log.d(TAG, "✅ WebSocketClient local conectado")
+                    }
+                    
+                    // Notificar que a tela está ativa para heartbeat mais frequente
+                    client.setScreenActive(true)
+                }
+                
+                // Enviar status do dispositivo imediatamente
+                sendDeviceStatusImmediately()
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao processar desbloqueio da tela", e)
+            }
+        }
+    }
+    
+    private fun handleScreenLocked() {
+        val currentTime = System.currentTimeMillis()
+        val timeSinceLastChange = currentTime - lastScreenStateChange
+        
+        // Evitar processamento muito frequente
+        if (timeSinceLastChange < 1000) {
+            Log.d(TAG, "Mudança de estado muito recente, ignorando")
+            return
+        }
+        
+        lastScreenStateChange = currentTime
+        isScreenLocked = true
+        
+        Log.d(TAG, "🔒 TELA BLOQUEADA - ajustando conexão para modo economia")
+        
+        // Liberar WakeLock para economizar bateria
+        wakeLock?.let { lock ->
+            if (lock.isHeld) {
+                lock.release()
+                Log.d(TAG, "🔋 WakeLock liberado para economizar bateria")
+            }
+        }
+        
+        // Manter conexão básica mas reduzir frequência de heartbeat
+        scope.launch {
+            try {
+                // Enviar status final antes de reduzir atividade
+                sendDeviceStatusImmediately()
+                
+                // Notificar WebSocketService e WebSocketClient que tela está inativa
+                webSocketService?.setScreenActive(false)
+                webSocketClient?.setScreenActive(false)
+                
+                Log.d(TAG, "📱 Modo economia ativado - conexão mantida mas com heartbeat reduzido")
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao processar bloqueio da tela", e)
+            }
+        }
+    }
+    
+    private fun checkScreenState() {
+        try {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            val isScreenOn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+                powerManager.isInteractive
+            } else {
+                @Suppress("DEPRECATION")
+                powerManager.isScreenOn
+            }
+            
+            val wasLocked = isScreenLocked
+            isScreenLocked = !isScreenOn
+            
+            if (wasLocked != isScreenLocked) {
+                Log.d(TAG, "📱 Estado da tela mudou: ${if (isScreenLocked) "BLOQUEADA" else "DESBLOQUEADA"}")
+                
+                if (!isScreenLocked) {
+                    handleScreenUnlocked()
+                } else {
+                    handleScreenLocked()
+                }
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao verificar estado da tela", e)
+        }
+    }
+    
+    private fun sendDeviceStatusImmediately() {
+        scope.launch {
+            try {
+                Log.d(TAG, "📤 Enviando status do dispositivo imediatamente...")
+                
+                val deviceInfo = DeviceInfoCollector.collectDeviceInfo(this@MainActivity, getDeviceName())
+                
+                // Enviar via WebSocketService se disponível
+                if (isServiceBound && webSocketService?.isConnected() == true) {
+                    webSocketService?.sendDeviceStatus(deviceInfo)
+                    Log.d(TAG, "✅ Status enviado via WebSocketService")
+                } else {
+                    // Fallback para WebSocketClient local
+                    webSocketClient?.sendDeviceStatus(deviceInfo)
+                    Log.d(TAG, "✅ Status enviado via WebSocketClient local")
+                }
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro ao enviar status imediatamente", e)
+            }
         }
     }
 }

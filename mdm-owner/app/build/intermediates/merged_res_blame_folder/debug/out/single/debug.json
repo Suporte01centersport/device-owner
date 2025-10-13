@@ -1,106 +1,102 @@
 [
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_ic_service_notification.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_service_notification.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/xml_network_security_config.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/xml/network_security_config.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xhdpi_ic_launcher.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xhdpi\\ic_launcher.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-mdpi_ic_launcher.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-mdpi/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-hdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-hdpi\\ic_launcher_round.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xxxhdpi_ic_launcher.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xxxhdpi/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxxhdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxxhdpi\\ic_launcher_round.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_ic_launch.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/ic_launch.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxhdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxhdpi\\ic_launcher_round.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_ic_apps.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/ic_apps.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_data_extraction_rules.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\data_extraction_rules.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xxhdpi_ic_launcher.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xxhdpi/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xhdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xhdpi\\ic_launcher_round.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/layout_modal_message.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/layout/modal_message.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\layout_activity_setup.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\activity_setup.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-hdpi_ic_launcher_round.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-hdpi/ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\layout_modal_message.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\modal_message.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/layout_activity_setup.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/layout/activity_setup.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\layout_item_app.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\item_app.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_status_connected_bg.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/status_connected_bg.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_device_admin.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\device_admin.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xhdpi_ic_launcher_round.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xhdpi/ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_backup_rules.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\backup_rules.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xxxhdpi_ic_launcher_round.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xxxhdpi/ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-mdpi_ic_launcher.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-mdpi\\ic_launcher.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_ic_wifi_off.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/ic_wifi_off.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_status_connected_bg.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\status_connected_bg.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/layout_item_app.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/layout/item_app.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_ic_launch.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_launch.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_ic_service_notification.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/ic_service_notification.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_ic_android.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_android.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-hdpi_ic_launcher.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-hdpi/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_ic_wifi_off.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_wifi_off.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xhdpi_ic_launcher.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xhdpi/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\layout_activity_main.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\activity_main.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-mdpi_ic_launcher_round.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-mdpi/ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_btn_primary.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\btn_primary.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/xml_device_admin.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/xml/device_admin.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxhdpi_ic_launcher.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxhdpi\\ic_launcher.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_btn_primary.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/btn_primary.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\drawable_ic_apps.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\drawable\\ic_apps.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/xml_backup_rules.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/xml/backup_rules.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-mdpi_ic_launcher_round.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-mdpi\\ic_launcher_round.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/drawable_ic_android.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/drawable/ic_android.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-xxxhdpi_ic_launcher.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-xxxhdpi\\ic_launcher.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/mipmap-xxhdpi_ic_launcher_round.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/mipmap-xxhdpi/ic_launcher_round.xml"
     },
     {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\xml_network_security_config.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\xml\\network_security_config.xml"
+        "merged": "com.mdm.launcher.app-merged_res-4:/xml_data_extraction_rules.xml.flat",
+        "source": "com.mdm.launcher.app-main-6:/xml/data_extraction_rules.xml"
     },
     {
         "merged": "com.mdm.launcher.app-merged_res-4:/layout_activity_main.xml.flat",
         "source": "com.mdm.launcher.app-main-6:/layout/activity_main.xml"
-    },
-    {
-        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-merged_res-4:\\mipmap-hdpi_ic_launcher.xml.flat",
-        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\mipmap-hdpi\\ic_launcher.xml"
     }
 ]

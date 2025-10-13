@@ -1,248 +1,239 @@
-# 📱 MDM Owner - Sistema Completo de Gerenciamento de Dispositivos
+# 📱 MDM Owner - Sistema de Gerenciamento de Dispositivos Android
 
-Sistema profissional de gerenciamento de dispositivos Android estilo ScaleFusion, com Device Owner, launcher customizado e painel web de controle remoto em tempo real.
+Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real.
 
-## 🎯 Funcionalidades Principais
+## 🚀 Início Rápido
 
-### 📱 **App Android (Device Owner)**
-- ✅ **Launcher Customizado** - Substitui tela inicial do Android
-- ✅ **Device Owner** - Controle total do dispositivo
-- ✅ **Sincronização em Tempo Real** - WebSocket com reconexão automática
-- ✅ **Monitoramento Completo** - Bateria, armazenamento, apps, localização
-- ✅ **Coleta de Dados** - Serial, IMEI, MAC, informações detalhadas
-
-### 🌐 **Painel Web de Gerenciamento**
-- ✅ **Dashboard Moderno** - Interface React + Tailwind CSS
-- ✅ **Controle Remoto** - Comandos em tempo real via WebSocket
-- ✅ **Monitoramento em Tempo Real** - Status, bateria, armazenamento, apps
-- ✅ **Sistema de Localização** - GPS com histórico e mapas interativos
-- ✅ **Mensagens de Suporte** - Comunicação bidirecional com dispositivos
-- ✅ **Detecção Rápida de Offline** - Status atualizado em 30 segundos
-- ✅ **Interface de Carregamento** - Estados visuais para dados em sincronização
-
-### 🚀 **Sistema Otimizado de Conexão**
-- ✅ **Throttling de Ping** - Limite inteligente de pings por dispositivo
-- ✅ **Timeout Adaptativo** - Baseado na latência da rede (15s-120s)
-- ✅ **Monitor de Saúde** - Score de qualidade da conexão por dispositivo
-- ✅ **Logs Configuráveis** - Níveis de log (error, warn, info, debug)
-- ✅ **Reconexão Automática** - Backoff exponencial com fallback HTTP
-- ✅ **Persistência de Dados** - Salvamento automático entre sessões
-
-## 🚀 Instalação Rápida
-
-### 1. **Clonar e Configurar**
-```bash
-git clone https://github.com/seu-usuario/device-owner.git
-cd device-owner
-```
-
-### 2. **Iniciar Servidor WebSocket**
+### 1. **Servidor Backend (WebSocket + PostgreSQL)**
 ```bash
 cd mdm-frontend/server
 npm install
 node websocket.js
 ```
 
-### 3. **Iniciar Painel Web**
+### 2. **Painel Web (Next.js)**
 ```bash
 cd mdm-frontend
 npm install
 npm run dev
 ```
+Acesse: http://localhost:3000
 
-### 4. **Compilar e Instalar App Android**
+### 3. **App Android**
+```bash
+cd mdm-owner
+./gradlew assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
 
-#### 📱 **Via Android Studio (Recomendado)**
+### 4. **Ativar Device Owner**
+```bash
+# Dispositivo deve estar sem conta Google
+adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
+```
 
-1. **Abrir Projeto no Android Studio**
-   - Abrir Android Studio
-   - File → Open → Selecionar pasta `mdm-owner`
-   - Aguardar sincronização do Gradle
+## 📋 Comandos Principais
 
-2. **Configurar Device Owner**
-   ```bash
-   # Conectar dispositivo via USB ou iniciar emulador
-   adb devices
-   
-   # Verificar se dispositivo está conectado
-   adb shell getprop ro.build.version.sdk
-   ```
+### **Servidor**
+```bash
+# Iniciar servidor WebSocket
+node mdm-frontend/server/websocket.js
 
-3. **Compilar APK**
-   - Build → Build Bundle(s) / APK(s) → Build APK(s)
-   - Ou usar atalho: `Ctrl+Shift+A` → "Build APK"
-   - **Ou via terminal**: `./gradlew.bat assembleDebug`
-   - APK será gerado em: `app/build/outputs/apk/debug/app-debug.apk`
+# Iniciar painel web
+cd mdm-frontend && npm run dev
 
-4. **Instalar APK**
-   ```bash
-   # Instalar APK no dispositivo via terminal
-   adb install -r app\build\outputs\apk\debug\app-debug.apk
-   
-   # Ou usar Android Studio: Run → Run 'app'
-   ```
+# Iniciar ambos juntos
+cd mdm-frontend && npm run dev:all
+```
 
-5. **Ativar Device Owner**
-   ```bash
-   # Ativar Device Owner (dispositivo deve estar sem conta Google)
-   adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
-   
-   # Verificar se foi ativado
-   adb shell dpm list-owners
-   ```
+### **Android**
+```bash
+# Compilar APK
+cd mdm-owner && ./gradlew assembleDebug
 
-6. **Remover Device Owner (Para Testes/Debug)**
-   
-   ⚠️ **Via App (Recomendado):**
-   - Abra o app no dispositivo
-   - Toque **10 vezes rapidamente** no botão de configurações (⚙️)
-   - Confirme a remoção no dialog que aparece
-   - O app abrirá as configurações para desinstalar
-   
-   **Via ADB (Alternativa):**
-   ```bash
-   # Isso só funciona se o app não for Device Owner ou em modo de teste
-   adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
-   adb uninstall com.mdm.launcher
-   
-   # Se não funcionar, use a opção via app ou factory reset
-   ```
+# Instalar APK
+adb install -r mdm-owner/app/build/outputs/apk/debug/app-debug.apk
 
-### 🔍 **Descoberta Automática do Servidor**
+# Ativar Device Owner
+adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
 
-O sistema MDM implementa **descoberta automática do servidor** - não é necessário configurar IP manualmente em cada dispositivo!
+# Remover Device Owner (via app)
+# Toque 10x no botão de configurações ⚙️
 
-#### Como Funciona
+# Logs do app
+adb logcat | grep -E "MDM|WebSocket|Location"
+```
 
-O app Android tenta descobrir o servidor automaticamente usando 4 estratégias:
-
-1. **DNS Local** (mdm.local) - Para produção com DNS configurado
-2. **Broadcast UDP** - O servidor responde a broadcasts na rede local
-3. **IPs Comuns** - Testa IPs típicos (.1, .100, .10, etc)
-4. **Configuração Manual** - Fallback para IP configurado
-
-#### No Servidor (Automático)
-
-O servidor já inicia automaticamente o sistema de descoberta:
-
+### **Banco de Dados (PostgreSQL)**
 ```bash
 cd mdm-frontend
-npm run dev
 
-# Você verá:
-# 🔍 ═══════════════════════════════════════════════
-#    SERVIDOR DE DESCOBERTA MDM INICIADO
-# ═══════════════════════════════════════════════
-# 📡 Porta UDP de descoberta: 3003
-# 🌐 WebSocket será anunciado na porta: 3002
-# 📍 IPs disponíveis para conexão:
-#    - ws://192.168.1.100:3002  (exemplo)
+# Configurar banco existente
+npm run configure-existing
+
+# Limpar dispositivos órfãos
+npm run cleanup-devices
+npm run cleanup-devices:confirm
+
+# Remover duplicatas
+npm run remove-duplicates
+npm run remove-duplicates:confirm
 ```
 
-#### No Dispositivo (Automático)
+## ✨ Funcionalidades
 
-O app Android descobre e conecta automaticamente ao servidor:
+### **App Android (Device Owner)**
+- ✅ Launcher customizado que substitui tela inicial
+- ✅ Device Owner com controle total do dispositivo
+- ✅ WebSocket com reconexão automática e adaptativa
+- ✅ Heartbeat inteligente (15s tela ativa / 30s bloqueada)
+- ✅ Monitoramento: bateria, armazenamento, apps, localização
+- ✅ GPS em tempo real com histórico inteligente
+- ✅ Descoberta automática do servidor (UDP broadcast)
+- ✅ WakeLock para manter conexão quando tela ativa
+- ✅ Health check a cada 60 segundos
 
+### **Painel Web**
+- ✅ Dashboard com status em tempo real
+- ✅ Controle remoto via WebSocket
+- ✅ Mapas de localização interativos
+- ✅ Mensagens de suporte bidirecionais
+- ✅ Políticas de apps por dispositivo/grupo
+- ✅ Detecção rápida de offline (30s)
+- ✅ Interface de carregamento durante sincronização
+
+### **Servidor WebSocket**
+- ✅ Timeout adaptativo baseado em latência (60s-180s)
+- ✅ Throttling de ping (max 60/min por dispositivo)
+- ✅ Score de saúde da conexão por dispositivo
+- ✅ Logs configuráveis (error, warn, info, debug)
+- ✅ PostgreSQL para persistência
+- ✅ Descoberta automática via UDP
+
+## 🔧 Configuração
+
+### **Servidor WebSocket**
+Edite `mdm-frontend/server/config.js`:
+```javascript
+{
+  LOG_LEVEL: 'info',                    // error, warn, info, debug
+  MAX_PINGS_PER_MINUTE: 60,             // Throttling de ping
+  BASE_INACTIVITY_TIMEOUT: 90000,       // 90s
+  MAX_INACTIVITY_TIMEOUT: 180000,       // 3min
+  HEARTBEAT_INTERVAL: 30000,            // 30s
+  PONG_TIMEOUT: 10000                   // 10s
+}
 ```
-2025-10-09 09:20:00.000 MainActivity  D  Servidor descoberto: ws://192.168.1.100:3002
-2025-10-09 09:20:01.000 WebSocketClient  D  WebSocket conectado
-```
 
-#### Configuração Manual (Opcional)
-
-Se a descoberta automática falhar, você pode configurar manualmente:
-
-1. Abra o app no dispositivo
-2. Toque no ícone de configurações (⚙️)
-3. Digite a URL: `ws://SEU_IP:3002`
-4. Salvar
-
-#### Para Ambientes Corporativos
-
-Configure um DNS local para `mdm.local` apontando para o servidor MDM:
-
+### **PostgreSQL**
 ```bash
-# Windows (hosts file): C:\Windows\System32\drivers\etc\hosts
-192.168.1.100  mdm.local
+# Conectar ao PostgreSQL
+psql -U postgres
 
-# Linux/Mac: /etc/hosts
-192.168.1.100  mdm.local
+# Criar banco
+CREATE DATABASE mdm_devices;
+
+# Configurar conexão em .env
+DATABASE_URL=postgresql://user:password@localhost:5432/mdm_devices
 ```
 
-#### 🖥️ **Configurar Emulador Android**
-
-1. **Criar AVD (Android Virtual Device)**
-   - Android Studio → Tools → AVD Manager
-   - Create Virtual Device
-   - Escolher dispositivo (ex: Pixel 4)
-   - Selecionar API Level 28+ (Android 9+)
-   - **IMPORTANTE**: Não adicionar Google Play Services
-
-2. **Configurações Especiais do Emulador**
-   ```bash
-   # Iniciar emulador com configurações específicas
-   emulator -avd NOME_DO_AVD -no-snapshot -wipe-data
-   
-   # Ou usar Android Studio: Run → Select Device → Emulator
-   ```
-
-3. **Verificar Configuração**
-   ```bash
-   # Verificar se emulador está rodando
-   adb devices
-   
-   # Verificar API Level
-   adb shell getprop ro.build.version.sdk
-   
-   # Verificar se não há conta Google
-   adb shell pm list users
-   ```
-
-4. **Instalar e Configurar Device Owner**
-   ```bash
-   # Instalar APK no emulador
-   adb install -r app\build\outputs\apk\debug\app-debug.apk
-   
-   # Ativar Device Owner
-   adb shell dpm set-device-owner com.mdm.launcher/.device.MDMDeviceAdminReceiver
-   
-   # Verificar ativação
-   adb shell dpm list-owners
-   ```
+### **Descoberta Automática do Servidor**
+O app descobre o servidor automaticamente:
+1. DNS Local (mdm.local)
+2. UDP Broadcast na rede local
+3. IPs comuns (.1, .100, .10, etc)
+4. Configuração manual (fallback)
 
 ## 🚨 Troubleshooting
 
 ### **Device Owner não ativa**
 ```bash
-# Verificar se há conta Google
+# Verificar contas Google
 adb shell pm list users
+# Se houver, fazer factory reset
 
-# Factory reset completo necessário se houver conta Google
+# Verificar status
+adb shell dpm list-owners
 ```
 
-### **App não conecta servidor**
+### **App não conecta**
 ```bash
-# Testar conectividade
+# Testar rede
 adb shell ping 192.168.1.100
 
 # Verificar WebSocket
 netstat -ano | findstr :3002
+
+# Logs do servidor
+LOG_LEVEL=debug node mdm-frontend/server/websocket.js
 ```
 
-### **Logs de Debug**
+### **Problemas de compilação Android**
 ```bash
-# Android
+# Limpar build
+cd mdm-owner
+./gradlew clean
+
+# Recompilar
+./gradlew assembleDebug
+```
+
+### **Logs úteis**
+```bash
+# Android - todos
 adb logcat | grep MDM
 
-# Servidor WebSocket
-node server/websocket.js
+# Android - WebSocket
+adb logcat | grep WebSocket
 
-# Painel Web
-npm run dev
+# Android - Localização
+adb logcat | grep Location
+
+# Servidor
+node mdm-frontend/server/websocket.js
 ```
 
-### **Testar Otimizações**
-```bash
-cd mdm-frontend/server
-node test-optimizations.js
+## 📊 Estrutura do Projeto
+
 ```
+device-owner/
+├── mdm-frontend/          # Painel Web + Servidor
+│   ├── app/              # Next.js App
+│   ├── server/           # WebSocket Server
+│   │   ├── websocket.js
+│   │   ├── config.js
+│   │   └── database/
+│   └── package.json
+│
+└── mdm-owner/            # App Android
+    ├── app/
+    │   └── src/main/java/com/mdm/launcher/
+    │       ├── MainActivity.kt
+    │       ├── network/WebSocketClient.kt
+    │       ├── service/
+    │       │   ├── WebSocketService.kt
+    │       │   └── LocationService.kt
+    │       └── utils/
+    └── build.gradle
+```
+
+## 🔐 Segurança
+
+- Device Owner garante controle total
+- Comunicação via WebSocket (pode adicionar WSS)
+- PostgreSQL para dados sensíveis
+- Launcher não pode ser desinstalado como Device Owner
+
+## 📝 Notas Importantes
+
+1. **Device Owner**: Dispositivo deve estar sem conta Google
+2. **GPS**: Precisão varia 1-20m entre dispositivos (normal)
+3. **Conexão**: Heartbeat adaptativo economiza bateria
+4. **WakeLock**: Mantém conexão ativa quando tela desbloqueada
+5. **Logs**: Use `LOG_LEVEL=debug` para troubleshooting
+
+## 🆘 Suporte
+
+- **Remover Device Owner**: Toque 10x no ⚙️ do app
+- **Logs detalhados**: `LOG_LEVEL=debug`
+- **Factory reset**: Última opção para remover Device Owner

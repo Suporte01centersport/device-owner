@@ -315,6 +315,9 @@ const webClients = new Set();
 // Armazenar dispositivos persistentes (mesmo quando desconectados)
 const persistentDevices = new Map();
 
+// Rastrear pings pendentes para validação de pong
+const pendingPings = new Map(); // deviceId -> { timestamp, timeoutId }
+
 // Senha de administrador global
 let globalAdminPassword = '';
 
@@ -620,7 +623,18 @@ wss.on('connection', ws => {
 
     ws.on('pong', () => {
         ws.lastActivity = Date.now();
+        ws.lastPongReceived = Date.now();
         log.debug('Pong recebido', { connectionId: ws.connectionId });
+        
+        // Limpar ping pendente se existir
+        if (ws.deviceId && pendingPings.has(ws.deviceId)) {
+            const pingData = pendingPings.get(ws.deviceId);
+            if (pingData.timeoutId) {
+                clearTimeout(pingData.timeoutId);
+            }
+            pendingPings.delete(ws.deviceId);
+            log.debug('Ping pendente limpo após receber pong', { deviceId: ws.deviceId });
+        }
         
         // Cancelar timeout de inatividade e reconfigurar
         if (ws.inactivityTimeout) {
@@ -631,7 +645,7 @@ wss.on('connection', ws => {
                 log.warn('Fechando conexão inativa após pong', { connectionId: ws.connectionId });
                 ws.close(1000, 'Inactive connection');
             }
-        }, 10 * 60 * 1000); // 10 minutos
+        }, config.MAX_INACTIVITY_TIMEOUT); // Usar configuração
     });
 
     // Identificar tipo de cliente
@@ -1022,29 +1036,39 @@ function handleDeviceRestrictions(ws, data) {
 
 function handlePing(ws, data) {
     const startTime = Date.now();
-    log.debug('Ping recebido', { connectionId: ws.connectionId });
+    ws.lastActivity = startTime;
+    ws.lastPingReceived = startTime;
+    
+    log.debug('Ping recebido', { connectionId: ws.connectionId, deviceId: ws.deviceId });
     
     // Registrar latência para timeout adaptativo
     if (ws.deviceId && data.timestamp) {
         const latency = startTime - data.timestamp;
         adaptiveTimeout.updateLatency(ws.deviceId, latency);
         healthMonitor.recordConnection(ws.deviceId, true, latency);
+        
+        log.debug('Latência calculada', { 
+            deviceId: ws.deviceId, 
+            latency: latency + 'ms',
+            adaptiveTimeout: Math.round(adaptiveTimeout.getTimeout(ws.deviceId) / 1000) + 's'
+        });
     }
     
     // Responder com pong imediatamente
     const pongMessage = {
         type: 'pong',
         timestamp: Date.now(),
-        serverTime: Date.now()
+        serverTime: Date.now(),
+        receivedTimestamp: data.timestamp || startTime
     };
     
     try {
         if (ws.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify(pongMessage));
-            log.debug('Pong enviado', { connectionId: ws.connectionId });
+            log.debug('Pong enviado', { connectionId: ws.connectionId, deviceId: ws.deviceId });
             
             // Atualizar lastSeen para dispositivos
-            if (ws.connectionType === 'device' && ws.deviceId) {
+            if (ws.isDevice && ws.deviceId) {
                 updateDeviceLastSeen(ws.deviceId);
             }
         } else {
@@ -1717,13 +1741,61 @@ function notifyWebClients(message) {
 // Sistema de monitoramento e heartbeat
 setInterval(() => {
     serverStats.lastHeartbeat = Date.now();
+    const now = Date.now();
     
-    // Enviar ping ativo para dispositivos conectados (com throttling)
+    // Enviar ping ativo para dispositivos conectados (com validação de pong)
     connectedDevices.forEach((deviceWs, deviceId) => {
         if (deviceWs.readyState === WebSocket.OPEN && pingThrottler.canPing(deviceId)) {
             try {
-                deviceWs.ping();
-                log.debug('Ping enviado para dispositivo', { deviceId });
+                // Verificar se há ping pendente sem resposta
+                if (pendingPings.has(deviceId)) {
+                    const pingData = pendingPings.get(deviceId);
+                    const timeSincePing = now - pingData.timestamp;
+                    
+                    // Se ping pendente há mais de PONG_TIMEOUT, considerar conexão morta
+                    if (timeSincePing > config.PONG_TIMEOUT) {
+                        log.warn('Conexão morta detectada (sem pong)', { 
+                            deviceId, 
+                            timeSincePing: Math.round(timeSincePing / 1000) + 's'
+                        });
+                        
+                        // Limpar timeout
+                        if (pingData.timeoutId) {
+                            clearTimeout(pingData.timeoutId);
+                        }
+                        pendingPings.delete(deviceId);
+                        
+                        // Fechar conexão
+                        deviceWs.close(1000, 'No pong received');
+                        connectedDevices.delete(deviceId);
+                        healthMonitor.recordConnection(deviceId, false);
+                        return;
+                    }
+                } else {
+                    // Enviar novo ping
+                    deviceWs.ping();
+                    log.debug('Ping WebSocket nativo enviado para dispositivo', { deviceId });
+                    
+                    // Registrar ping pendente com timeout
+                    const timeoutId = setTimeout(() => {
+                        if (pendingPings.has(deviceId)) {
+                            log.warn('Timeout aguardando pong', { deviceId });
+                            pendingPings.delete(deviceId);
+                            healthMonitor.recordConnection(deviceId, false);
+                            
+                            // Fechar conexão morta
+                            if (deviceWs.readyState === WebSocket.OPEN) {
+                                deviceWs.close(1000, 'Pong timeout');
+                            }
+                            connectedDevices.delete(deviceId);
+                        }
+                    }, config.PONG_TIMEOUT);
+                    
+                    pendingPings.set(deviceId, {
+                        timestamp: now,
+                        timeoutId: timeoutId
+                    });
+                }
             } catch (error) {
                 log.error('Erro ao enviar ping para dispositivo', { deviceId, error: error.message });
                 healthMonitor.recordConnection(deviceId, false);
@@ -1732,16 +1804,17 @@ setInterval(() => {
     });
     
     // Verificar dispositivos inativos e atualizar status (com timeout adaptativo)
-    const now = Date.now();
-    const BASE_INACTIVITY_TIMEOUT = 30 * 1000; // 30 segundos base
-    const WARNING_TIMEOUT = 15 * 1000; // 15 segundos para avisar sobre possível desconexão
+    const WARNING_TIMEOUT = 45 * 1000; // 45 segundos para avisar sobre possível desconexão
     
     persistentDevices.forEach((device, deviceId) => {
         const timeSinceLastSeen = now - device.lastSeen;
         const isConnected = connectedDevices.has(deviceId);
         
-        // Usar timeout adaptativo baseado na latência do dispositivo
-        const adaptiveInactivityTimeout = adaptiveTimeout.getTimeout(deviceId);
+        // Usar timeout adaptativo baseado na latência do dispositivo (mais tolerante)
+        const adaptiveInactivityTimeout = Math.max(
+            adaptiveTimeout.getTimeout(deviceId),
+            config.BASE_INACTIVITY_TIMEOUT
+        );
         
         // Se o dispositivo não está conectado via WebSocket OU não foi visto há mais do timeout adaptativo
         if (!isConnected || timeSinceLastSeen > adaptiveInactivityTimeout) {

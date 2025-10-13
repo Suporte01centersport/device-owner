@@ -20,6 +20,8 @@ class WebSocketService : Service() {
     private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isServiceRunning = false
     private var isInitializing = false // Flag para evitar múltiplas inicializações
+    private var healthCheckJob: Job? = null
+    private var isScreenActive = true // Estado da tela para heartbeat adaptativo
     
     companion object {
         private const val TAG = "WebSocketService"
@@ -71,6 +73,7 @@ class WebSocketService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "WebSocketService destruído")
         isServiceRunning = false
+        healthCheckJob?.cancel()
         webSocketClient?.disconnect()
         serviceScope.cancel()
         super.onDestroy()
@@ -143,12 +146,14 @@ class WebSocketService : Service() {
                     processBackgroundMessage(message)
                 },
                 onConnectionChange = { connected ->
-                    Log.d(TAG, "Status da conexão em background: $connected")
+                    Log.d(TAG, "═══════════════════════════════════════")
+                    Log.d(TAG, "🔔 STATUS DE CONEXÃO MUDOU: $connected")
+                    Log.d(TAG, "═══════════════════════════════════════")
                     updateNotification(connected)
                     
-                    // Quando conectar, coletar e enviar dados completos
+                    // Quando conectar, coletar e enviar dados completos IMEDIATAMENTE
                     if (connected) {
-                        Log.d(TAG, "📤 Conexão estabelecida no Service - enviando dados completos...")
+                        Log.d(TAG, "📤 Conexão confirmada pelo servidor - enviando dados completos...")
                         sendDeviceStatusWithRealData()
                     }
                 }
@@ -158,9 +163,31 @@ class WebSocketService : Service() {
             if (webSocketClient?.isConnected() != true) {
                 Log.d(TAG, "🚀 Iniciando conexão WebSocket...")
                 webSocketClient?.connect()
+                
+                // Aguardar conexão abrir e enviar dados IMEDIATAMENTE
+                serviceScope.launch {
+                    delay(2000) // Aguardar 2s para conexão estabilizar
+                    
+                    if (webSocketClient?.isConnected() == true) {
+                        Log.d(TAG, "✅ Conexão estabelecida - enviando device_status")
+                        sendDeviceStatusWithRealData()
+                    } else {
+                        Log.w(TAG, "⚠️ Aguardando conexão ser estabelecida...")
+                        // Tentar novamente após mais 3s
+                        delay(3000)
+                        if (webSocketClient?.isConnected() == true) {
+                            Log.d(TAG, "✅ Conexão estabelecida (2ª tentativa) - enviando device_status")
+                            sendDeviceStatusWithRealData()
+                        }
+                    }
+                }
             } else {
-                Log.d(TAG, "✓ WebSocket já está conectado")
+                Log.d(TAG, "✓ WebSocket já está conectado - enviando device_status")
+                sendDeviceStatusWithRealData()
             }
+            
+            // Iniciar verificação periódica de saúde
+            startHealthCheck()
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao inicializar WebSocket em background", e)
@@ -486,6 +513,31 @@ class WebSocketService : Service() {
         webSocketClient?.disconnect()
     }
     
+    fun setScreenActive(active: Boolean) {
+        val wasActive = isScreenActive
+        isScreenActive = active
+        
+        if (wasActive != active) {
+            Log.d(TAG, "📱 Estado da tela mudou no Service: ${if (active) "ATIVA" else "INATIVA"}")
+            
+            // Notificar WebSocketClient sobre mudança de estado
+            webSocketClient?.setScreenActive(active)
+            
+            if (active) {
+                // Tela ativa - enviar status imediatamente
+                sendDeviceStatusWithRealData()
+            }
+        }
+    }
+    
+    /**
+     * Notifica sobre mudança de rede para forçar reconexão
+     */
+    fun onNetworkChanged() {
+        Log.d(TAG, "🌐 Mudança de rede detectada no WebSocketService")
+        webSocketClient?.onNetworkChanged()
+    }
+    
     private fun showBackgroundNotification(title: String, body: String) {
         try {
             Log.d(TAG, "Exibindo notificação em background: $title - $body")
@@ -568,5 +620,39 @@ class WebSocketService : Service() {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao exibir notificação em background", e)
         }
+    }
+    
+    private fun startHealthCheck() {
+        // Cancelar verificação anterior se existir
+        healthCheckJob?.cancel()
+        
+        // Iniciar verificação periódica de saúde da conexão a cada 60 segundos
+        healthCheckJob = serviceScope.launch {
+            while (isActive && isServiceRunning) {
+                delay(60000L) // 60 segundos
+                
+                try {
+                    val isConnected = webSocketClient?.isConnected() ?: false
+                    Log.d(TAG, "🏥 Verificação de saúde: conectado=$isConnected")
+                    
+                    if (!isConnected) {
+                        Log.w(TAG, "⚠️ WebSocket desconectado, verificando saúde...")
+                        val isHealthy = webSocketClient?.checkConnectionHealth() ?: false
+                        
+                        if (!isHealthy) {
+                            Log.w(TAG, "❌ Conexão não saudável, tentando reconectar...")
+                            webSocketClient?.forceReconnect()
+                        }
+                    } else {
+                        // Mesmo conectado, verificar saúde
+                        webSocketClient?.checkConnectionHealth()
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao verificar saúde da conexão", e)
+                }
+            }
+        }
+        
+        Log.d(TAG, "✅ Verificação periódica de saúde iniciada (60s)")
     }
 }

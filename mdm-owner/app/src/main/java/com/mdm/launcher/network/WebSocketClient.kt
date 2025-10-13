@@ -21,41 +21,80 @@ class WebSocketClient private constructor(
     private val gson = Gson()
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     
-    // Sistema de reconexão automática melhorado
+    // Sistema de reconexão automática melhorado - SINCRONIZADO COM SERVIDOR
     private var reconnectAttempts = 0
-    private var maxReconnectAttempts = 50 // Muito mais persistente para WiFi
-    private var reconnectDelay = 1000L // 1s inicial
-    private var maxReconnectDelay = 10000L // 10 segundos máximo - mais rápido
+    private var maxReconnectAttempts = 30 // Reduzido para não sobrecarregar
+    private var reconnectDelay = 2000L // 2s inicial (mais conservador)
+    private var maxReconnectDelay = 30000L // 30 segundos máximo
     private var isReconnecting = false
     private var heartbeatJob: Job? = null
     private var lastHeartbeat = 0L
     private var lastSuccessfulMessage = 0L
-    private val heartbeatInterval = 15000L // 15 segundos - mais frequente para detectar desconexões
-    private val connectionTimeout = 10000L // 10 segundos timeout - mais rápido
+    private val heartbeatInterval = 30000L // 30 segundos - SINCRONIZADO COM SERVIDOR
+    private val activeHeartbeatInterval = 15000L // 15 segundos quando tela desbloqueada
+    private val connectionTimeout = 15000L // 15 segundos timeout - mais tolerante
     private var lastConnectionAttempt = 0L
-    private val minReconnectInterval = 1000L // Mínimo 1s entre tentativas - mais agressivo
+    private val minReconnectInterval = 2000L // Mínimo 2s entre tentativas - menos agressivo
+    private var lastPongReceived = 0L
+    private var isScreenActive = true // Assume tela ativa por padrão
     
     private val webSocketListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log.d(TAG, "🎉 WebSocket CONECTADO com sucesso!")
+            Log.d(TAG, "🎉 WebSocket ABERTO - enviando ping inicial")
             Log.d(TAG, "🌐 URL: $serverUrl")
             Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(4)}")
-            isConnected = true
+            
+            // NÃO marcar como conectado ainda - aguardar primeira mensagem do servidor
             isReconnecting = false
             reconnectAttempts = 0
             reconnectDelay = 1000L
-            onConnectionChange(true)
+            
+            // Enviar ping inicial para receber pong do servidor e confirmar conexão
+            try {
+                val pingMessage = mapOf(
+                    "type" to "ping",
+                    "deviceId" to deviceId,
+                    "timestamp" to System.currentTimeMillis()
+                )
+                val jsonMessage = com.google.gson.Gson().toJson(pingMessage)
+                webSocket.send(jsonMessage)
+                Log.d(TAG, "📤 Ping inicial enviado - aguardando pong do servidor")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao enviar ping inicial", e)
+            }
             
             // Iniciar sistema de heartbeat
             startHeartbeat()
             
-            // NÃO enviar device_status vazio aqui - aguardar o MainActivity coletar dados reais
-            Log.d(TAG, "✅ Conexão estabelecida - aguardando MainActivity enviar dados completos")
+            Log.d(TAG, "✅ Conexão WebSocket aberta - aguardando confirmação do servidor")
         }
         
         override fun onMessage(webSocket: WebSocket, text: String) {
             Log.d(TAG, "Mensagem recebida: $text")
-            lastSuccessfulMessage = System.currentTimeMillis()
+            val now = System.currentTimeMillis()
+            lastSuccessfulMessage = now
+            
+            // Verificar se é pong
+            try {
+                val gson = com.google.gson.Gson()
+                val message = gson.fromJson(text, Map::class.java)
+                if (message["type"] == "pong") {
+                    lastPongReceived = now
+                    val serverTime = (message["serverTime"] as? Double)?.toLong() ?: 0
+                    val latency = if (serverTime > 0) now - serverTime else 0
+                    Log.d(TAG, "Pong recebido - latência: ${latency}ms")
+                }
+            } catch (e: Exception) {
+                // Ignorar erro de parse
+            }
+            
+            // Marcar como conectado na PRIMEIRA mensagem recebida do servidor
+            if (!isConnected) {
+                Log.d(TAG, "✅ PRIMEIRA MENSAGEM DO SERVIDOR RECEBIDA - conexão confirmada!")
+                isConnected = true
+                onConnectionChange(true)
+            }
+            
             onMessage(text)
         }
         
@@ -337,12 +376,22 @@ class WebSocketClient private constructor(
     fun isConnected(): Boolean = isConnected
     
     fun forceReconnect() {
-        Log.d(TAG, "Forçando reconexão...")
+        Log.d(TAG, "🔄 Forçando reconexão completa...")
         disconnect()
+        
+        // Reset completo para nova conexão
         reconnectAttempts = 0
         isReconnecting = false
-        lastConnectionAttempt = 0L // Reset para permitir reconexão imediata
-        connect()
+        lastConnectionAttempt = 0L
+        lastSuccessfulMessage = 0L
+        lastPongReceived = 0L
+        
+        // Aguardar um pouco antes de reconectar para evitar conflitos
+        scope.launch {
+            delay(1000) // 1 segundo
+            Log.d(TAG, "🚀 Iniciando reconexão após reset...")
+            connect()
+        }
     }
     
     fun checkConnectionHealth(): Boolean {
@@ -373,6 +422,57 @@ class WebSocketClient private constructor(
         reconnectDelay = 1000L
     }
     
+    fun setScreenActive(active: Boolean) {
+        val wasActive = isScreenActive
+        isScreenActive = active
+        
+        if (wasActive != active) {
+            Log.d(TAG, "📱 Estado da tela mudou: ${if (active) "ATIVA" else "INATIVA"}")
+            
+            if (active && isConnected) {
+                // Tela ativa - enviar ping imediato e usar heartbeat mais frequente
+                sendPing()
+                Log.d(TAG, "📤 Ping imediato enviado devido à tela ativa")
+            }
+        }
+    }
+    
+    /**
+     * Força reconexão quando detecta mudança de rede
+     */
+    fun onNetworkChanged() {
+        Log.d(TAG, "🌐 Mudança de rede detectada - forçando reconexão...")
+        
+        // Se estiver conectado, verificar se ainda está válido
+        if (isConnected) {
+            Log.d(TAG, "Verificando se conexão ainda é válida...")
+            scope.launch {
+                delay(2000) // Aguardar 2s para rede se estabilizar
+                
+                // Tentar enviar ping para testar conexão
+                try {
+                    sendPing()
+                    delay(5000) // Aguardar resposta
+                    
+                    // Se não recebeu pong, conexão pode estar morta
+                    if (lastPongReceived < System.currentTimeMillis() - 10000) {
+                        Log.w(TAG, "Conexão parece estar morta após mudança de rede")
+                        forceReconnect()
+                    } else {
+                        Log.d(TAG, "Conexão ainda válida após mudança de rede")
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Erro ao testar conexão após mudança de rede: ${e.message}")
+                    forceReconnect()
+                }
+            }
+        } else {
+            // Se não estiver conectado, tentar reconectar
+            Log.d(TAG, "Não conectado - tentando reconectar após mudança de rede...")
+            forceReconnect()
+        }
+    }
+    
     private fun scheduleReconnect() {
         val currentTime = System.currentTimeMillis()
         
@@ -395,12 +495,14 @@ class WebSocketClient private constructor(
         
         if (reconnectAttempts >= maxReconnectAttempts) {
             Log.w(TAG, "Máximo de tentativas de reconexão atingido ($maxReconnectAttempts)")
-            // Reset mais rápido para WiFi - 30 segundos em vez de 1 minuto
+            // Reset após 60 segundos e tentar novamente
             scope.launch {
-                delay(30000L) // 30 segundos
-                Log.d(TAG, "Resetando tentativas de reconexão após timeout")
+                delay(60000L) // 60 segundos
+                Log.d(TAG, "Resetando tentativas de reconexão após período de espera")
                 reconnectAttempts = 0
+                reconnectDelay = 2000L // Reset do delay
                 if (!isConnected) {
+                    Log.d(TAG, "Reiniciando ciclo de reconexão...")
                     scheduleReconnect()
                 }
             }
@@ -409,13 +511,14 @@ class WebSocketClient private constructor(
         
         reconnectAttempts++
         
-        // Backoff otimizado - muito rápido no início para reconexão após restart do servidor
+        // Backoff exponencial mais conservador para evitar sobrecarga
         val delay = when {
-            reconnectAttempts == 1 -> 500L // Primeira tentativa: 0.5s
-            reconnectAttempts <= 3 -> 1000L // 2-3 tentativas: 1s
-            reconnectAttempts <= 10 -> 2000L // 4-10 tentativas: 2s
-            reconnectAttempts <= 20 -> 3000L // 11-20 tentativas: 3s
-            else -> 5000L // Resto: 5s
+            reconnectAttempts == 1 -> 1000L // Primeira tentativa: 1s
+            reconnectAttempts <= 3 -> 2000L // 2-3 tentativas: 2s
+            reconnectAttempts <= 5 -> 5000L // 4-5 tentativas: 5s
+            reconnectAttempts <= 10 -> 10000L // 6-10 tentativas: 10s
+            reconnectAttempts <= 20 -> 20000L // 11-20 tentativas: 20s
+            else -> 30000L // Resto: 30s
         }
         
         Log.d(TAG, "🔄 Agendando reconexão em ${delay}ms (tentativa $reconnectAttempts/$maxReconnectAttempts)")
@@ -434,16 +537,19 @@ class WebSocketClient private constructor(
     private fun startHeartbeat() {
         stopHeartbeat() // Parar heartbeat anterior se existir
         
-        lastSuccessfulMessage = System.currentTimeMillis() // Reset do timestamp
+        val now = System.currentTimeMillis()
+        lastSuccessfulMessage = now
+        lastPongReceived = now
         
         heartbeatJob = scope.launch {
             while (isConnected && isActive) {
                 try {
-                    val now = System.currentTimeMillis()
+                    val currentTime = System.currentTimeMillis()
                     
-                    // Verificar se não recebemos resposta há muito tempo (mais tolerante)
-                    if (lastSuccessfulMessage > 0 && (now - lastSuccessfulMessage) > (heartbeatInterval * 3)) {
-                        Log.w(TAG, "Não recebemos resposta há muito tempo (${(now - lastSuccessfulMessage)/1000}s), forçando reconexão")
+                    // Verificar se não recebemos resposta há muito tempo (mais tolerante - 2 ciclos)
+                    val maxSilence = heartbeatInterval * 2
+                    if (lastSuccessfulMessage > 0 && (currentTime - lastSuccessfulMessage) > maxSilence) {
+                        Log.w(TAG, "Não recebemos resposta há muito tempo (${(currentTime - lastSuccessfulMessage)/1000}s), forçando reconexão")
                         isConnected = false
                         onConnectionChange(false)
                         stopHeartbeat()
@@ -462,9 +568,15 @@ class WebSocketClient private constructor(
                         break
                     }
                     
+                    // Enviar ping
                     sendPing()
-                    lastHeartbeat = now
-                    Log.d(TAG, "Heartbeat enviado (última resposta há ${(now - lastSuccessfulMessage)/1000}s)")
+                    lastHeartbeat = currentTime
+                    
+                    val timeSinceLastMessage = (currentTime - lastSuccessfulMessage) / 1000
+                    val timeSinceLastPong = (currentTime - lastPongReceived) / 1000
+                    
+                    Log.d(TAG, "Heartbeat enviado (última msg: ${timeSinceLastMessage}s, último pong: ${timeSinceLastPong}s)")
+                    
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao enviar heartbeat: ${e.message}")
                     // Se falhou ao enviar, considerar desconectado
@@ -474,7 +586,10 @@ class WebSocketClient private constructor(
                     scheduleReconnect()
                     break
                 }
-                delay(heartbeatInterval)
+                
+                // Usar intervalo dinâmico baseado no estado da tela
+                val currentInterval = if (isScreenActive) activeHeartbeatInterval else heartbeatInterval
+                delay(currentInterval)
             }
         }
     }
