@@ -86,6 +86,11 @@ mdm-frontend/server/admin_password.json
 mdm-frontend/server/support_messages.json
 mdm-frontend/server/backup/
 
+# Test files
+check-devices.js
+**/test-*.js
+**/test-*.ts
+
 # Database files (if any)
 *.db
 *.sqlite
