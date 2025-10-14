@@ -2,6 +2,8 @@
 
 Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real.
 
+> **🔐 ATUALIZAÇÃO DE PERMISSÕES (14/10/2025):** Permissões otimizadas e corrigidas! Ver [PERMISSIONS-CHANGELOG.md](mdm-owner/PERMISSIONS-CHANGELOG.md) para detalhes.
+
 ## 🚀 Início Rápido
 
 ### 1. **Servidor Backend (WebSocket + PostgreSQL)**
@@ -22,13 +24,13 @@ Acesse: http://localhost:3000
 ### 3. **App Android**
 ```bash
 cd mdm-owner
+
+# Opção 1: Script automático (RECOMENDADO)
+install-and-setup.bat
+
+# Opção 2: Manual
 ./gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-```
-
-### 4. **Ativar Device Owner**
-```bash
-# Dispositivo deve estar sem conta Google
 adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
 ```
 
@@ -48,20 +50,23 @@ cd mdm-frontend && npm run dev:all
 
 ### **Android**
 ```bash
-# Compilar APK
-cd mdm-owner && ./gradlew assembleDebug
+# Instalação automática (RECOMENDADO)
+cd mdm-owner
+install-and-setup.bat        # Instalação completa com validações
+quick-install.bat            # Instalação rápida
+build-and-install.bat        # Recompilar e instalar
+uninstall.bat                # Desinstalar
 
-# Instalar APK
-adb install -r mdm-owner/app/build/outputs/apk/debug/app-debug.apk
+# Comandos manuais
+./gradlew assembleDebug      # Compilar APK
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell dpm set-device-owner com.mdm.launcher/.device.MDMDeviceAdminReceiver
 
-# Ativar Device Owner
-adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
+# Remover Device Owner
+# Toque 10x no botão ⚙️ no app
 
-# Remover Device Owner (via app)
-# Toque 10x no botão de configurações ⚙️
-
-# Logs do app
-adb logcat | grep -E "MDM|WebSocket|Location"
+# Logs
+adb logcat | findstr MDM
 ```
 
 ### **Banco de Dados (PostgreSQL)**
@@ -217,12 +222,38 @@ device-owner/
     └── build.gradle
 ```
 
-## 🔐 Segurança
+## 🔐 Segurança e Permissões
 
+### **Permissões Otimizadas** ✅
+- ✅ Removidas permissões telefônicas desnecessárias
+- ✅ Adicionado suporte para Android 12+ (Bluetooth)
+- ✅ Background location para rastreamento 24/7
+- ✅ Controle de WiFi e rede (ScaleFusion-like)
+- ✅ Suporte NFC para funcionalidades enterprise
+- ✅ device_admin.xml corrigido (apenas políticas válidas)
+
+### **Scripts Úteis**
+```bash
+cd mdm-owner
+
+# Recompilar após correções de permissões
+rebuild-after-permissions.bat
+
+# Validar permissões instaladas
+validate-permissions.bat
+```
+
+### **Documentação de Permissões**
+- 📄 [PERMISSIONS-CHANGELOG.md](mdm-owner/PERMISSIONS-CHANGELOG.md) - Todas as alterações
+- 📄 [RUNTIME-PERMISSIONS-GUIDE.md](mdm-owner/RUNTIME-PERMISSIONS-GUIDE.md) - Guia de implementação
+- 📄 [QUICK-START-PERMISSIONS.md](mdm-owner/QUICK-START-PERMISSIONS.md) - Início rápido
+
+### **Segurança**
 - Device Owner garante controle total
 - Comunicação via WebSocket (pode adicionar WSS)
 - PostgreSQL para dados sensíveis
 - Launcher não pode ser desinstalado como Device Owner
+- Permissões mínimas necessárias (princípio do menor privilégio)
 
 ## 📝 Notas Importantes
 

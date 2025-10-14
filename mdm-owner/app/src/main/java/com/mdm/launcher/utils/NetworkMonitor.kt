@@ -20,6 +20,7 @@ class NetworkMonitor(private val context: Context) {
     
     companion object {
         private const val TAG = "NetworkMonitor"
+        private const val NOTIFICATION_DEBOUNCE_MS = 5000L // 5 segundos entre notificações
     }
     
     private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
@@ -32,6 +33,10 @@ class NetworkMonitor(private val context: Context) {
     
     // Callback para quando a conectividade muda
     private var onConnectivityChange: ((Boolean) -> Unit)? = null
+    
+    // Debouncing para evitar notificações excessivas
+    private var lastNotificationTime = 0L
+    private var lastConnectedState: Boolean? = null
     
     init {
         Log.d(TAG, "NetworkMonitor inicializado")
@@ -82,14 +87,20 @@ class NetworkMonitor(private val context: Context) {
                 override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
                     val hasInternet = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-                    Log.d(TAG, "🔄 Capacidades da rede alteradas: internet=$hasInternet, validado=$isValidated")
+                    val connected = hasInternet && isValidated
                     
-                    if (hasInternet && isValidated) {
+                    // Debounce: só notificar se mudou E passou tempo suficiente
+                    val now = System.currentTimeMillis()
+                    if (connected != lastConnectedState && (now - lastNotificationTime) > NOTIFICATION_DEBOUNCE_MS) {
+                        Log.d(TAG, "🔄 Mudança real de capacidades: internet=$hasInternet, validado=$isValidated")
+                        lastConnectedState = connected
+                        lastNotificationTime = now
+                        
                         scope.launch {
                             delay(500)
-                            _isConnected.value = true
-                            onConnectivityChange(true)
-                            Log.d(TAG, "✅ Internet confirmada")
+                            _isConnected.value = connected
+                            onConnectivityChange?.invoke(connected)
+                            Log.d(TAG, "✅ Notificação de conectividade enviada: $connected")
                         }
                     }
                 }

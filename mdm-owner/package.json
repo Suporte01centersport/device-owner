@@ -1,0 +1,21 @@
+{
+  "name": "mdm-launcher-qrcode",
+  "version": "1.0.0",
+  "description": "Gerador de QR Code para download do MDM Launcher",
+  "main": "gerar-qrcode.js",
+  "scripts": {
+    "qr": "node gerar-qrcode.js",
+    "qrcode": "node gerar-qrcode.js"
+  },
+  "keywords": [
+    "qrcode",
+    "mdm",
+    "launcher"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "qrcode-terminal": "^0.12.0"
+  }
+}
+

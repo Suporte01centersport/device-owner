@@ -1,16 +1,18 @@
 package com.mdm.launcher.service
 
 import android.app.*
-import android.content.Context
-import android.content.Intent
+import android.content.*
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import com.mdm.launcher.MainActivity
 import com.mdm.launcher.R
 import com.mdm.launcher.data.DeviceInfo
 import com.mdm.launcher.network.WebSocketClient
+import com.mdm.launcher.utils.ConnectionStateManager
+import com.mdm.launcher.utils.NetworkMonitor
 import kotlinx.coroutines.*
 
 class WebSocketService : Service() {
@@ -22,6 +24,28 @@ class WebSocketService : Service() {
     private var isInitializing = false // Flag para evitar múltiplas inicializações
     private var healthCheckJob: Job? = null
     private var isScreenActive = true // Estado da tela para heartbeat adaptativo
+    private var networkMonitor: NetworkMonitor? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    
+    // BroadcastReceiver para comandos internos
+    private val commandReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            when (intent.action) {
+                "com.mdm.launcher.NETWORK_CHANGE" -> {
+                    Log.d(TAG, "🌐 Broadcast de mudança de rede recebido")
+                    handleNetworkChange()
+                }
+                "com.mdm.launcher.FORCE_RECONNECT" -> {
+                    Log.d(TAG, "🔄 Broadcast de reconexão forçada recebido")
+                    forceReconnect()
+                }
+                "com.mdm.launcher.HEALTH_CHECK" -> {
+                    Log.d(TAG, "🏥 Broadcast de health check recebido")
+                    performHealthCheck()
+                }
+            }
+        }
+    }
     
     companion object {
         private const val TAG = "WebSocketService"
@@ -39,6 +63,31 @@ class WebSocketService : Service() {
         super.onCreate()
         Log.d(TAG, "WebSocketService criado")
         createNotificationChannel()
+        
+        // Registrar BroadcastReceiver para comandos
+        val filter = IntentFilter().apply {
+            addAction("com.mdm.launcher.NETWORK_CHANGE")
+            addAction("com.mdm.launcher.FORCE_RECONNECT")
+            addAction("com.mdm.launcher.HEALTH_CHECK")
+        }
+        // Android 13+ requer especificar se o receiver é exportado ou não
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(commandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(commandReceiver, filter)
+        }
+        Log.d(TAG, "BroadcastReceiver registrado")
+        
+        // Adquirir WakeLock parcial para manter CPU ativa durante reconexão
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "MDMLauncher::WebSocketWakeLock"
+        )
+        
+        // Agendar verificações periódicas com WorkManager
+        ConnectionStateManager.scheduleHealthChecks(this)
+        Log.d(TAG, "WorkManager health checks agendados")
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -74,6 +123,26 @@ class WebSocketService : Service() {
         Log.d(TAG, "WebSocketService destruído")
         isServiceRunning = false
         healthCheckJob?.cancel()
+        
+        // Parar monitoramento de rede
+        networkMonitor?.stopMonitoring()
+        networkMonitor?.destroy()
+        networkMonitor = null
+        
+        // Desregistrar BroadcastReceiver
+        try {
+            unregisterReceiver(commandReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "Erro ao desregistrar receiver", e)
+        }
+        
+        // Liberar WakeLock
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        
         webSocketClient?.disconnect()
         serviceScope.cancel()
         super.onDestroy()
@@ -151,6 +220,9 @@ class WebSocketService : Service() {
                     Log.d(TAG, "═══════════════════════════════════════")
                     updateNotification(connected)
                     
+                    // Salvar estado de conexão
+                    ConnectionStateManager.saveConnectionState(this@WebSocketService, connected)
+                    
                     // Quando conectar, coletar e enviar dados completos IMEDIATAMENTE
                     if (connected) {
                         Log.d(TAG, "📤 Conexão confirmada pelo servidor - enviando dados completos...")
@@ -158,6 +230,9 @@ class WebSocketService : Service() {
                     }
                 }
             )
+            
+            // Iniciar monitoramento de rede
+            startNetworkMonitoring()
             
             // Conectar apenas se não estiver conectado
             if (webSocketClient?.isConnected() != true) {
@@ -654,5 +729,90 @@ class WebSocketService : Service() {
         }
         
         Log.d(TAG, "✅ Verificação periódica de saúde iniciada (60s)")
+    }
+    
+    private fun startNetworkMonitoring() {
+        if (networkMonitor != null) {
+            Log.d(TAG, "NetworkMonitor já está ativo")
+            return
+        }
+        
+        try {
+            Log.d(TAG, "🌐 Iniciando monitoramento de rede...")
+            networkMonitor = NetworkMonitor(this)
+            
+            networkMonitor?.startMonitoring { isConnected ->
+                Log.d(TAG, "🔔 Mudança de conectividade detectada: $isConnected")
+                
+                if (isConnected) {
+                    // Rede voltou - verificar se WebSocket está conectado
+                    val isWebSocketConnected = webSocketClient?.isConnected() ?: false
+                    
+                    if (!isWebSocketConnected) {
+                        Log.d(TAG, "🔄 Rede disponível mas WebSocket desconectado - reconectando...")
+                        
+                        serviceScope.launch {
+                            delay(2000) // Aguardar rede estabilizar
+                            webSocketClient?.onNetworkChanged()
+                        }
+                    } else {
+                        Log.d(TAG, "✅ WebSocket já está conectado")
+                    }
+                } else {
+                    Log.d(TAG, "❌ Conectividade de rede perdida")
+                }
+            }
+            
+            Log.d(TAG, "✅ NetworkMonitor iniciado com sucesso")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao iniciar NetworkMonitor", e)
+        }
+    }
+    
+    private fun handleNetworkChange() {
+        Log.d(TAG, "🌐 Tratando mudança de rede...")
+        webSocketClient?.onNetworkChanged()
+    }
+    
+    private fun forceReconnect() {
+        Log.d(TAG, "🔄 Forçando reconexão completa...")
+        
+        // Adquirir WakeLock temporário para garantir que reconexão complete
+        wakeLock?.acquire(30000) // 30 segundos
+        
+        serviceScope.launch {
+            try {
+                webSocketClient?.forceReconnect()
+                delay(5000) // Aguardar reconexão
+                
+                if (webSocketClient?.isConnected() == true) {
+                    Log.d(TAG, "✅ Reconexão bem-sucedida")
+                } else {
+                    Log.w(TAG, "⚠️ Reconexão ainda em andamento...")
+                }
+            } finally {
+                // Liberar WakeLock
+                if (wakeLock?.isHeld == true) {
+                    wakeLock?.release()
+                }
+            }
+        }
+    }
+    
+    private fun performHealthCheck() {
+        Log.d(TAG, "🏥 Realizando health check...")
+        
+        val isConnected = webSocketClient?.isConnected() ?: false
+        val state = ConnectionStateManager.getConnectionState(this)
+        
+        Log.d(TAG, "Estado atual:")
+        Log.d(TAG, "  - WebSocket conectado: $isConnected")
+        Log.d(TAG, "  - Última conexão: ${state.lastConnectedTime}")
+        Log.d(TAG, "  - Total de conexões: ${state.totalConnections}")
+        
+        if (!isConnected) {
+            Log.w(TAG, "⚠️ WebSocket desconectado durante health check - reconectando...")
+            forceReconnect()
+        }
     }
 }

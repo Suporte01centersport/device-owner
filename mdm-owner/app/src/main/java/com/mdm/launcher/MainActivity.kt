@@ -193,6 +193,57 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * Configura otimizações de bateria para garantir conexão persistente
+     */
+    private fun configureBatteryOptimizations() {
+        try {
+            Log.d(TAG, "Configurando otimizações de bateria...")
+            
+            // Importar o helper
+            val helper = com.mdm.launcher.utils.BatteryOptimizationHelper
+            
+            // Verificar status atual
+            val isIgnoringOptimizations = helper.isIgnoringBatteryOptimizations(this)
+            val canScheduleAlarms = helper.canScheduleExactAlarms(this)
+            
+            Log.d(TAG, "Status atual:")
+            Log.d(TAG, "  - Ignorando otimizações: $isIgnoringOptimizations")
+            Log.d(TAG, "  - Pode agendar alarmes: $canScheduleAlarms")
+            
+            // Se não está configurado, configurar na primeira execução
+            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val hasConfiguredOptimizations = prefs.getBoolean("has_configured_battery_optimizations", false)
+            
+            if (!hasConfiguredOptimizations) {
+                Log.d(TAG, "Primeira execução - configurando otimizações...")
+                
+                // Configurar todas as otimizações necessárias
+                helper.configureOptimizations(this)
+                
+                // Marcar como configurado
+                prefs.edit().putBoolean("has_configured_battery_optimizations", true).apply()
+                
+                Log.d(TAG, "✅ Otimizações configuradas")
+            } else {
+                Log.d(TAG, "Otimizações já foram configuradas anteriormente")
+                
+                // Se não estiver mais na whitelist, avisar
+                if (!isIgnoringOptimizations) {
+                    Log.w(TAG, "⚠️ App foi removido da whitelist de bateria - recomendado adicionar novamente")
+                    
+                    // Mostrar notificação ou toast (opcional)
+                    handler.postDelayed({
+                        Toast.makeText(this, "Recomendado: Adicione o app à whitelist de bateria para conexão estável", Toast.LENGTH_LONG).show()
+                    }, 3000)
+                }
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao configurar otimizações de bateria", e)
+        }
+    }
+    
     companion object {
         private const val TAG = "MainActivity"
         private const val REQUEST_CODE_ENABLE_ADMIN = 1001
@@ -237,6 +288,9 @@ class MainActivity : AppCompatActivity() {
         
         // Inicializar PermissionManager
         permissionManager = PermissionManager(this)
+        
+        // Configurar otimizações de bateria para garantir conexão persistente
+        configureBatteryOptimizations()
         
         // Garantir que a barra de navegação seja visível usando API moderna
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
@@ -1368,13 +1422,30 @@ class MainActivity : AppCompatActivity() {
                 
                 // DeviceIdManager sempre retorna um ID válido
                 Log.d(TAG, "✅ DeviceId válido: ${deviceId.takeLast(8)}")
+                Log.d(TAG, "✅ Servidor descoberto: $serverUrl")
                 setupWebSocketWithId(deviceId, serverUrl)
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Erro na descoberta do servidor: ${e.message}", e)
-                // Fallback: usar IP do emulador
-                val fallbackUrl = "ws://10.0.2.2:3002"
-                Log.w(TAG, "⚠️ Usando URL fallback: $fallbackUrl")
-                setupWebSocketWithId(deviceId, fallbackUrl)
+                Log.e(TAG, "❌❌❌ ERRO CRÍTICO: Falha na descoberta do servidor! ❌❌❌")
+                Log.e(TAG, "Erro: ${e.message}", e)
+                Log.e(TAG, "")
+                Log.e(TAG, "VERIFIQUE:")
+                Log.e(TAG, "  1. Servidor WebSocket está rodando? (node mdm-frontend/server/websocket.js)")
+                Log.e(TAG, "  2. Dispositivo está na mesma rede WiFi do servidor?")
+                Log.e(TAG, "  3. Firewall não está bloqueando a porta 3002?")
+                Log.e(TAG, "  4. Discovery server está respondendo na porta 3003?")
+                Log.e(TAG, "")
+                
+                // Mostrar erro na UI
+                runOnUiThread {
+                    android.widget.Toast.makeText(
+                        this@MainActivity,
+                        "❌ Servidor não encontrado! Verifique se está na mesma rede WiFi",
+                        android.widget.Toast.LENGTH_LONG
+                    ).show()
+                }
+                
+                // NÃO usar fallback - deixar claro que há um problema de configuração
+                // O app vai tentar reconectar automaticamente quando o servidor ficar disponível
             }
         }
     }

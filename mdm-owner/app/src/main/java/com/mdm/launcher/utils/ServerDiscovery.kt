@@ -22,42 +22,66 @@ object ServerDiscovery {
     private const val BROADCAST_MESSAGE = "MDM_DISCOVERY"
     private const val DISCOVERY_TIMEOUT = 3000L // 3 segundos
     
+    private var lastDiscoveryTime = 0L
+    private var cachedServerUrl: String? = null
+    private const val DISCOVERY_CACHE_DURATION = 60000L // 1 minuto de cache
+    
     /**
-     * Descobre automaticamente o servidor MDM
+     * Descobre automaticamente o servidor MDM (com cache de 1 minuto)
      * @return URL completa do WebSocket (ex: ws://192.168.1.100:3002)
      */
     suspend fun discoverServer(context: Context): String = withContext(Dispatchers.IO) {
+        // Usar cache se ainda válido (evitar descobertas repetidas)
+        val now = System.currentTimeMillis()
+        if (cachedServerUrl != null && (now - lastDiscoveryTime) < DISCOVERY_CACHE_DURATION) {
+            Log.d(TAG, "✓ Usando servidor em cache: $cachedServerUrl (${(now - lastDiscoveryTime)/1000}s atrás)")
+            return@withContext cachedServerUrl!!
+        }
+        
         Log.d(TAG, "=== INICIANDO DESCOBERTA DO SERVIDOR ===")
         
         // Estratégia 1: Tentar domínio fixo (mdm.local)
         tryDomainResolution()?.let { serverUrl ->
             Log.d(TAG, "✓ Servidor encontrado via DNS: $serverUrl")
+            cachedServerUrl = serverUrl
+            lastDiscoveryTime = now
             return@withContext serverUrl
         }
         
         // Estratégia 2: Descoberta via broadcast UDP
         tryBroadcastDiscovery(context)?.let { serverUrl ->
             Log.d(TAG, "✓ Servidor encontrado via broadcast: $serverUrl")
+            cachedServerUrl = serverUrl
+            lastDiscoveryTime = now
             return@withContext serverUrl
         }
         
         // Estratégia 3: Tentar IPs comuns da rede local
         tryCommonLocalIPs()?.let { serverUrl ->
             Log.d(TAG, "✓ Servidor encontrado via IP comum: $serverUrl")
+            cachedServerUrl = serverUrl
+            lastDiscoveryTime = now
             return@withContext serverUrl
         }
         
-        // Estratégia 4: IP configurado manualmente (SharedPreferences)
+        // Estratégia 4: IP configurado manualmente ou descoberto anteriormente (SharedPreferences)
         val manualUrl = getManualServerUrl(context)
-        if (manualUrl != null && !manualUrl.contains("10.0.2.2")) {
-            Log.d(TAG, "✓ Usando URL configurada manualmente: $manualUrl")
-            return@withContext manualUrl
+        if (manualUrl != null) {
+            if (!manualUrl.contains("10.0.2.2")) {
+                Log.d(TAG, "✓ Usando URL salva: $manualUrl")
+                return@withContext manualUrl
+            }
         }
         
-        // Fallback: IP do emulador (desenvolvimento)
-        val fallbackUrl = "ws://10.0.2.2:3002"
-        Log.w(TAG, "⚠️ Nenhum servidor encontrado, usando fallback: $fallbackUrl")
-        return@withContext fallbackUrl
+        // Fallback: ERRO - Servidor não encontrado (dispositivos reais não devem usar 10.0.2.2)
+        Log.e(TAG, "❌ ERRO: Servidor não encontrado na rede local!")
+        Log.e(TAG, "❌ Certifique-se de que:")
+        Log.e(TAG, "   1. O servidor está rodando na porta 3002")
+        Log.e(TAG, "   2. O dispositivo está na mesma rede WiFi")
+        Log.e(TAG, "   3. O firewall não está bloqueando a porta 3002")
+        
+        // Retornar null para forçar erro visível ao invés de usar IP inválido
+        throw Exception("Servidor MDM não encontrado na rede local. Verifique se o servidor está rodando e acessível.")
     }
     
     /**
@@ -69,7 +93,7 @@ object ServerDiscovery {
             
             val result = withTimeout(DISCOVERY_TIMEOUT) {
                 val address = InetAddress.getByName(MDM_DOMAIN)
-                val ip = address.hostAddress
+                val ip = address.hostAddress ?: return@withTimeout null
                 Log.d(TAG, "Domínio $MDM_DOMAIN resolvido para: $ip")
                 
                 // Verificar se o servidor está respondendo
@@ -270,11 +294,18 @@ object ServerDiscovery {
     }
     
     /**
-     * Obtém URL configurada manualmente
+     * Obtém URL configurada manualmente OU descoberta anteriormente
      */
     private fun getManualServerUrl(context: Context): String? {
         return try {
             val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            // Primeiro tentar URL descoberta automaticamente
+            val discoveredUrl = prefs.getString("discovered_server_url", null)
+            if (!discoveredUrl.isNullOrEmpty()) {
+                Log.d(TAG, "✓ Usando URL descoberta anteriormente: $discoveredUrl")
+                return discoveredUrl
+            }
+            // Depois tentar URL manual
             prefs.getString("server_url", null)
         } catch (e: Exception) {
             null
