@@ -190,38 +190,51 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }
   ]
 
-  // Gerar dados de atividade recente baseados nos dispositivos reais
-  const recentActivities = devices.slice(0, 4).map((device, index) => {
-    const now = Date.now()
-    const lastSeen = device.lastSeen
-    const timeDiff = now - lastSeen
-    const minutes = Math.floor(timeDiff / 60000)
-    const hours = Math.floor(timeDiff / 3600000)
-    
-    let timeText = ''
-    if (minutes < 1) timeText = 'Agora mesmo'
-    else if (minutes < 60) timeText = `${minutes} min atrás`
-    else if (hours < 24) timeText = `${hours}h atrás`
-    else timeText = `${Math.floor(hours / 24)}d atrás`
-    
-    const actions = [
-      'Conectado',
-      'Configuração aplicada', 
-      'Dados sincronizados',
-      'Localização atualizada',
-      'Desconectado'
-    ]
-    
-    const actionTypes = ['success', 'info', 'warning', 'success', 'warning']
-    
-    return {
-      id: device.deviceId,
-      device: device.name || `Dispositivo ${index + 1}`,
-      action: actions[index % actions.length],
-      time: timeText,
-      type: device.status === 'online' ? 'success' : 'warning'
-    }
-  })
+  // Gerar dados de atividade recente baseados em eventos REAIS
+  const recentActivities = devices
+    .filter(device => device.status === 'online') // Mostrar apenas dispositivos que tiveram atividade real
+    .slice(0, 4)
+    .map((device, index) => {
+      const now = Date.now()
+      const lastSeen = device.lastSeen
+      const timeDiff = now - lastSeen
+      const minutes = Math.floor(timeDiff / 60000)
+      const hours = Math.floor(timeDiff / 3600000)
+      
+      let timeText = ''
+      if (minutes < 1) timeText = 'Agora mesmo'
+      else if (minutes < 60) timeText = `${minutes} min atrás`
+      else if (hours < 24) timeText = `${hours}h atrás`
+      else timeText = `${Math.floor(hours / 24)}d atrás`
+      
+      // Determinar ação real baseada no status do dispositivo
+      let action = ''
+      let type: 'success' | 'warning' | 'info' = 'success'
+      
+      if (device.status === 'online') {
+        if (minutes < 1) {
+          action = 'Conectado ao servidor'
+          type = 'success'
+        } else if (minutes < 5) {
+          action = 'Enviando dados de localização'
+          type = 'info'
+        } else {
+          action = 'Online e operacional'
+          type = 'success'
+        }
+      } else {
+        action = 'Desconectado'
+        type = 'warning'
+      }
+      
+      return {
+        id: device.deviceId,
+        device: device.name || `Dispositivo ${index + 1}`,
+        action: action,
+        time: timeText,
+        type: type
+      }
+    })
 
   // Gerar dados do gráfico baseados nos dispositivos (sem Math.random para evitar hidratação)
   const generateChartData = () => {
