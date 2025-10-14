@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-187:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-187:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-187:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-187:12
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-201:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-201:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-201:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-201:12
 MERGED from [androidx.databinding:viewbinding:8.1.4] C:\Users\admin\.gradle\caches\transforms-3\aac47b4351775c438be9bcc08e326473\transformed\viewbinding-8.1.4\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\admin\.gradle\caches\transforms-3\f886aa54234d9474d31211f594ef8604\transformed\constraintlayout-2.1.4\AndroidManifest.xml:2:1-11:12
@@ -265,8 +265,8 @@ ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifes
 	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:22-75
 application
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-185:19
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-185:19
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-199:19
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-199:19
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\admin\.gradle\caches\transforms-3\f886aa54234d9474d31211f594ef8604\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
@@ -316,189 +316,213 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\admin\.gradle\cach
 	android:usesCleartextTraffic
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:9-44
 activity#com.mdm.launcher.MainActivity
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:80:9-101:20
-	android:screenOrientation
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-49
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:80:9-104:20
 	android:clearTaskOnLaunch
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:89:13-46
 	android:stateNotNeeded
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:91:13-42
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:92:13-43
 	android:excludeFromRecents
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:90:13-46
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:91:13-47
 	android:launchMode
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:13-44
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:13-48
 	android:windowSoftInputMode
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:86:13-55
 	android:exported
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:82:13-36
 	android:configChanges
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:87:13-81
+	android:screenOrientation
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-49
+	android:noHistory
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:13-38
 	android:alwaysRetainTaskState
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:13-49
 	android:theme
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:85:13-62
+	android:finishOnTaskLaunch
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:90:13-47
+	android:taskAffinity
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:13-36
 	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:81:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:92:13-95:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:13-98:29
 	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:92:28-51
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:28-51
 action#android.intent.action.MAIN
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:17-69
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:17-69
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:25-66
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:25-66
 category#android.intent.category.LAUNCHER
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:17-77
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:17-77
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:27-74
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:27-74
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.DEFAULT+category:name:android.intent.category.HOME
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:13-100:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:13-103:29
 	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:28-51
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:28-51
 category#android.intent.category.HOME
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:98:17-73
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:17-73
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:98:27-70
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:27-70
 category#android.intent.category.DEFAULT
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:17-76
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:17-76
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:27-73
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:27-73
 receiver#com.mdm.launcher.DeviceAdminReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:104:9-114:20
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:9-117:20
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:106:13-36
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:109:13-36
 	android:permission
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:13-70
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:110:13-70
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:105:13-48
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:13-48
 meta-data#android.app.device_admin
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:13-110:56
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:111:13-113:56
 	android:resource
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:110:17-53
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:17-53
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:109:17-56
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:17-56
 intent-filter#action:name:android.app.action.DEVICE_ADMIN_ENABLED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:111:13-113:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:13-116:29
 action#android.app.action.DEVICE_ADMIN_ENABLED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:17-82
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-82
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:25-79
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:25-79
 service#com.mdm.launcher.service.WebSocketService
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:9-121:56
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:120:9-124:56
 	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:119:13-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:122:13-35
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:120:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:13-37
 	android:foregroundServiceType
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:13-53
+	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:121:13-53
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:118:13-53
 service#com.mdm.launcher.service.LocationService
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:9-128:56
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:127:9-131:56
 	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:126:13-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:13-35
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:127:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:130:13-37
 	android:foregroundServiceType
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:128:13-53
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:131:13-53
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:125:13-52
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:128:13-52
 receiver#com.mdm.launcher.AppChangeReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:131:9-141:20
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:134:9-144:20
 	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:13-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:13-35
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:134:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:137:13-37
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:13-46
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:135:13-46
 intent-filter#action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:135:13-140:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:138:13-143:29
 action#android.intent.action.PACKAGE_ADDED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:17-78
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:17-78
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:25-75
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:25-75
 action#android.intent.action.PACKAGE_REMOVED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:137:17-80
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:140:17-80
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:137:25-77
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:140:25-77
 action#android.intent.action.PACKAGE_REPLACED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:138:17-81
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:141:17-81
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:138:25-78
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:141:25-78
 data
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:17-50
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:17-50
 	android:scheme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:23-47
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:23-47
+receiver#com.mdm.launcher.utils.AppUpdateReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:147:9-155:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:149:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:150:13-37
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:148:13-52
+intent-filter#action:name:com.mdm.launcher.UPDATE_FAILURE+action:name:com.mdm.launcher.UPDATE_SUCCESS
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:151:13-154:29
+action#com.mdm.launcher.UPDATE_SUCCESS
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:17-74
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:25-71
+action#com.mdm.launcher.UPDATE_FAILURE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:17-74
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:25-71
 receiver#com.mdm.launcher.receivers.DefaultLauncherReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:144:9-160:20
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:158:9-174:20
 	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:146:13-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:160:13-35
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:147:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:161:13-37
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:145:13-62
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:159:13-62
 intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_CHANGED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:148:13-156:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:162:13-170:29
 	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:148:28-51
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:162:28-51
 action#android.intent.action.PACKAGE_CHANGED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:17-80
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:166:17-80
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:25-77
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:166:25-77
 action#android.intent.action.BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:17-79
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:167:17-79
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:25-76
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:167:25-76
 action#android.intent.action.MY_PACKAGE_REPLACED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:154:17-84
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:168:17-84
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:154:25-81
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:168:25-81
 intent-filter#action:name:android.intent.action.BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:157:13-159:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:171:13-173:29
 	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:157:28-51
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:171:28-51
 receiver#com.mdm.launcher.receivers.SystemBootReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:163:9-177:20
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:177:9-191:20
 	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:165:13-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:179:13-35
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:166:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:180:13-37
 	android:directBootAware
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:167:13-43
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:181:13-43
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:164:13-57
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:178:13-57
 intent-filter#action:name:android.intent.action.ACTION_POWER_CONNECTED+action:name:android.intent.action.ACTION_POWER_DISCONNECTED+action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.LOCKED_BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.QUICKBOOT_POWERON+action:name:android.net.conn.CONNECTIVITY_CHANGE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:168:13-176:29
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:182:13-190:29
 	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:168:28-50
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:182:28-50
 action#android.intent.action.QUICKBOOT_POWERON
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:170:17-82
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:184:17-82
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:170:25-79
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:184:25-79
 action#android.intent.action.LOCKED_BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:171:17-86
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:185:17-86
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:171:25-83
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:185:25-83
 action#android.net.conn.CONNECTIVITY_CHANGE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:172:17-79
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:186:17-79
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:172:25-76
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:186:25-76
 action#android.intent.action.ACTION_POWER_CONNECTED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:174:17-87
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:188:17-87
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:174:25-84
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:188:25-84
 action#android.intent.action.ACTION_POWER_DISCONNECTED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:175:17-90
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:189:17-90
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:175:25-87
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:189:25-87
 activity#com.mdm.launcher.SetupActivity
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:180:9-183:62
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:194:9-197:62
 	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:182:13-37
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:196:13-37
 	android:theme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:183:13-59
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:197:13-59
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:181:13-42
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:195:13-42
 uses-sdk
 INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml

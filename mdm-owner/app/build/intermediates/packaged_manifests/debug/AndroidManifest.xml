@@ -113,11 +113,14 @@
             android:alwaysRetainTaskState="true"
             android:clearTaskOnLaunch="false"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-            android:excludeFromRecents="true"
+            android:excludeFromRecents="false"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:finishOnTaskLaunch="false"
+            android:launchMode="singleInstance"
+            android:noHistory="false"
             android:screenOrientation="portrait"
-            android:stateNotNeeded="true"
+            android:stateNotNeeded="false"
+            android:taskAffinity=""
             android:theme="@style/Theme.MDMLauncher.Launcher"
             android:windowSoftInputMode="adjustResize" >
             <intent-filter android:priority="1000" >
@@ -172,6 +175,17 @@
                 <action android:name="android.intent.action.PACKAGE_REPLACED" />
 
                 <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver para resultado de atualização automática -->
+        <receiver
+            android:name="com.mdm.launcher.utils.AppUpdateReceiver"
+            android:enabled="true"
+            android:exported="false" >
+            <intent-filter>
+                <action android:name="com.mdm.launcher.UPDATE_SUCCESS" />
+                <action android:name="com.mdm.launcher.UPDATE_FAILURE" />
             </intent-filter>
         </receiver>
 

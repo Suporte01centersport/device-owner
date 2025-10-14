@@ -7,6 +7,8 @@ import Dashboard from './components/Dashboard'
 import DeviceCard from './components/DeviceCard'
 import DeviceModal from './components/DeviceModal'
 import SupportMessagesModal from './components/SupportMessagesModal'
+import UpdateAppModal from './components/UpdateAppModal'
+import BulkUpdateModal from './components/BulkUpdateModal'
 import PoliciesPage from './policies/page'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
@@ -28,6 +30,9 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const [supportDevice, setSupportDevice] = useState<Device | null>(null)
+  const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
+  const [updateDevice, setUpdateDevice] = useState<Device | null>(null)
+  const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false)
   
   // Debug: Monitorar mudanças no estado devices
   useEffect(() => {
@@ -392,6 +397,78 @@ export default function Home() {
     }
   }, [sendMessage])
 
+  const handleUpdateApp = useCallback(async (apkUrl: string, version: string) => {
+    if (!updateDevice) return
+
+    try {
+      console.log('📥 Iniciando atualização de app:', {
+        deviceId: updateDevice.deviceId,
+        apkUrl,
+        version
+      })
+
+      const response = await fetch('/api/devices/update-app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          deviceIds: [updateDevice.deviceId],
+          apkUrl,
+          version
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`✅ Atualização iniciada para ${updateDevice.name}!\n\nO dispositivo começará a baixar e instalar o APK automaticamente.\n\nAcompanhe o progresso nos logs do dispositivo.`)
+        setIsUpdateModalOpen(false)
+        setUpdateDevice(null)
+      } else {
+        alert(`❌ Erro ao enviar comando de atualização:\n${result.error || 'Erro desconhecido'}`)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar app:', error)
+      alert('❌ Erro ao enviar comando de atualização. Verifique o console para mais detalhes.')
+    }
+  }, [updateDevice])
+
+  const handleBulkUpdateApp = useCallback(async (deviceIds: string[], apkUrl: string, version: string) => {
+    try {
+      console.log('📥 Iniciando atualização em massa:', {
+        deviceCount: deviceIds.length,
+        deviceIds,
+        apkUrl,
+        version
+      })
+
+      const response = await fetch('/api/devices/update-app', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          deviceIds,
+          apkUrl,
+          version
+        })
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        alert(`✅ Atualização iniciada para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos começarão a baixar e instalar o APK automaticamente.\n\nAcompanhe o progresso nos logs dos dispositivos.`)
+        setIsBulkUpdateModalOpen(false)
+      } else {
+        alert(`❌ Erro ao enviar comando de atualização:\n${result.error || 'Erro desconhecido'}`)
+      }
+    } catch (error) {
+      console.error('Erro ao atualizar apps em massa:', error)
+      alert('❌ Erro ao enviar comando de atualização. Verifique o console para mais detalhes.')
+    }
+  }, [])
+
   const loadUnreadSupportCount = useCallback(async () => {
     try {
       const response = await fetch('/api/support-messages')
@@ -545,9 +622,13 @@ export default function Home() {
                 <p className="text-secondary mt-1">Gerencie todos os dispositivos conectados</p>
               </div>
               <div className="flex gap-3">
-                <button className="btn btn-primary">
-                  <span>📱</span>
-                  Provisionar Dispositivo
+                <button 
+                  className="btn btn-primary"
+                  onClick={() => setIsBulkUpdateModalOpen(true)}
+                  disabled={devices.length === 0}
+                >
+                  <span>📥</span>
+                  Atualização em Massa
                 </button>
                 <button className="btn btn-secondary">
                   <span>⚙️</span>
@@ -579,6 +660,10 @@ export default function Home() {
                     onClick={() => handleDeviceClick(device)}
                     onDelete={() => handleDeleteDevice(device.deviceId)}
                     onSupport={() => handleSupportClick(device)}
+                    onUpdate={() => {
+                      setUpdateDevice(device)
+                      setIsUpdateModalOpen(true)
+                    }}
                     onSupportCountUpdate={supportCountUpdateTrigger}
                   />
                 ))}
@@ -855,6 +940,29 @@ export default function Home() {
           isOpen={isSupportModalOpen}
           onClose={handleSupportModalClose}
           onMessageStatusUpdate={handleSupportCountUpdate}
+        />
+      )}
+
+      {/* Update App Modal */}
+      {isUpdateModalOpen && updateDevice && (
+        <UpdateAppModal
+          device={updateDevice}
+          isOpen={isUpdateModalOpen}
+          onClose={() => {
+            setIsUpdateModalOpen(false)
+            setUpdateDevice(null)
+          }}
+          onConfirm={handleUpdateApp}
+        />
+      )}
+
+      {/* Bulk Update Modal */}
+      {isBulkUpdateModalOpen && (
+        <BulkUpdateModal
+          devices={devices}
+          isOpen={isBulkUpdateModalOpen}
+          onClose={() => setIsBulkUpdateModalOpen(false)}
+          onConfirm={handleBulkUpdateApp}
         />
       )}
     </div>

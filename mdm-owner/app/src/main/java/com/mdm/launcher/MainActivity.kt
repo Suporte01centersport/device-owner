@@ -2686,6 +2686,9 @@ class MainActivity : AppCompatActivity() {
         
         Log.d(TAG, "onResume() chamado - Activity retomada (${timeSinceLastResume}ms desde último resume)")
         
+        // Garantir que ainda somos o launcher padrão
+        ensureDefaultLauncher()
+        
         // Evitar processamento desnecessário se a activity foi destruída
         if (isActivityDestroyed) {
             Log.w(TAG, "Activity foi destruída, ignorando onResume")
@@ -2782,6 +2785,10 @@ class MainActivity : AppCompatActivity() {
         
         // Tela pode estar sendo bloqueada - verificar estado
         checkScreenState()
+        
+        // REMOVIDO: Não forçar retorno automático ao launcher
+        // O usuário pode estar abrindo um app permitido
+        // O launcher só volta quando o usuário apertar HOME ou finalizar o app
     }
     
     override fun onStop() {
@@ -2797,6 +2804,83 @@ class MainActivity : AppCompatActivity() {
     override fun onRestart() {
         super.onRestart()
         Log.d(TAG, "onRestart() chamado - Activity reiniciada")
+        
+        // Garantir que ainda somos o launcher padrão
+        ensureDefaultLauncher()
+    }
+    
+    /**
+     * Garantir que este app é o launcher padrão
+     * Usar Device Owner para forçar permanentemente
+     */
+    private fun ensureDefaultLauncher() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (dpm.isDeviceOwnerApp(packageName)) {
+                Log.d(TAG, "✅ App é Device Owner - verificando configuração de launcher")
+                
+                // Verificar se ainda somos o launcher padrão
+                val packageManager = packageManager
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                }
+                
+                val resolveInfos = packageManager.queryIntentActivities(
+                    homeIntent,
+                    PackageManager.MATCH_DEFAULT_ONLY
+                )
+                
+                val currentLauncher = if (resolveInfos.isNotEmpty()) {
+                    resolveInfos[0].activityInfo.packageName
+                } else {
+                    null
+                }
+                
+                if (currentLauncher != packageName) {
+                    Log.w(TAG, "⚠️ Launcher padrão mudou para: $currentLauncher - tentando restaurar")
+                    
+                    // Como Device Owner, podemos bloquear a mudança de launcher
+                    // Desabilitar outros launchers (exceto o nosso)
+                    try {
+                        val allLaunchers = packageManager.queryIntentActivities(
+                            homeIntent,
+                            PackageManager.MATCH_ALL
+                        )
+                        
+                        for (launcher in allLaunchers) {
+                            val launcherPackage = launcher.activityInfo.packageName
+                            if (launcherPackage != packageName) {
+                                try {
+                                    // Ocultar outros launchers
+                                    dpm.setApplicationHidden(componentName, launcherPackage, true)
+                                    Log.d(TAG, "🔒 Launcher desabilitado: $launcherPackage")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Erro ao desabilitar launcher $launcherPackage", e)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao listar launchers", e)
+                    }
+                    
+                    // Forçar seleção do nosso launcher
+                    val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                        setPackage(packageName)
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    }
+                    startActivity(launcherIntent)
+                } else {
+                    Log.d(TAG, "✅ MDM Launcher é o launcher padrão")
+                }
+            } else {
+                Log.w(TAG, "⚠️ App não é Device Owner - não pode forçar launcher padrão")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao garantir launcher padrão", e)
+        }
     }
     
     private fun loadAppsIfNeeded() {
@@ -3187,7 +3271,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
+        Log.d(TAG, "🔙 Botão voltar pressionado")
+        
+        // SEMPRE permitir o botão voltar - o usuário precisa poder sair dos apps
+        // O launcher MDM já está configurado para não sair (singleInstance + excludeFromRecents=false)
+        // então o botão voltar apenas vai para a tela anterior sem sair do launcher
+        super.onBackPressed()
+        
+        // Código antigo comentado - mantido para referência
+        /*
         // Verificar se estamos em Lock Task Mode
         val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
         val kioskApp = prefs.getString("kiosk_app", null)
@@ -3212,6 +3306,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Botão voltar pressionado - ignorado")
             // Não fazer nada - o botão voltar é desabilitado
         }
+        */
     }
     
     override fun onWindowFocusChanged(hasFocus: Boolean) {

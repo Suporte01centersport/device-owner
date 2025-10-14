@@ -407,6 +407,49 @@ class WebSocketService : Service() {
                     
                     Log.d(TAG, "🗑️ ═══════════════════════════════════════════════")
                 }
+                "update_app" -> {
+                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "📥 COMANDO: ATUALIZAR APLICATIVO")
+                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
+                    
+                    try {
+                        val data = jsonObject["data"] as? Map<*, *>
+                        val apkUrl = data?.get("apk_url") as? String
+                        val version = data?.get("version") as? String
+                        
+                        if (apkUrl.isNullOrEmpty()) {
+                            Log.e(TAG, "❌ URL do APK não fornecida")
+                            sendUpdateStatus(false, "URL do APK não fornecida")
+                            return
+                        }
+                        
+                        Log.d(TAG, "📦 URL do APK: $apkUrl")
+                        Log.d(TAG, "🔢 Versão: ${version ?: "não especificada"}")
+                        
+                        // Enviar status de início
+                        sendUpdateStatus(true, "Download iniciado", 0)
+                        
+                        // Iniciar download e instalação
+                        com.mdm.launcher.utils.AppUpdater.downloadAndInstall(
+                            context = this@WebSocketService,
+                            apkUrl = apkUrl,
+                            onProgress = { progress ->
+                                Log.d(TAG, "📊 Progresso do download: $progress%")
+                                sendUpdateStatus(true, "Baixando atualização", progress)
+                            },
+                            onComplete = { success, message ->
+                                Log.d(TAG, if (success) "✅ Atualização concluída: $message" else "❌ Falha na atualização: $message")
+                                sendUpdateStatus(success, message, if (success) 100 else null)
+                            }
+                        )
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao processar atualização", e)
+                        sendUpdateStatus(false, "Erro: ${e.message}")
+                    }
+                    
+                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
+                }
                 "show_notification" -> {
                     Log.d(TAG, "═══════════════════════════════════════════")
                     Log.d(TAG, "📬 SHOW_NOTIFICATION RECEBIDO (SERVICE)")
@@ -484,6 +527,30 @@ class WebSocketService : Service() {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar mensagem em background", e)
+        }
+    }
+    
+    /**
+     * Envia status de atualização para o servidor
+     */
+    private fun sendUpdateStatus(success: Boolean, message: String, progress: Int? = null) {
+        try {
+            val statusMessage = mutableMapOf<String, Any>(
+                "type" to "update_status",
+                "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this),
+                "timestamp" to System.currentTimeMillis(),
+                "success" to success,
+                "message" to message
+            )
+            
+            progress?.let {
+                statusMessage["progress"] = it
+            }
+            
+            webSocketClient?.sendMessage(com.google.gson.Gson().toJson(statusMessage))
+            Log.d(TAG, "📤 Status de atualização enviado: $message ${progress?.let { "($it%)" } ?: ""}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao enviar status de atualização", e)
         }
     }
     

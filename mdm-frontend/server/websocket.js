@@ -168,6 +168,48 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    // Rota para enviar comando de atualização de APK
+    if (req.method === 'POST' && req.url === '/api/update-app') {
+        let body = '';
+        
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', () => {
+            try {
+                const { deviceIds, apkUrl, version } = JSON.parse(body);
+                
+                console.log('═══════════════════════════════════════════════');
+                console.log('📥 HTTP API: Comando de atualização recebido');
+                console.log('═══════════════════════════════════════════════');
+                console.log('Device IDs:', deviceIds);
+                console.log('APK URL:', apkUrl);
+                console.log('Version:', version);
+                
+                // Chamar função para enviar comando via WebSocket
+                const result = sendAppUpdateCommand(deviceIds, apkUrl, version || 'latest');
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    message: 'Comando de atualização enviado',
+                    ...result
+                }));
+                
+            } catch (error) {
+                console.error('Erro ao processar comando de atualização:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: false,
+                    error: error.message
+                }));
+            }
+        });
+        
+        return;
+    }
+    
     const parsedUrl = url.parse(req.url, true);
     const path = parsedUrl.pathname;
     
@@ -2269,6 +2311,82 @@ function handleGetAdminPassword(ws, data) {
     
     ws.send(JSON.stringify(response));
     console.log('Senha de administrador solicitada:', globalAdminPassword ? '***' : 'não definida');
+}
+
+/**
+ * Função para enviar comando de atualização de APK para dispositivos
+ * @param {string|string[]} deviceIds - ID do dispositivo ou array de IDs, ou 'all' para todos
+ * @param {string} apkUrl - URL do APK (ex: GitHub releases)
+ * @param {string} version - Versão do APK (opcional)
+ */
+function sendAppUpdateCommand(deviceIds, apkUrl, version = 'latest') {
+    console.log('═══════════════════════════════════════════════');
+    console.log('📥 ENVIANDO COMANDO DE ATUALIZAÇÃO DE APK');
+    console.log('═══════════════════════════════════════════════');
+    console.log('Dispositivos:', deviceIds);
+    console.log('URL do APK:', apkUrl);
+    console.log('Versão:', version);
+    
+    const updateCommand = {
+        type: 'update_app',
+        data: {
+            apk_url: apkUrl,
+            version: version
+        },
+        timestamp: Date.now()
+    };
+    
+    let targetDevices = [];
+    
+    if (deviceIds === 'all') {
+        // Enviar para todos os dispositivos conectados
+        targetDevices = Array.from(connectedDevices.keys());
+        console.log(`📡 Enviando para TODOS os ${targetDevices.length} dispositivos conectados`);
+    } else if (Array.isArray(deviceIds)) {
+        targetDevices = deviceIds;
+        console.log(`🎯 Enviando para ${targetDevices.length} dispositivos específicos`);
+    } else if (typeof deviceIds === 'string') {
+        targetDevices = [deviceIds];
+        console.log(`🎯 Enviando para dispositivo específico: ${deviceIds}`);
+    }
+    
+    let successCount = 0;
+    let failedCount = 0;
+    const results = [];
+    
+    targetDevices.forEach(deviceId => {
+        const deviceWs = connectedDevices.get(deviceId);
+        
+        if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+            try {
+                deviceWs.send(JSON.stringify(updateCommand));
+                successCount++;
+                results.push({ deviceId, success: true, message: 'Comando enviado' });
+                console.log(`✅ Comando enviado para dispositivo: ${deviceId}`);
+            } catch (error) {
+                failedCount++;
+                results.push({ deviceId, success: false, message: error.message });
+                console.error(`❌ Erro ao enviar para ${deviceId}:`, error);
+            }
+        } else {
+            failedCount++;
+            const status = deviceWs ? `desconectado (${deviceWs.readyState})` : 'não encontrado';
+            results.push({ deviceId, success: false, message: status });
+            console.warn(`⚠️ Dispositivo ${deviceId} ${status}`);
+        }
+    });
+    
+    console.log('═══════════════════════════════════════════════');
+    console.log(`📊 Resultado: ${successCount} enviados, ${failedCount} falharam`);
+    console.log('═══════════════════════════════════════════════');
+    
+    return {
+        success: successCount > 0,
+        successCount,
+        failedCount,
+        total: targetDevices.length,
+        results
+    };
 }
 
 function handleGeofenceEvent(ws, data) {

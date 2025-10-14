@@ -80,15 +80,18 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
+            android:launchMode="singleInstance"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MDMLauncher.Launcher"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:alwaysRetainTaskState="true"
             android:clearTaskOnLaunch="false"
-            android:excludeFromRecents="true"
-            android:stateNotNeeded="true">
+            android:finishOnTaskLaunch="false"
+            android:excludeFromRecents="false"
+            android:stateNotNeeded="false"
+            android:taskAffinity=""
+            android:noHistory="false">
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -137,6 +140,17 @@
                 <action android:name="android.intent.action.PACKAGE_REMOVED" />
                 <action android:name="android.intent.action.PACKAGE_REPLACED" />
                 <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Broadcast Receiver para resultado de atualização automática -->
+        <receiver
+            android:name=".utils.AppUpdateReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.mdm.launcher.UPDATE_SUCCESS" />
+                <action android:name="com.mdm.launcher.UPDATE_FAILURE" />
             </intent-filter>
         </receiver>
 
