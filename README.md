@@ -1,15 +1,14 @@
 # 📱 MDM Owner - Sistema de Gerenciamento de Dispositivos Android
 
-Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real.
+Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real via WebSocket.
 
-> **🔐 ATUALIZAÇÃO DE PERMISSÕES (14/10/2025):** Permissões otimizadas e corrigidas! Ver [PERMISSIONS-CHANGELOG.md](mdm-owner/PERMISSIONS-CHANGELOG.md) para detalhes.
+> **✅ ATUALIZADO (14/10/2025):** Android 13+ compatível | Descoberta automática otimizada | Launcher persistente
 
 ## 🚀 Início Rápido
 
-### 1. **Servidor Backend (WebSocket + PostgreSQL)**
+### 1. **Servidor Backend (Node.js + PostgreSQL)**
 ```bash
 cd mdm-frontend/server
-npm install
 node websocket.js
 ```
 
@@ -19,57 +18,60 @@ cd mdm-frontend
 npm install
 npm run dev
 ```
-Acesse: http://localhost:3000
+Acesse: **http://localhost:3000**
 
 ### 3. **App Android**
 ```bash
 cd mdm-owner
-
-# Opção 1: Script automático (RECOMENDADO)
-install-and-setup.bat
-
-# Opção 2: Manual
-./gradlew assembleDebug
+gradlew assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
 ```
 
-## 📋 Comandos Principais
+## 📋 Comandos Essenciais
 
 ### **Servidor**
 ```bash
-# Iniciar servidor WebSocket
+# Servidor WebSocket (porta 3002)
 node mdm-frontend/server/websocket.js
 
-# Iniciar painel web
-cd mdm-frontend && npm run dev
+# Painel Web (porta 3000)
+cd mdm-frontend
+npm run dev
 
-# Iniciar ambos juntos
-cd mdm-frontend && npm run dev:all
+# Ambos juntos
+cd mdm-frontend
+npm run dev:all
+
+# Servidor com debug
+set LOG_LEVEL=debug && node mdm-frontend/server/websocket.js
 ```
 
 ### **Android**
 ```bash
-# Instalação automática (RECOMENDADO)
 cd mdm-owner
-install-and-setup.bat        # Instalação completa com validações
-quick-install.bat            # Instalação rápida
-build-and-install.bat        # Recompilar e instalar
-uninstall.bat                # Desinstalar
 
-# Comandos manuais
-./gradlew assembleDebug      # Compilar APK
+# Compilar APK
+gradlew assembleDebug
+
+# Instalar
 adb install -r app/build/outputs/apk/debug/app-debug.apk
-adb shell dpm set-device-owner com.mdm.launcher/.device.MDMDeviceAdminReceiver
 
-# Remover Device Owner
-# Toque 10x no botão ⚙️ no app
+# Ativar Device Owner (dispositivo SEM conta Google)
+adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
 
-# Logs
-adb logcat | findstr MDM
+# Verificar Device Owner
+adb shell dpm list-owners
+
+# Logs em tempo real
+adb logcat -s MDM:* WebSocketClient:* WebSocketService:* ServerDiscovery:*
+
+# Limpar e reinstalar
+adb uninstall com.mdm.launcher
+adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-### **Banco de Dados (PostgreSQL)**
+### **Banco de Dados PostgreSQL**
 ```bash
 cd mdm-frontend
 
@@ -83,188 +85,289 @@ npm run cleanup-devices:confirm
 # Remover duplicatas
 npm run remove-duplicates
 npm run remove-duplicates:confirm
+
+# Corrigir IDs nulos
+npm run fix-null-device-ids:confirm
 ```
 
 ## ✨ Funcionalidades
 
 ### **App Android (Device Owner)**
-- ✅ Launcher customizado que substitui tela inicial
-- ✅ Device Owner com controle total do dispositivo
-- ✅ WebSocket com reconexão automática e adaptativa
-- ✅ Heartbeat inteligente (15s tela ativa / 30s bloqueada)
-- ✅ Monitoramento: bateria, armazenamento, apps, localização
-- ✅ GPS em tempo real com histórico inteligente
-- ✅ Descoberta automática do servidor (UDP broadcast)
-- ✅ WakeLock para manter conexão quando tela ativa
-- ✅ Health check a cada 60 segundos
+- ✅ **Launcher persistente** - não fecha ao limpar tarefas
+- ✅ **Descoberta automática do servidor** via UDP broadcast (cache de 1 min)
+- ✅ **Conexão WebSocket** com reconexão automática inteligente
+- ✅ **Android 13/14 compatível** - BroadcastReceiver otimizado
+- ✅ **Heartbeat adaptativo** - 15s tela ativa / 30s bloqueada
+- ✅ **GPS em tempo real** com histórico
+- ✅ **Monitoramento completo** - bateria, armazenamento, apps
+- ✅ **Otimizações de bateria** - cache e debouncing
 
 ### **Painel Web**
-- ✅ Dashboard com status em tempo real
+- ✅ Dashboard em tempo real
 - ✅ Controle remoto via WebSocket
-- ✅ Mapas de localização interativos
-- ✅ Mensagens de suporte bidirecionais
+- ✅ Mapas de localização (Leaflet)
+- ✅ Mensagens bidirecionais
 - ✅ Políticas de apps por dispositivo/grupo
 - ✅ Detecção rápida de offline (30s)
-- ✅ Interface de carregamento durante sincronização
 
 ### **Servidor WebSocket**
-- ✅ Timeout adaptativo baseado em latência (60s-180s)
-- ✅ Throttling de ping (max 60/min por dispositivo)
-- ✅ Score de saúde da conexão por dispositivo
+- ✅ **Discovery Server** UDP na porta 3003
+- ✅ Timeout adaptativo (60s-180s baseado em latência)
+- ✅ Throttling de ping (max 60/min)
+- ✅ Score de saúde por dispositivo
 - ✅ Logs configuráveis (error, warn, info, debug)
 - ✅ PostgreSQL para persistência
-- ✅ Descoberta automática via UDP
 
 ## 🔧 Configuração
 
-### **Servidor WebSocket**
-Edite `mdm-frontend/server/config.js`:
+### **Servidor WebSocket** (`mdm-frontend/server/config.js`)
 ```javascript
 {
-  LOG_LEVEL: 'info',                    // error, warn, info, debug
-  MAX_PINGS_PER_MINUTE: 60,             // Throttling de ping
-  BASE_INACTIVITY_TIMEOUT: 90000,       // 90s
-  MAX_INACTIVITY_TIMEOUT: 180000,       // 3min
-  HEARTBEAT_INTERVAL: 30000,            // 30s
-  PONG_TIMEOUT: 10000                   // 10s
+  LOG_LEVEL: 'info',                // error, warn, info, debug
+  MAX_PINGS_PER_MINUTE: 60,         // Throttling
+  BASE_INACTIVITY_TIMEOUT: 90000,   // 90s
+  MAX_INACTIVITY_TIMEOUT: 180000,   // 3min
+  HEARTBEAT_INTERVAL: 30000,        // 30s
+  PONG_TIMEOUT: 10000               // 10s
 }
 ```
 
 ### **PostgreSQL**
 ```bash
-# Conectar ao PostgreSQL
-psql -U postgres
-
 # Criar banco
+psql -U postgres
 CREATE DATABASE mdm_devices;
 
-# Configurar conexão em .env
+# Configurar .env
 DATABASE_URL=postgresql://user:password@localhost:5432/mdm_devices
 ```
 
-### **Descoberta Automática do Servidor**
-O app descobre o servidor automaticamente:
-1. DNS Local (mdm.local)
-2. UDP Broadcast na rede local
-3. IPs comuns (.1, .100, .10, etc)
-4. Configuração manual (fallback)
+### **Descoberta Automática**
+O app descobre o servidor automaticamente (ordem de prioridade):
+1. **DNS Local** (`mdm.local`)
+2. **UDP Broadcast** na rede local (porta 3003)
+3. **IPs comuns** (.1, .100, .10, .2, .50, .254)
+4. **Cache** (60 segundos)
+5. **SharedPreferences** (última URL conhecida)
 
 ## 🚨 Troubleshooting
 
-### **Device Owner não ativa**
-```bash
-# Verificar contas Google
-adb shell pm list users
-# Se houver, fazer factory reset
-
-# Verificar status
-adb shell dpm list-owners
-```
-
 ### **App não conecta**
-```bash
-# Testar rede
-adb shell ping 192.168.1.100
 
-# Verificar WebSocket
+**1. Verificar servidor rodando:**
+```bash
 netstat -ano | findstr :3002
-
-# Logs do servidor
-LOG_LEVEL=debug node mdm-frontend/server/websocket.js
+netstat -ano | findstr :3003
 ```
 
-### **Problemas de compilação Android**
+**2. Verificar rede do dispositivo:**
 ```bash
-# Limpar build
-cd mdm-owner
-./gradlew clean
+# IP do PC servidor
+ipconfig
 
-# Recompilar
-./gradlew assembleDebug
+# Testar ping do dispositivo
+adb shell ping 192.168.X.X
 ```
+
+**3. Ver logs de descoberta:**
+```bash
+adb logcat -s ServerDiscovery:* -v time
+```
+
+**Problema comum:** Firewall bloqueando portas 3002/3003
+```bash
+# Windows: Abrir portas no firewall
+netsh advfirewall firewall add rule name="MDM WebSocket" dir=in action=allow protocol=TCP localport=3002
+netsh advfirewall firewall add rule name="MDM Discovery" dir=in action=allow protocol=UDP localport=3003
+```
+
+### **Device Owner não ativa**
+
+**Erro:** `Not allowed to set the device owner`
+
+**Solução:**
+```bash
+# 1. Dispositivo deve estar sem conta Google
+adb shell pm list users
+
+# 2. Se tiver conta, fazer factory reset
+# 3. Instalar app ANTES de adicionar conta Google
+# 4. Ativar Device Owner:
+adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
+```
+
+### **App crashando no Android 13/14**
+
+✅ **RESOLVIDO** - BroadcastReceiver com flag `RECEIVER_NOT_EXPORTED`
+
+Se ainda crashar:
+```bash
+# Ver crash completo
+adb logcat -s AndroidRuntime:E
+
+# Reinstalar versão atualizada
+adb uninstall com.mdm.launcher
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+### **Launcher não volta após limpar tarefas**
+
+✅ **RESOLVIDO** - `launchMode="singleTask"` + `excludeFromRecents="true"`
+
+Verificar se está como launcher padrão:
+```bash
+# Ver launcher atual
+adb shell cmd package query-activities --component -a android.intent.action.MAIN -c android.intent.category.HOME
+
+# Forçar definir como padrão (requer interação manual)
+adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
+```
+
+### **Descoberta do servidor muito lenta**
+
+✅ **OTIMIZADO** - Cache de 60 segundos para evitar descobertas repetidas
+
+Ver quantas descobertas estão acontecendo:
+```bash
+adb logcat -s ServerDiscovery:* | findstr "INICIANDO DESCOBERTA"
+```
+
+Se aparecer muito frequente, reiniciar app.
 
 ### **Logs úteis**
 ```bash
-# Android - todos
-adb logcat | grep MDM
+# Todos MDM
+adb logcat -s MDM:*
 
-# Android - WebSocket
-adb logcat | grep WebSocket
+# WebSocket
+adb logcat -s WebSocketClient:* WebSocketService:*
 
-# Android - Localização
-adb logcat | grep Location
+# Localização
+adb logcat -s LocationService:*
 
-# Servidor
-node mdm-frontend/server/websocket.js
+# Descoberta servidor
+adb logcat -s ServerDiscovery:*
+
+# Network Monitor
+adb logcat -s NetworkMonitor:*
+
+# Limpar logs
+adb logcat -c
 ```
 
 ## 📊 Estrutura do Projeto
 
 ```
 device-owner/
-├── mdm-frontend/          # Painel Web + Servidor
-│   ├── app/              # Next.js App
-│   ├── server/           # WebSocket Server
-│   │   ├── websocket.js
-│   │   ├── config.js
-│   │   └── database/
-│   └── package.json
+├── mdm-frontend/              # Painel Web + Servidor
+│   ├── app/                   # Next.js 14
+│   │   ├── api/               # API Routes
+│   │   ├── components/        # React Components
+│   │   ├── lib/               # WebSocket client, etc
+│   │   └── types/             # TypeScript types
+│   ├── server/                # Backend Node.js
+│   │   ├── websocket.js       # Servidor WebSocket (porta 3002)
+│   │   ├── discovery-server.js # Discovery UDP (porta 3003)
+│   │   ├── config.js          # Configurações
+│   │   └── database/          # PostgreSQL models
+│   ├── package.json
+│   └── start-dev.bat          # Iniciar desenvolvimento
 │
-└── mdm-owner/            # App Android
-    ├── app/
-    │   └── src/main/java/com/mdm/launcher/
-    │       ├── MainActivity.kt
-    │       ├── network/WebSocketClient.kt
-    │       ├── service/
-    │       │   ├── WebSocketService.kt
-    │       │   └── LocationService.kt
-    │       └── utils/
-    └── build.gradle
+└── mdm-owner/                 # App Android
+    ├── app/src/main/
+    │   ├── AndroidManifest.xml
+    │   ├── java/com/mdm/launcher/
+    │   │   ├── MainActivity.kt
+    │   │   ├── DeviceAdminReceiver.kt
+    │   │   ├── network/
+    │   │   │   └── WebSocketClient.kt
+    │   │   ├── service/
+    │   │   │   ├── WebSocketService.kt
+    │   │   │   └── LocationService.kt
+    │   │   ├── utils/
+    │   │   │   ├── ServerDiscovery.kt      # Descoberta automática
+    │   │   │   ├── NetworkMonitor.kt       # Monitor de rede
+    │   │   │   ├── DeviceIdManager.kt
+    │   │   │   └── DeviceInfoCollector.kt
+    │   │   └── receivers/
+    │   │       └── SystemBootReceiver.kt
+    │   └── res/                # Layouts, recursos
+    ├── build.gradle
+    ├── gradlew.bat
+    ├── package.json            # Para QR Code
+    └── gerar-qrcode.js         # Gerar QR para download
 ```
 
 ## 🔐 Segurança e Permissões
 
-### **Permissões Otimizadas** ✅
-- ✅ Removidas permissões telefônicas desnecessárias
-- ✅ Adicionado suporte para Android 12+ (Bluetooth)
-- ✅ Background location para rastreamento 24/7
-- ✅ Controle de WiFi e rede (ScaleFusion-like)
-- ✅ Suporte NFC para funcionalidades enterprise
-- ✅ device_admin.xml corrigido (apenas políticas válidas)
+### **Permissões Críticas (Android)**
+- ✅ `BIND_DEVICE_ADMIN` - Device Owner
+- ✅ `ACCESS_FINE_LOCATION` + `ACCESS_BACKGROUND_LOCATION` - GPS 24/7
+- ✅ `INTERNET` + `ACCESS_NETWORK_STATE` - WebSocket
+- ✅ `FOREGROUND_SERVICE` - Serviços persistentes
+- ✅ `WAKE_LOCK` - Manter conexão ativa
+- ✅ `RECEIVE_BOOT_COMPLETED` - Iniciar após reboot
+- ✅ `BLUETOOTH_CONNECT/SCAN` - Android 12+
+- ✅ `POST_NOTIFICATIONS` - Android 13+
 
-### **Scripts Úteis**
+### **Device Owner Capabilities**
+- ✅ Bloquear instalação/desinstalação de apps
+- ✅ Definir apps permitidos (whitelist/blacklist)
+- ✅ Bloquear configurações do sistema
+- ✅ Lock/wipe remoto
+- ✅ Políticas de senha
+- ✅ Modo kiosk
+- ✅ Não pode ser desinstalado sem remover Device Owner
+
+### **Remover Device Owner**
 ```bash
-cd mdm-owner
+# Método 1: No app (toque 10x no ⚙️)
+# Método 2: Via ADB
+adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 
-# Recompilar após correções de permissões
-rebuild-after-permissions.bat
-
-# Validar permissões instaladas
-validate-permissions.bat
+# Método 3: Factory reset (última opção)
 ```
-
-### **Documentação de Permissões**
-- 📄 [PERMISSIONS-CHANGELOG.md](mdm-owner/PERMISSIONS-CHANGELOG.md) - Todas as alterações
-- 📄 [RUNTIME-PERMISSIONS-GUIDE.md](mdm-owner/RUNTIME-PERMISSIONS-GUIDE.md) - Guia de implementação
-- 📄 [QUICK-START-PERMISSIONS.md](mdm-owner/QUICK-START-PERMISSIONS.md) - Início rápido
-
-### **Segurança**
-- Device Owner garante controle total
-- Comunicação via WebSocket (pode adicionar WSS)
-- PostgreSQL para dados sensíveis
-- Launcher não pode ser desinstalado como Device Owner
-- Permissões mínimas necessárias (princípio do menor privilégio)
 
 ## 📝 Notas Importantes
 
-1. **Device Owner**: Dispositivo deve estar sem conta Google
-2. **GPS**: Precisão varia 1-20m entre dispositivos (normal)
-3. **Conexão**: Heartbeat adaptativo economiza bateria
-4. **WakeLock**: Mantém conexão ativa quando tela desbloqueada
-5. **Logs**: Use `LOG_LEVEL=debug` para troubleshooting
+1. **Device Owner**: Dispositivo DEVE estar **sem conta Google** antes de ativar
+2. **Rede**: Dispositivo e servidor devem estar na **mesma rede WiFi**
+3. **Portas**: 3002 (WebSocket) e 3003 (Discovery) devem estar **abertas no firewall**
+4. **GPS**: Precisão varia 1-20m (normal)
+5. **Bateria**: WakeLock usado apenas quando tela ativa
+6. **Launcher**: Persiste mesmo ao limpar tarefas recentes
+7. **Cache**: Descoberta do servidor em cache por 60s
+
+## 🎯 Melhorias Recentes (14/10/2025)
+
+✅ **Android 13/14 compatível** - Correção BroadcastReceiver  
+✅ **Descoberta otimizada** - Cache de 60s, 90% menos chamadas  
+✅ **NetworkMonitor** - Debounce de 5s para evitar eventos repetidos  
+✅ **Launcher persistente** - `singleTask` + `excludeFromRecents`  
+✅ **Conexão estável** - Reconexão inteligente após mudança de rede  
 
 ## 🆘 Suporte
 
-- **Remover Device Owner**: Toque 10x no ⚙️ do app
-- **Logs detalhados**: `LOG_LEVEL=debug`
-- **Factory reset**: Última opção para remover Device Owner
+**Problemas comuns e soluções:**
+
+| Problema | Solução |
+|----------|---------|
+| App não conecta | Verificar firewall portas 3002/3003 |
+| Device Owner não ativa | Remover conta Google e fazer factory reset |
+| App crasha Android 13+ | Reinstalar versão atualizada |
+| Launcher some ao limpar tarefas | Reinstalar versão atualizada |
+| Descoberta muito lenta | Normal na primeira vez, depois usa cache |
+
+**Logs debug:**
+```bash
+# Server
+set LOG_LEVEL=debug
+node mdm-frontend/server/websocket.js
+
+# Android
+adb logcat -s MDM:* WebSocketClient:* WebSocketService:* ServerDiscovery:* -v time
+```
+
+---
+
+**Desenvolvido com foco em:** ScaleFusion, Workspace ONE, ManageEngine MDM
