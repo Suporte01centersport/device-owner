@@ -3,14 +3,15 @@ package com.mdm.launcher.utils
 import android.util.Log
 
 /**
- * Classe utilitária para logging com suporte a controle por BuildConfig
- * Em produção (release), apenas logs de WARN e ERROR são mostrados
+ * Classe utilitária para logging com suporte a controle manual
+ * Em produção (release), mudar para false para desabilitar logs DEBUG/VERBOSE
  */
 object Logger {
     private const val DEFAULT_TAG = "MDMLauncher"
     
-    // Controle global de logging (pode ser alterado em runtime se necessário)
-    // Por padrão, todos os logs estão habilitados. Em produção, setar para false
+    // Controle global de logging
+    // IMPORTANTE: Mudar para false em produção para melhor performance e segurança
+    // TODO: Integrar com BuildConfig.DEBUG quando disponível
     var isDebugMode = true
     
     fun v(tag: String = DEFAULT_TAG, message: String) {

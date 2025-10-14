@@ -20,12 +20,19 @@ class WebSocketService : Service() {
     private val binder = LocalBinder()
     private var webSocketClient: WebSocketClient? = null
     private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private var isServiceRunning = false
-    private var isInitializing = false // Flag para evitar múltiplas inicializações
+    @Volatile private var isServiceRunning = false
+    @Volatile private var isInitializing = false // Flag para evitar múltiplas inicializações
     private var healthCheckJob: Job? = null
-    private var isScreenActive = true // Estado da tela para heartbeat adaptativo
+    @Volatile private var isScreenActive = true // Estado da tela para heartbeat adaptativo
     private var networkMonitor: NetworkMonitor? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    
+    // Runnable para desativar modo manutenção (para poder cancelar timers antigos)
+    private var maintenanceRunnable: Runnable? = null
+    
+    // Lock para evitar race conditions com launchers
+    private val launcherLock = Object()
     
     // BroadcastReceiver para comandos internos
     private val commandReceiver = object : BroadcastReceiver() {
@@ -42,6 +49,22 @@ class WebSocketService : Service() {
                 "com.mdm.launcher.HEALTH_CHECK" -> {
                     Log.d(TAG, "🏥 Broadcast de health check recebido")
                     performHealthCheck()
+                }
+                "com.mdm.launcher.END_MAINTENANCE_INTERNAL" -> {
+                    Log.d(TAG, "🔧 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔧 BROADCAST INTERNO RECEBIDO: END_MAINTENANCE_INTERNAL")
+                    Log.d(TAG, "🔧 Processando desabilitação de launchers...")
+                    Log.d(TAG, "🔧 ═══════════════════════════════════════════════")
+                    
+                    // Cancelar o timer agendado
+                    maintenanceRunnable?.let {
+                        handler.removeCallbacks(it)
+                        maintenanceRunnable = null
+                        Log.d(TAG, "✅ Timer de manutenção cancelado")
+                    }
+                    
+                    // Desabilitar outros launchers
+                    disableOtherLaunchers()
                 }
             }
         }
@@ -69,6 +92,7 @@ class WebSocketService : Service() {
             addAction("com.mdm.launcher.NETWORK_CHANGE")
             addAction("com.mdm.launcher.FORCE_RECONNECT")
             addAction("com.mdm.launcher.HEALTH_CHECK")
+            addAction("com.mdm.launcher.END_MAINTENANCE_INTERNAL")
         }
         // Android 13+ requer especificar se o receiver é exportado ou não
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -126,6 +150,17 @@ class WebSocketService : Service() {
         // Cancelar health check
         healthCheckJob?.cancel()
         healthCheckJob = null
+        
+        // Cancelar timer de modo manutenção (se existir)
+        try {
+            maintenanceRunnable?.let {
+                handler.removeCallbacks(it)
+                maintenanceRunnable = null
+                Log.d(TAG, "Timer de modo manutenção cancelado")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao cancelar timer de modo manutenção", e)
+        }
         
         // Parar e limpar NetworkMonitor
         try {
@@ -406,6 +441,318 @@ class WebSocketService : Service() {
                     }
                     
                     Log.d(TAG, "🗑️ ═══════════════════════════════════════════════")
+                }
+                "open_settings" -> {
+                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
+                    Log.d(TAG, "⚙️ COMANDO: ABRIR CONFIGURAÇÕES")
+                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
+                    
+                    try {
+                        // CANCELAR TIMER ANTERIOR (se existir) para evitar múltiplos timers
+                        maintenanceRunnable?.let {
+                            handler.removeCallbacks(it)
+                            Log.d(TAG, "🗑️ Timer de manutenção anterior cancelado")
+                        }
+                        
+                        val data = jsonObject["data"] as? Map<*, *>
+                        var durationMinutes = (data?.get("duration_minutes") as? Number)?.toInt() ?: 5
+                        
+                        // VALIDAÇÃO: Limitar duração máxima para segurança
+                        if (durationMinutes < 1) {
+                            durationMinutes = 1
+                            Log.w(TAG, "⚠️ Duração ajustada para mínimo: 1 minuto")
+                        } else if (durationMinutes > 30) {
+                            durationMinutes = 30
+                            Log.w(TAG, "⚠️ Duração ajustada para máximo: 30 minutos")
+                        }
+                        
+                        Log.d(TAG, "🔧 Ativando modo manutenção por $durationMinutes minutos")
+                        
+                        // Ativar modo manutenção temporariamente
+                        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                        val expiryTime = System.currentTimeMillis() + (durationMinutes * 60 * 1000)
+                        
+                        prefs.edit()
+                            .putBoolean("maintenance_mode", true)
+                            .putLong("maintenance_expiry", expiryTime)
+                            .apply()
+                        
+                        Log.d(TAG, "✅ Modo manutenção ativado até ${java.text.SimpleDateFormat("HH:mm:ss").format(expiryTime)}")
+                        
+                        // Mostrar notificação informando que o launcher está desprotegido
+                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                        
+                        // Criar canal de notificação para Android 8+
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            val channel = android.app.NotificationChannel(
+                                "maintenance_mode",
+                                "Modo Manutenção",
+                                android.app.NotificationManager.IMPORTANCE_HIGH
+                            ).apply {
+                                description = "Notificações de modo manutenção"
+                            }
+                            notificationManager.createNotificationChannel(channel)
+                        }
+                        
+                        // Criar PendingIntent para abrir configurações ao clicar na notificação
+                        val settingsIntent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
+                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                        }
+                        
+                        val settingsPendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            android.app.PendingIntent.getActivity(
+                                this@WebSocketService,
+                                2001,
+                                settingsIntent,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                            )
+                        } else {
+                            @Suppress("DEPRECATION")
+                            android.app.PendingIntent.getActivity(
+                                this@WebSocketService,
+                                2001,
+                                settingsIntent,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                            )
+                        }
+                        
+                        // Criar PendingIntent para encerrar modo manutenção
+                        val endMaintenanceIntent = Intent("com.mdm.launcher.END_MAINTENANCE").apply {
+                            setPackage(packageName) // Garantir que o intent é direcionado ao nosso app
+                        }
+                        
+                        Log.d(TAG, "🔧 Criando PendingIntent para END_MAINTENANCE")
+                        Log.d(TAG, "   Package: $packageName")
+                        Log.d(TAG, "   Action: com.mdm.launcher.END_MAINTENANCE")
+                        
+                        val endMaintenancePendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                            // Android 12+ (API 31+) - usar FLAG_MUTABLE para broadcasts
+                            android.app.PendingIntent.getBroadcast(
+                                this@WebSocketService,
+                                2002,
+                                endMaintenanceIntent,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+                            )
+                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                            android.app.PendingIntent.getBroadcast(
+                                this@WebSocketService,
+                                2002,
+                                endMaintenanceIntent,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+                            )
+                        } else {
+                            @Suppress("DEPRECATION")
+                            android.app.PendingIntent.getBroadcast(
+                                this@WebSocketService,
+                                2002,
+                                endMaintenanceIntent,
+                                android.app.PendingIntent.FLAG_UPDATE_CURRENT
+                            )
+                        }
+                        
+                        Log.d(TAG, "✅ PendingIntent criado com sucesso")
+                        
+                        // Criar notificação
+                        val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            android.app.Notification.Builder(this@WebSocketService, "maintenance_mode")
+                        } else {
+                            @Suppress("DEPRECATION")
+                            android.app.Notification.Builder(this@WebSocketService)
+                        }
+                        
+                        val notification = notificationBuilder
+                            .setSmallIcon(android.R.drawable.ic_menu_manage)
+                            .setContentTitle("🔧 Modo Manutenção Ativo")
+                            .setContentText("Launcher desprotegido por $durationMinutes minutos. Toque no botão abaixo para encerrar.")
+                            .setStyle(android.app.Notification.BigTextStyle()
+                                .bigText("O launcher MDM está temporariamente desprotegido.\n\n" +
+                                        "✅ Você pode:\n" +
+                                        "• Abrir as Configurações do Android\n" +
+                                        "• Navegar entre apps livremente\n" +
+                                        "• Usar o botão HOME\n\n" +
+                                        "⏰ Expira em $durationMinutes minutos\n" +
+                                        "⏰ Às ${java.text.SimpleDateFormat("HH:mm").format(expiryTime)}\n\n" +
+                                        "👆 Toque no botão \"Encerrar Modo\" abaixo para desativar antecipadamente"))
+                            .addAction(
+                                android.R.drawable.ic_menu_close_clear_cancel,
+                                "🔒 Encerrar Modo",
+                                endMaintenancePendingIntent
+                            )
+                            .setAutoCancel(false)
+                            .setOngoing(true)
+                            .build()
+                        
+                        notificationManager.notify(2000, notification)
+                        
+                        Log.d(TAG, "📱 Notificação de modo manutenção mostrada ao usuário")
+                        
+                        // Reabilitar outros launchers temporariamente para permitir navegação
+                        // SINCRONIZADO para evitar race conditions
+                        Log.d(TAG, "🔍 Iniciando reabilitação de launchers...")
+                        synchronized(launcherLock) {
+                        try {
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                            val componentName = android.content.ComponentName(this@WebSocketService, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            
+                            Log.d(TAG, "🔍 Device Owner status: ${dpm.isDeviceOwnerApp(packageName)}")
+                            
+                            if (dpm.isDeviceOwnerApp(packageName)) {
+                                val pm = packageManager
+                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                    addCategory(Intent.CATEGORY_HOME)
+                                }
+                                
+                                // Buscar TODOS os pacotes que podem ser launchers, incluindo ocultos e desabilitados
+                                Log.d(TAG, "🔍 Buscando TODOS os launchers do sistema...")
+                                val allLaunchers = pm.queryIntentActivities(
+                                    homeIntent, 
+                                    android.content.pm.PackageManager.MATCH_ALL or 
+                                    android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS or
+                                    android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
+                                )
+                                Log.d(TAG, "🔍 Total de launchers encontrados (incluindo desabilitados): ${allLaunchers.size}")
+                                
+                                // Listar TODOS os pacotes do sistema para encontrar launchers conhecidos
+                                val knownLaunchers = listOf(
+                                    "com.android.launcher3",
+                                    "com.google.android.apps.nexuslauncher", 
+                                    "com.miui.home",
+                                    "com.huawei.android.launcher",
+                                    "com.oppo.launcher",
+                                    "com.coloros.launcher",
+                                    "com.realme.launcher",
+                                    "com.samsung.android.app.launcher",
+                                    "com.sec.android.app.launcher"
+                                )
+                                
+                                Log.d(TAG, "🔍 Verificando launchers conhecidos no sistema...")
+                                for (launcherPackage in knownLaunchers) {
+                                    try {
+                                        val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
+                                        Log.d(TAG, "  📦 $launcherPackage → oculto: $isHidden")
+                                    } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
+                                        Log.d(TAG, "  📦 $launcherPackage → NÃO INSTALADO")
+                                    } catch (e: Exception) {
+                                        Log.d(TAG, "  📦 $launcherPackage → erro: ${e.message}")
+                                    }
+                                }
+                                
+                                Log.d(TAG, "🔍 Tentando reabilitar launchers ocultos...")
+                                
+                                var reenabledCount = 0
+                                
+                                // Primeiro: Reabilitar launchers encontrados na query
+                                for (launcher in allLaunchers) {
+                                    val launcherPackage = launcher.activityInfo.packageName
+                                    Log.d(TAG, "🔍 Analisando launcher: $launcherPackage (é nosso? ${launcherPackage == packageName})")
+                                    
+                                    if (launcherPackage != packageName) {
+                                        try {
+                                            // Verificar se está oculto
+                                            val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
+                                            Log.d(TAG, "🔍 Launcher $launcherPackage está oculto? $isHidden")
+                                            
+                                            if (isHidden) {
+                                                // Reabilitar launcher
+                                                val result = dpm.setApplicationHidden(componentName, launcherPackage, false)
+                                                Log.d(TAG, "🔓 Tentativa de reabilitar $launcherPackage: sucesso=$result")
+                                                if (result) {
+                                                    reenabledCount++
+                                                }
+                                            } else {
+                                                Log.d(TAG, "ℹ️ Launcher $launcherPackage já está visível")
+                                            }
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "❌ Erro ao reabilitar launcher $launcherPackage", e)
+                                        }
+                                    }
+                                }
+                                
+                                // Segundo: Tentar reabilitar launchers conhecidos forçadamente
+                                Log.d(TAG, "🔍 Tentando reabilitar launchers conhecidos forçadamente...")
+                                for (launcherPackage in knownLaunchers) {
+                                    try {
+                                        val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
+                                        if (isHidden) {
+                                            val result = dpm.setApplicationHidden(componentName, launcherPackage, false)
+                                            Log.d(TAG, "🔓 Forçada reabilitação de $launcherPackage: sucesso=$result")
+                                            if (result) {
+                                                reenabledCount++
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        // Ignorar erros de pacotes não instalados
+                                    }
+                                }
+                                
+                                if (reenabledCount > 0) {
+                                    Log.d(TAG, "✅ Launchers reabilitados: $reenabledCount")
+                                    Log.d(TAG, "✅ Navegação livre permitida - pressione HOME para escolher launcher")
+                                } else {
+                                    Log.w(TAG, "⚠️ Nenhum launcher foi reabilitado!")
+                                    Log.w(TAG, "⚠️ Este dispositivo pode ter apenas 1 launcher de fábrica.")
+                                    Log.w(TAG, "💡 SOLUÇÃO: Pressione HOME e use a barra de navegação para acessar apps do sistema")
+                                }
+                            } else {
+                                Log.w(TAG, "⚠️ App não é Device Owner - não pode gerenciar launchers")
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "❌ ERRO CRÍTICO ao reabilitar launchers", e)
+                        }
+                        } // fim synchronized(launcherLock)
+                        
+                        // Criar e armazenar o Runnable para poder cancelá-lo depois
+                        maintenanceRunnable = Runnable {
+                            Log.d(TAG, "⏰ Tempo de manutenção expirado - desativando modo manutenção")
+                            prefs.edit()
+                                .putBoolean("maintenance_mode", false)
+                                .putLong("maintenance_expiry", 0)
+                                .apply()
+                            
+                            // Remover notificação
+                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                            notificationManager.cancel(2000)
+                            
+                            // Desabilitar outros launchers novamente
+                            disableOtherLaunchers()
+                            
+                            // Voltar ao launcher MDM
+                            val launcherIntent = Intent(this@WebSocketService, com.mdm.launcher.MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                            startActivity(launcherIntent)
+                            
+                            Log.d(TAG, "🏠 Voltando ao launcher MDM - proteção reativada")
+                        }
+                        
+                        // Agendar o Runnable armazenado
+                        handler.postDelayed(maintenanceRunnable!!, durationMinutes * 60 * 1000L)
+                        Log.d(TAG, "✅ Timer de desativação agendado para ${durationMinutes} minutos")
+                        
+                        // Enviar confirmação
+                        val confirmationMessage = mapOf(
+                            "type" to "settings_opened",
+                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
+                            "timestamp" to System.currentTimeMillis(),
+                            "success" to true,
+                            "expiresAt" to expiryTime
+                        )
+                        webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao abrir configurações", e)
+                        
+                        val errorMessage = mapOf(
+                            "type" to "settings_opened",
+                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
+                            "timestamp" to System.currentTimeMillis(),
+                            "success" to false,
+                            "error" to e.message
+                        )
+                        webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                    }
+                    
+                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
                 }
                 "update_app" -> {
                     Log.d(TAG, "📥 ═══════════════════════════════════════════════")
@@ -893,6 +1240,51 @@ class WebSocketService : Service() {
                 if (wakeLock?.isHeld == true) {
                     wakeLock?.release()
                 }
+            }
+        }
+    }
+    
+    /**
+     * Desabilita outros launchers para garantir que o MDM Launcher seja o único
+     */
+    private fun disableOtherLaunchers() {
+        synchronized(launcherLock) {
+            try {
+                val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                val componentName = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                
+                if (dpm.isDeviceOwnerApp(packageName)) {
+                    val pm = packageManager
+                    val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_HOME)
+                    }
+                    
+                    val allLaunchers = pm.queryIntentActivities(homeIntent, android.content.pm.PackageManager.MATCH_ALL)
+                    Log.d(TAG, "🔍 Desabilitando ${allLaunchers.size - 1} launchers...")
+                    
+                    var disabledCount = 0
+                    for (launcher in allLaunchers) {
+                        val launcherPackage = launcher.activityInfo.packageName
+                        if (launcherPackage != packageName) {
+                            try {
+                                // Desabilitar outros launchers novamente
+                                val result = dpm.setApplicationHidden(componentName, launcherPackage, true)
+                                Log.d(TAG, "🔒 Launcher $launcherPackage desabilitado: sucesso=$result")
+                                if (result) {
+                                    disabledCount++
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ Erro ao desabilitar launcher $launcherPackage", e)
+                            }
+                        }
+                    }
+                    Log.d(TAG, "✅ Launchers desabilitados: $disabledCount de ${allLaunchers.size - 1}")
+                    Log.d(TAG, "✅ Proteção reativada - MDM Launcher é o único disponível")
+                } else {
+                    Log.w(TAG, "⚠️ App não é Device Owner - não pode gerenciar launchers")
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ ERRO CRÍTICO ao desabilitar launchers", e)
             }
         }
     }

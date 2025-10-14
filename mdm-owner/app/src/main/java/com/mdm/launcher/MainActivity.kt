@@ -535,6 +535,7 @@ class MainActivity : AppCompatActivity() {
             hideMessageModal()
         }
         
+        // Botão OK - apenas fecha o modal
         messageModal?.findViewById<Button>(R.id.btn_ok)?.setOnClickListener {
             hideMessageModal()
         }
@@ -906,7 +907,9 @@ class MainActivity : AppCompatActivity() {
             val networkRequest = NetworkRequest.Builder()
                 .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
                 .build()
-            connectivityManager?.registerNetworkCallback(networkRequest, networkCallback!!)
+            networkCallback?.let { callback ->
+                connectivityManager?.registerNetworkCallback(networkRequest, callback)
+            }
         }
     }
     
@@ -2812,68 +2815,90 @@ class MainActivity : AppCompatActivity() {
     /**
      * Garantir que este app é o launcher padrão
      * Usar Device Owner para forçar permanentemente
+     * EXCETO se estiver em modo manutenção (acesso às configurações)
      */
     private fun ensureDefaultLauncher() {
         try {
+            // Verificar se está em modo manutenção
+            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
+            val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
+            val now = System.currentTimeMillis()
+            
+            if (maintenanceMode && now < maintenanceExpiry) {
+                Log.d(TAG, "🔧 Modo manutenção ativo - launcher desprotegido temporariamente")
+                Log.d(TAG, "⏱️ Expira em ${(maintenanceExpiry - now) / 1000} segundos")
+                return // Não forçar retorno ao launcher
+            } else if (maintenanceMode && now >= maintenanceExpiry) {
+                // Modo manutenção expirou - desativar
+                Log.d(TAG, "⏰ Modo manutenção expirou - reativando proteção")
+                prefs.edit()
+                    .putBoolean("maintenance_mode", false)
+                    .putLong("maintenance_expiry", 0)
+                    .apply()
+            }
+            
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
             
             if (dpm.isDeviceOwnerApp(packageName)) {
-                Log.d(TAG, "✅ App é Device Owner - verificando configuração de launcher")
+                Log.d(TAG, "✅ App é Device Owner - garantindo exclusividade de launcher")
                 
-                // Verificar se ainda somos o launcher padrão
                 val packageManager = packageManager
                 val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
                 }
                 
-                val resolveInfos = packageManager.queryIntentActivities(
-                    homeIntent,
-                    PackageManager.MATCH_DEFAULT_ONLY
-                )
-                
-                val currentLauncher = if (resolveInfos.isNotEmpty()) {
-                    resolveInfos[0].activityInfo.packageName
-                } else {
-                    null
-                }
-                
-                if (currentLauncher != packageName) {
-                    Log.w(TAG, "⚠️ Launcher padrão mudou para: $currentLauncher - tentando restaurar")
+                // SEMPRE desabilitar outros launchers, não apenas quando o launcher muda
+                // Isso garante que o MDM Launcher seja o único disponível
+                try {
+                    val allLaunchers = packageManager.queryIntentActivities(
+                        homeIntent,
+                        PackageManager.MATCH_ALL
+                    )
                     
-                    // Como Device Owner, podemos bloquear a mudança de launcher
-                    // Desabilitar outros launchers (exceto o nosso)
-                    try {
-                        val allLaunchers = packageManager.queryIntentActivities(
-                            homeIntent,
-                            PackageManager.MATCH_ALL
-                        )
-                        
-                        for (launcher in allLaunchers) {
-                            val launcherPackage = launcher.activityInfo.packageName
-                            if (launcherPackage != packageName) {
-                                try {
-                                    // Ocultar outros launchers
-                                    dpm.setApplicationHidden(componentName, launcherPackage, true)
-                                    Log.d(TAG, "🔒 Launcher desabilitado: $launcherPackage")
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Erro ao desabilitar launcher $launcherPackage", e)
+                    Log.d(TAG, "🔍 Verificando ${allLaunchers.size} launchers no sistema...")
+                    var hiddenCount = 0
+                    var alreadyHiddenCount = 0
+                    
+                    for (launcher in allLaunchers) {
+                        val launcherPackage = launcher.activityInfo.packageName
+                        if (launcherPackage != packageName) {
+                            try {
+                                // Verificar se já está oculto
+                                val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
+                                
+                                if (!isHidden) {
+                                    // Ocultar launcher
+                                    val result = dpm.setApplicationHidden(componentName, launcherPackage, true)
+                                    if (result) {
+                                        hiddenCount++
+                                        Log.d(TAG, "🔒 Launcher desabilitado: $launcherPackage")
+                                    } else {
+                                        Log.w(TAG, "⚠️ Falha ao desabilitar: $launcherPackage")
+                                    }
+                                } else {
+                                    alreadyHiddenCount++
+                                    Log.d(TAG, "ℹ️ Launcher já desabilitado: $launcherPackage")
                                 }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "❌ Erro ao desabilitar launcher $launcherPackage", e)
                             }
                         }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao listar launchers", e)
                     }
                     
-                    // Forçar seleção do nosso launcher
-                    val launcherIntent = Intent(Intent.ACTION_MAIN).apply {
-                        addCategory(Intent.CATEGORY_HOME)
-                        setPackage(packageName)
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    if (hiddenCount > 0) {
+                        Log.d(TAG, "✅ Desabilitou $hiddenCount launcher(s) adicional(is)")
                     }
-                    startActivity(launcherIntent)
-                } else {
-                    Log.d(TAG, "✅ MDM Launcher é o launcher padrão")
+                    if (alreadyHiddenCount > 0) {
+                        Log.d(TAG, "ℹ️ $alreadyHiddenCount launcher(s) já estavam desabilitados")
+                    }
+                    if (hiddenCount == 0 && alreadyHiddenCount == 0 && allLaunchers.size == 1) {
+                        Log.d(TAG, "✅ MDM Launcher é o único launcher disponível no sistema")
+                    }
+                    
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro ao gerenciar launchers", e)
                 }
             } else {
                 Log.w(TAG, "⚠️ App não é Device Owner - não pode forçar launcher padrão")
