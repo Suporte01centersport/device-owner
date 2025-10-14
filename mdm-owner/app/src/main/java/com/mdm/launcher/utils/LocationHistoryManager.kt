@@ -39,9 +39,13 @@ object LocationHistoryManager {
     private val gson = Gson()
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault())
     
+    // Lock para sincronização de acesso concorrente
+    private val lock = Any()
+    
     fun saveLocation(context: Context, location: Location, address: String? = null) {
-        try {
-            val history = loadLocationHistory(context)
+        synchronized(lock) {
+            try {
+                val history = loadLocationHistory(context)
             val lastLocation = history.maxByOrNull { it.timestamp }
             
             // Verificar se deve salvar baseado na distância inteligente
@@ -87,26 +91,29 @@ object LocationHistoryManager {
                 .putString("history", json)
                 .apply()
             
-            Log.d(TAG, "📍 Localização salva no histórico: ${entry.latitude}, ${entry.longitude} (${history.size} entradas)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao salvar localização no histórico", e)
+                Log.d(TAG, "📍 Localização salva no histórico: ${entry.latitude}, ${entry.longitude} (${history.size} entradas)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao salvar localização no histórico", e)
+            }
         }
     }
     
     fun loadLocationHistory(context: Context): MutableList<LocationEntry> {
-        return try {
-            val json = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .getString("history", null)
-            
-            if (json != null) {
-                val type = object : TypeToken<MutableList<LocationEntry>>() {}.type
-                gson.fromJson(json, type) ?: mutableListOf()
-            } else {
+        synchronized(lock) {
+            return try {
+                val json = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                    .getString("history", null)
+                
+                if (json != null) {
+                    val type = object : TypeToken<MutableList<LocationEntry>>() {}.type
+                    gson.fromJson(json, type) ?: mutableListOf()
+                } else {
+                    mutableListOf()
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao carregar histórico de localização", e)
                 mutableListOf()
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao carregar histórico de localização", e)
-            mutableListOf()
         }
     }
     
@@ -138,34 +145,38 @@ object LocationHistoryManager {
     }
     
     fun clearOldEntries(context: Context) {
-        try {
-            val history = loadLocationHistory(context)
-            val cutoffTime = System.currentTimeMillis() - (MAX_AGE_DAYS * 24 * 60 * 60 * 1000)
-            
-            val filteredHistory = history.filter { it.timestamp >= cutoffTime }
-            
-            val json = gson.toJson(filteredHistory)
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .putString("history", json)
-                .apply()
-            
-            Log.d(TAG, "Entradas antigas removidas: ${history.size - filteredHistory.size}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao limpar entradas antigas", e)
+        synchronized(lock) {
+            try {
+                val history = loadLocationHistory(context)
+                val cutoffTime = System.currentTimeMillis() - (MAX_AGE_DAYS * 24 * 60 * 60 * 1000)
+                
+                val filteredHistory = history.filter { it.timestamp >= cutoffTime }
+                
+                val json = gson.toJson(filteredHistory)
+                context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("history", json)
+                    .apply()
+                
+                Log.d(TAG, "Entradas antigas removidas: ${history.size - filteredHistory.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao limpar entradas antigas", e)
+            }
         }
     }
     
     fun clearAllHistory(context: Context) {
-        try {
-            context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-                .edit()
-                .remove("history")
-                .apply()
-            
-            Log.d(TAG, "🗑️ Histórico de localização completamente limpo")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao limpar histórico", e)
+        synchronized(lock) {
+            try {
+                context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("history")
+                    .apply()
+                
+                Log.d(TAG, "🗑️ Histórico de localização completamente limpo")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao limpar histórico", e)
+            }
         }
     }
     

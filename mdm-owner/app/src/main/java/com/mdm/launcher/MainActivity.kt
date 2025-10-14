@@ -2977,37 +2977,72 @@ class MainActivity : AppCompatActivity() {
         }
         
         isActivityDestroyed = true
+        
+        // Liberar WakeLock
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock liberado no onDestroy")
+                }
+            }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao liberar WakeLock", e)
+        }
+        
+        // Parar rastreamento e monitoramento
         stopLocationTracking()
         stopNetworkMonitoring()
         stopPeriodicSync()
         
         // Parar NetworkMonitor
-        networkMonitor?.destroy()
-        networkMonitor = null
+        try {
+            networkMonitor?.destroy()
+            networkMonitor = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao destruir NetworkMonitor", e)
+        }
         
         // Desregistrar BroadcastReceiver
         try {
             unregisterReceiver(serviceMessageReceiver)
-            Log.d(TAG, "✅ BroadcastReceiver desregistrado")
+            Log.d(TAG, "BroadcastReceiver desregistrado")
         } catch (e: Exception) {
-            Log.w(TAG, "Erro ao desregistrar BroadcastReceiver (pode já estar desregistrado)", e)
+            Log.w(TAG, "Erro ao desregistrar BroadcastReceiver", e)
         }
         
         // Desconectar do serviço
-        if (isServiceBound) {
-            unbindService(serviceConnection)
-            isServiceBound = false
+        try {
+            if (isServiceBound) {
+                unbindService(serviceConnection)
+                isServiceBound = false
+                Log.d(TAG, "Serviço desvinculado")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desvincular serviço", e)
         }
         
-        // WebSocketClient removido - usando apenas WebSocketService
-        scope.cancel()
+        // Cancelar coroutines
+        try {
+            scope.cancel()
+            Log.d(TAG, "CoroutineScope cancelado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao cancelar scope", e)
+        }
         
         // Limpar modal de mensagem
-        messageModal?.let { modal ->
-            val rootLayout = findViewById<ViewGroup>(android.R.id.content)
-            rootLayout.removeView(modal)
+        try {
+            messageModal?.let { modal ->
+                val rootLayout = findViewById<ViewGroup>(android.R.id.content)
+                rootLayout.removeView(modal)
+            }
+            messageModal = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar modal", e)
         }
-        messageModal = null
+        
+        Log.d(TAG, "MainActivity cleanup completo")
     }
     
     private fun stopNetworkMonitoring() {

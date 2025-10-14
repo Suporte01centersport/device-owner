@@ -120,31 +120,62 @@ class WebSocketService : Service() {
     }
     
     override fun onDestroy() {
-        Log.d(TAG, "WebSocketService destruído")
+        Log.d(TAG, "WebSocketService sendo destruído - iniciando cleanup...")
         isServiceRunning = false
-        healthCheckJob?.cancel()
         
-        // Parar monitoramento de rede
-        networkMonitor?.stopMonitoring()
-        networkMonitor?.destroy()
-        networkMonitor = null
+        // Cancelar health check
+        healthCheckJob?.cancel()
+        healthCheckJob = null
+        
+        // Parar e limpar NetworkMonitor
+        try {
+            networkMonitor?.stopMonitoring()
+            networkMonitor?.destroy()
+            networkMonitor = null
+            Log.d(TAG, "NetworkMonitor limpo")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar NetworkMonitor", e)
+        }
         
         // Desregistrar BroadcastReceiver
         try {
             unregisterReceiver(commandReceiver)
+            Log.d(TAG, "BroadcastReceiver desregistrado")
         } catch (e: Exception) {
             Log.w(TAG, "Erro ao desregistrar receiver", e)
         }
         
         // Liberar WakeLock
-        wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
+        try {
+            wakeLock?.let {
+                if (it.isHeld) {
+                    it.release()
+                    Log.d(TAG, "WakeLock liberado")
+                }
             }
+            wakeLock = null
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao liberar WakeLock", e)
         }
         
-        webSocketClient?.disconnect()
-        serviceScope.cancel()
+        // Cleanup WebSocket
+        try {
+            webSocketClient?.cleanup()
+            webSocketClient = null
+            Log.d(TAG, "WebSocketClient limpo")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar WebSocketClient", e)
+        }
+        
+        // Cancelar scope de coroutines
+        try {
+            serviceScope.cancel()
+            Log.d(TAG, "ServiceScope cancelado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao cancelar serviceScope", e)
+        }
+        
+        Log.d(TAG, "WebSocketService cleanup completo")
         super.onDestroy()
     }
     
