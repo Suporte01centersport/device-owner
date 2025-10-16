@@ -178,7 +178,7 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onConfirm }:
                         )}
                       </div>
                       <div className="text-sm text-muted mt-1">
-                        {device.model} • Android {device.androidVersion} • Bateria: {device.battery}%
+                        {device.model} • Android {device.androidVersion} • Bateria: {device.batteryLevel}%
                       </div>
                     </div>
                   </label>
