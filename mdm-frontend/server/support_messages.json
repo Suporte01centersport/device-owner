@@ -1,0 +1,98 @@
+[
+  {
+    "id": "support_1759844947554_kb9w3053l",
+    "deviceId": "182f2a496fa5e897",
+    "deviceName": "Google sdk_gphone64_x86_64",
+    "message": "gfhhgf",
+    "timestamp": 1759844946613,
+    "androidVersion": "16",
+    "model": "sdk_gphone64_x86_64",
+    "receivedAt": 1759844947554,
+    "status": "resolved",
+    "updatedAt": 1759844976722
+  },
+  {
+    "id": "support_1760106461377_9a5658mhy",
+    "deviceId": "fd07ff3c3f98639c",
+    "deviceName": "realme RMX3933",
+    "message": "Ggh",
+    "timestamp": 1760106459924,
+    "androidVersion": "15",
+    "model": "RMX3933",
+    "receivedAt": 1760106461377,
+    "status": "resolved",
+    "updatedAt": 1760106466755
+  },
+  {
+    "id": "support_1760119286175_qnqa3a891",
+    "deviceId": "fd07ff3c3f98639c",
+    "deviceName": "realme RMX3933",
+    "message": "Dhd",
+    "timestamp": 1760119284801,
+    "androidVersion": "15",
+    "model": "RMX3933",
+    "receivedAt": 1760119286175,
+    "status": "resolved",
+    "updatedAt": 1760119306671
+  },
+  {
+    "id": "support_1760125331677_hp1961jn9",
+    "deviceId": "fd07ff3c3f98639c",
+    "deviceName": "Celular2",
+    "message": "Teste",
+    "timestamp": 1760125331418,
+    "androidVersion": "15",
+    "model": "RMX3933",
+    "receivedAt": 1760125331677,
+    "status": "resolved",
+    "updatedAt": 1760125575232
+  },
+  {
+    "id": "support_1760125607416_ovvnk9hyh",
+    "deviceId": "ad0a3577214bbb1f",
+    "deviceName": "Celular1",
+    "message": "Heheh",
+    "timestamp": 1760125607106,
+    "androidVersion": "13",
+    "model": "RMX3834",
+    "receivedAt": 1760125607416,
+    "status": "resolved",
+    "updatedAt": 1760126278740
+  },
+  {
+    "id": "support_1760129604679_bsk0t1h54",
+    "deviceId": "ad0a3577214bbb1f",
+    "deviceName": "Celular1",
+    "message": "Gyi",
+    "timestamp": 1760129604370,
+    "androidVersion": "13",
+    "model": "RMX3834",
+    "receivedAt": 1760129604679,
+    "status": "resolved",
+    "updatedAt": 1760129614298
+  },
+  {
+    "id": "support_1760129643951_1302k79nx",
+    "deviceId": "ad0a3577214bbb1f",
+    "deviceName": "Teste nome",
+    "message": "Eudu",
+    "timestamp": 1760129643648,
+    "androidVersion": "13",
+    "model": "RMX3834",
+    "receivedAt": 1760129643951,
+    "status": "resolved",
+    "updatedAt": 1760345936024
+  },
+  {
+    "id": "support_1760465172554_er4123u2z",
+    "deviceId": "2b6cc815965f3806",
+    "deviceName": "realme RMX3933",
+    "message": "Giv",
+    "timestamp": 1760465172232,
+    "androidVersion": "15",
+    "model": "RMX3933",
+    "receivedAt": 1760465172554,
+    "status": "read",
+    "updatedAt": 1760465183592
+  }
+]
