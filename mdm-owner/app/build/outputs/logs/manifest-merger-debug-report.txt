@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-139:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-139:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-139:12
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-139:12
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-211:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-211:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-211:12
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:2:1-211:12
 MERGED from [androidx.databinding:viewbinding:8.1.4] C:\Users\admin\.gradle\caches\transforms-3\aac47b4351775c438be9bcc08e326473\transformed\viewbinding-8.1.4\AndroidManifest.xml:2:1-7:12
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\admin\.gradle\caches\transforms-3\f886aa54234d9474d31211f594ef8604\transformed\constraintlayout-2.1.4\AndroidManifest.xml:2:1-11:12
@@ -17,6 +17,9 @@ MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\adm
 MERGED from [androidx.emoji2:emoji2-views-helper:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\edfc859765bfd8d1dee666089f989061\transformed\emoji2-views-helper-1.2.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:17:1-35:12
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\admin\.gradle\caches\transforms-3\b2eee46bd9f1e0d00374c9dd56d561c7\transformed\savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.work:work-runtime-ktx:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\716a72eb48b3691adfa39fcafa77d22e\transformed\work-runtime-ktx-2.9.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:17:1-145:12
+MERGED from [androidx.lifecycle:lifecycle-service:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a5f59f05a569d4df74238064dc50f0e2\transformed\lifecycle-service-2.7.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a1f9a719f18dc616242305f79bd165da\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:17:1-35:12
 MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\2e0326fc6aaf0f148b6ebcf9cfc315be\transformed\lifecycle-livedata-core-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
@@ -38,6 +41,8 @@ MERGED from [androidx.lifecycle:lifecycle-runtime:2.7.0] C:\Users\admin\.gradle\
 MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\2cba2390c4ae302d34dfc85f089067ea\transformed\lifecycle-viewmodel-2.7.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.lifecycle:lifecycle-livedata-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\8154d4536de802de383f8e9d6245e591\transformed\lifecycle-livedata-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\eda49eaeac6a01581e1655bd25543c4b\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\d59558a8a0219f91c870207e3cc35d02\transformed\room-ktx-2.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:17:1-31:12
 MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\2a37f3f32c2783966bb14fed8f7c050c\transformed\cardview-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.enterprise:enterprise-feedback:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\cb39423363c3832727c888bbc7986a42\transformed\enterprise-feedback-1.0.0\AndroidManifest.xml:2:1-9:12
 MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\5e2dc5b26d00599019f85ce81968a45f\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
@@ -47,9 +52,11 @@ MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.g
 MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\admin\.gradle\caches\transforms-3\c7c53497e58d46e37e9706ad9aa08261\transformed\startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
 MERGED from [androidx.tracing:tracing:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\62c3b5f0a6aa838f5fd27533d60eb232\transformed\tracing-1.0.0\AndroidManifest.xml:17:1-24:12
 MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\admin\.gradle\caches\transforms-3\c96ffacf0b2a1d4d9fa5d7777ac9e002\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\b67252396667ac911b95525561301766\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\50146a4b5c13b9372965dc0087ddcc19\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\fe1be72de5acf26ba4778c8bba88a4a7\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.print:print:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\b12164d51816564a3fa7e224a4608154\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\ba500a07a49d12ad129dc7aa956b1796\transformed\sqlite-2.3.0\AndroidManifest.xml:17:1-22:12
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\52bb2409b4dbc51bb46e24e06de45831\transformed\annotation-experimental-1.3.0\AndroidManifest.xml:17:1-22:12
 	package
 		INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml
@@ -73,143 +80,207 @@ uses-permission#android.permission.WRITE_SETTINGS
 ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:8:5-73
 	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:8:22-70
-uses-permission#android.permission.MODIFY_PHONE_STATE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:9:5-77
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:9:22-74
 uses-permission#android.permission.INTERNET
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:10:5-67
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:9:5-67
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:10:22-64
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:9:22-64
 uses-permission#android.permission.ACCESS_NETWORK_STATE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:11:5-79
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:10:5-79
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:24:5-79
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:24:5-79
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:11:22-76
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:10:22-76
 uses-permission#android.permission.ACCESS_WIFI_STATE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:11:5-76
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:11:22-73
+uses-permission#android.permission.CHANGE_WIFI_STATE
 ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:12:5-76
 	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:12:22-73
-uses-permission#android.permission.ACCESS_FINE_LOCATION
+uses-permission#android.permission.CHANGE_NETWORK_STATE
 ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:13:5-79
 	android:name
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:13:22-76
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:14:5-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:14:22-76
 uses-permission#android.permission.ACCESS_COARSE_LOCATION
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:14:5-81
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:15:5-81
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:14:22-78
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:15:22-78
+uses-permission#android.permission.ACCESS_BACKGROUND_LOCATION
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:16:5-85
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:16:22-82
 uses-permission#android.permission.BLUETOOTH
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:15:5-68
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:19:5-95
+	android:maxSdkVersion
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:19:66-92
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:15:22-65
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:19:22-65
 uses-permission#android.permission.BLUETOOTH_ADMIN
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:16:5-74
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:20:5-101
+	android:maxSdkVersion
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:20:72-98
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:16:22-71
-uses-permission#android.permission.CAMERA
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:17:5-65
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:20:22-71
+uses-permission#android.permission.BLUETOOTH_CONNECT
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:5-76
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:17:22-62
-uses-permission#android.permission.RECORD_AUDIO
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:18:5-71
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:22-73
+uses-permission#android.permission.BLUETOOTH_SCAN
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:5-23:58
+	android:usesPermissionFlags
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:9-55
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:18:22-68
-uses-permission#android.permission.READ_PHONE_STATE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:19:5-75
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:22-70
+uses-permission#android.permission.NFC
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:5-62
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:19:22-72
-uses-permission#android.permission.READ_PRIVILEGED_PHONE_STATE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:20:5-86
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:22-59
+uses-permission#android.permission.NFC_PREFERRED_PAYMENT_INFO
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:5-85
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:20:22-83
-uses-permission#android.permission.READ_PHONE_NUMBERS
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:5-77
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:22-82
+uses-feature#android.hardware.bluetooth
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:5-88
+	android:required
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:61-85
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:21:22-74
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:19-60
+uses-feature#android.hardware.bluetooth_le
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:5-91
+	android:required
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:64-88
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:19-63
+uses-feature#android.hardware.nfc
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:5-82
+	android:required
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:55-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:19-54
+uses-feature#android.hardware.location.gps
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:5-90
+	android:required
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:64-87
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:19-63
+uses-feature#android.hardware.wifi
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:5-82
+	android:required
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:56-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:19-55
 uses-permission#android.permission.READ_EXTERNAL_STORAGE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:5-80
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:5-41:38
+	android:maxSdkVersion
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:9-35
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:22:22-77
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:22-77
 uses-permission#android.permission.WRITE_EXTERNAL_STORAGE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:5-81
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:42:5-43:38
+	android:maxSdkVersion
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:9-35
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:23:22-78
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:42:22-78
 uses-permission#android.permission.QUERY_ALL_PACKAGES
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:24:5-77
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:5-77
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:24:22-74
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:22-74
 uses-permission#android.permission.PACKAGE_USAGE_STATS
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:5-78
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:45:5-78
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:25:22-75
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:45:22-75
 uses-permission#android.permission.SYSTEM_ALERT_WINDOW
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:5-78
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:46:5-78
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:26:22-75
-uses-permission#android.permission.DISABLE_KEYGUARD
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:5-75
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:27:22-72
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:46:22-75
 uses-permission#android.permission.WAKE_LOCK
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:5-68
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:47:5-68
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:23:5-68
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:23:5-68
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:28:22-65
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:47:22-65
 uses-permission#android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:5-95
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:48:5-95
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:29:22-92
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:48:22-92
 uses-permission#android.permission.FOREGROUND_SERVICE
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:5-77
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:49:5-77
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:26:5-77
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:26:5-77
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:30:22-74
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:49:22-74
 uses-permission#android.permission.FOREGROUND_SERVICE_DATA_SYNC
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:5-87
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:50:5-87
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:31:22-84
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:50:22-84
+uses-permission#android.permission.FOREGROUND_SERVICE_LOCATION
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:51:5-86
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:51:22-83
 uses-permission#android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:5-100
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:52:5-100
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:32:22-97
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:52:22-97
 uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:5-81
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:53:5-81
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:25:5-81
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:25:5-81
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:33:22-78
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:53:22-78
 uses-permission#android.permission.POST_NOTIFICATIONS
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:5-77
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:54:5-77
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:34:22-74
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:54:22-74
+uses-permission#android.permission.SCHEDULE_EXACT_ALARM
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:55:5-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:55:22-76
+uses-permission#android.permission.USE_EXACT_ALARM
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:56:5-74
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:56:22-71
 uses-permission#android.permission.INSTALL_PACKAGES
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:5-75
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:59:5-75
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:37:22-72
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:59:22-72
 uses-permission#android.permission.DELETE_PACKAGES
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:38:5-74
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:60:5-74
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:38:22-71
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:60:22-71
 uses-permission#android.permission.CLEAR_APP_USER_DATA
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:39:5-78
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:61:5-78
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:39:22-75
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:61:22-75
 uses-permission#android.permission.SET_WALLPAPER
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:5-72
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:62:5-72
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:40:22-69
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:62:22-69
 uses-permission#android.permission.SET_WALLPAPER_HINTS
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:5-78
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:5-78
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:41:22-75
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:22-75
 application
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:5-137:19
-INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:43:5-137:19
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-209:19
+INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:5-209:19
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:22:5-20
 MERGED from [com.google.android.material:material:1.10.0] C:\Users\admin\.gradle\caches\transforms-3\c69f8f39c689375408e03ed021e3dd8e\transformed\material-1.10.0\AndroidManifest.xml:22:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\admin\.gradle\caches\transforms-3\f886aa54234d9474d31211f594ef8604\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
 MERGED from [androidx.constraintlayout:constraintlayout:2.1.4] C:\Users\admin\.gradle\caches\transforms-3\f886aa54234d9474d31211f594ef8604\transformed\constraintlayout-2.1.4\AndroidManifest.xml:9:5-20
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:28:5-143:19
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:28:5-143:19
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:23:5-33:19
 MERGED from [androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:28:5-89
 MERGED from [androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:23:5-29:19
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:23:5-29:19
 MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\admin\.gradle\caches\transforms-3\b66ae2728a53b41722f0d4985a092e50\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
 MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\admin\.gradle\caches\transforms-3\b66ae2728a53b41722f0d4985a092e50\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
 MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:23:5-53:19
@@ -219,167 +290,253 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\admin\.gradle\cach
 	android:extractNativeLibs
 		INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml
 	android:requestLegacyExternalStorage
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:52:9-52
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:74:9-52
 	android:roundIcon
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:49:9-54
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:71:9-54
 	android:icon
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:47:9-43
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:9-43
 	android:networkSecurityConfig
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:54:9-69
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:76:9-69
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:50:9-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:9-35
 	android:label
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:48:9-41
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:9-41
 	android:fullBackupContent
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:46:9-54
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:9-54
 	tools:targetApi
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:55:9-29
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:77:9-29
 	android:allowBackup
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:44:9-35
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:66:9-35
 	android:theme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:51:9-49
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:73:9-49
 	android:dataExtractionRules
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:45:9-65
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:67:9-65
 	android:usesCleartextTraffic
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:53:9-44
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:9-44
 activity#com.mdm.launcher.MainActivity
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:58:9-77:20
-	android:screenOrientation
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:62:13-49
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:80:9-104:20
 	android:clearTaskOnLaunch
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:67:13-46
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:89:13-46
+	android:stateNotNeeded
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:92:13-43
+	android:excludeFromRecents
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:91:13-47
 	android:launchMode
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:61:13-43
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:13-48
 	android:windowSoftInputMode
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:64:13-55
-	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:60:13-36
-	android:configChanges
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:65:13-81
-	android:alwaysRetainTaskState
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:66:13-49
-	android:theme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:63:13-62
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:59:13-41
-intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:13-71:29
-	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:68:28-51
-action#android.intent.action.MAIN
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:17-69
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:69:25-66
-category#android.intent.category.LAUNCHER
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:17-77
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:70:27-74
-intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.DEFAULT+category:name:android.intent.category.HOME
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:13-76:29
-	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:72:28-51
-category#android.intent.category.HOME
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:74:17-73
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:74:27-70
-category#android.intent.category.DEFAULT
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:17-76
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:75:27-73
-receiver#com.mdm.launcher.DeviceAdminReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:80:9-90:20
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:86:13-55
 	android:exported
 		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:82:13-36
-	android:permission
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:83:13-70
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:81:13-48
-meta-data#android.app.device_admin
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-86:56
-	android:resource
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:86:17-53
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:85:17-56
-intent-filter#action:name:android.app.action.DEVICE_ADMIN_ENABLED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:87:13-89:29
-action#android.app.action.DEVICE_ADMIN_ENABLED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:17-82
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:25-79
-service#com.mdm.launcher.service.WebSocketService
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:9-97:56
-	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:13-35
-	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:13-37
-	android:foregroundServiceType
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:13-53
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:13-53
-receiver#com.mdm.launcher.AppChangeReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:100:9-110:20
-	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:13-35
-	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:103:13-37
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:13-46
-intent-filter#action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:104:13-109:29
-action#android.intent.action.PACKAGE_ADDED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:105:17-78
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:105:25-75
-action#android.intent.action.PACKAGE_REMOVED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:106:17-80
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:106:25-77
-action#android.intent.action.PACKAGE_REPLACED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:17-81
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:25-78
-data
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:17-50
-	android:scheme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:23-47
-receiver#com.mdm.launcher.receivers.DefaultLauncherReceiver
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:9-129:20
-	android:enabled
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:13-35
-	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:116:13-37
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:13-62
-intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_CHANGED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:13-125:29
-	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:117:28-51
-action#android.intent.action.PACKAGE_CHANGED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:121:17-80
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:121:25-77
-action#android.intent.action.BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:122:17-79
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:122:25-76
-action#android.intent.action.MY_PACKAGE_REPLACED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:17-84
-	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:25-81
-intent-filter#action:name:android.intent.action.BOOT_COMPLETED
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:126:13-128:29
-	android:priority
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:126:28-51
-activity#com.mdm.launcher.SetupActivity
-ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:132:9-135:62
-	android:exported
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:134:13-37
+	android:configChanges
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:87:13-81
+	android:screenOrientation
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:84:13-49
+	android:noHistory
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:94:13-38
+	android:alwaysRetainTaskState
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:88:13-49
 	android:theme
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:135:13-59
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:85:13-62
+	android:finishOnTaskLaunch
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:90:13-47
+	android:taskAffinity
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:93:13-36
 	android:name
-		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:133:13-42
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:81:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:13-98:29
+	android:priority
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:95:28-51
+action#android.intent.action.MAIN
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:17-69
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:96:25-66
+category#android.intent.category.LAUNCHER
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:17-77
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:97:27-74
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.DEFAULT+category:name:android.intent.category.HOME
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:13-103:29
+	android:priority
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:99:28-51
+category#android.intent.category.HOME
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:17-73
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:101:27-70
+category#android.intent.category.DEFAULT
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:17-76
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:102:27-73
+receiver#com.mdm.launcher.DeviceAdminReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:107:9-117:20
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:109:13-36
+	android:permission
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:110:13-70
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:108:13-48
+meta-data#android.app.device_admin
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:111:13-113:56
+	android:resource
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:113:17-53
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:112:17-56
+intent-filter#action:name:android.app.action.DEVICE_ADMIN_ENABLED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:114:13-116:29
+action#android.app.action.DEVICE_ADMIN_ENABLED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:17-82
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:115:25-79
+service#com.mdm.launcher.service.WebSocketService
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:120:9-124:56
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:122:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:123:13-37
+	android:foregroundServiceType
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:124:13-53
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:121:13-53
+service#com.mdm.launcher.service.LocationService
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:127:9-131:56
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:129:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:130:13-37
+	android:foregroundServiceType
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:131:13-53
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:128:13-52
+receiver#com.mdm.launcher.AppChangeReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:134:9-144:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:136:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:137:13-37
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:135:13-46
+intent-filter#action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:138:13-143:29
+action#android.intent.action.PACKAGE_ADDED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:17-78
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:139:25-75
+action#android.intent.action.PACKAGE_REMOVED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:140:17-80
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:140:25-77
+action#android.intent.action.PACKAGE_REPLACED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:141:17-81
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:141:25-78
+data
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:17-50
+	android:scheme
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:142:23-47
+receiver#com.mdm.launcher.utils.AppUpdateReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:147:9-155:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:149:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:150:13-37
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:148:13-52
+intent-filter#action:name:com.mdm.launcher.UPDATE_FAILURE+action:name:com.mdm.launcher.UPDATE_SUCCESS
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:151:13-154:29
+action#com.mdm.launcher.UPDATE_SUCCESS
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:17-74
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:152:25-71
+action#com.mdm.launcher.UPDATE_FAILURE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:17-74
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:153:25-71
+receiver#com.mdm.launcher.receivers.MaintenanceModeReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:158:9-165:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:160:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:161:13-37
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:159:13-62
+intent-filter#action:name:com.mdm.launcher.END_MAINTENANCE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:162:13-164:29
+action#com.mdm.launcher.END_MAINTENANCE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:163:17-75
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:163:25-72
+receiver#com.mdm.launcher.receivers.DefaultLauncherReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:168:9-184:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:170:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:171:13-37
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:169:13-62
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.PACKAGE_ADDED+action:name:android.intent.action.PACKAGE_CHANGED+action:name:android.intent.action.PACKAGE_REMOVED+action:name:android.intent.action.PACKAGE_REPLACED+data:scheme:package
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:172:13-180:29
+	android:priority
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:172:28-51
+action#android.intent.action.PACKAGE_CHANGED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:176:17-80
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:176:25-77
+action#android.intent.action.BOOT_COMPLETED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:177:17-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:177:25-76
+action#android.intent.action.MY_PACKAGE_REPLACED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:178:17-84
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:178:25-81
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:181:13-183:29
+	android:priority
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:181:28-51
+receiver#com.mdm.launcher.receivers.SystemBootReceiver
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:187:9-201:20
+	android:enabled
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:189:13-35
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:190:13-37
+	android:directBootAware
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:191:13-43
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:188:13-57
+intent-filter#action:name:android.intent.action.ACTION_POWER_CONNECTED+action:name:android.intent.action.ACTION_POWER_DISCONNECTED+action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.LOCKED_BOOT_COMPLETED+action:name:android.intent.action.MY_PACKAGE_REPLACED+action:name:android.intent.action.QUICKBOOT_POWERON+action:name:android.net.conn.CONNECTIVITY_CHANGE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:192:13-200:29
+	android:priority
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:192:28-50
+action#android.intent.action.QUICKBOOT_POWERON
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:194:17-82
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:194:25-79
+action#android.intent.action.LOCKED_BOOT_COMPLETED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:195:17-86
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:195:25-83
+action#android.net.conn.CONNECTIVITY_CHANGE
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:196:17-79
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:196:25-76
+action#android.intent.action.ACTION_POWER_CONNECTED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:198:17-87
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:198:25-84
+action#android.intent.action.ACTION_POWER_DISCONNECTED
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:199:17-90
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:199:25-87
+activity#com.mdm.launcher.SetupActivity
+ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:204:9-207:62
+	android:exported
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:206:13-37
+	android:theme
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:207:13-59
+	android:name
+		ADDED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml:205:13-42
 uses-sdk
 INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml
@@ -410,6 +567,12 @@ MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transfo
 MERGED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:21:5-44
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\admin\.gradle\caches\transforms-3\b2eee46bd9f1e0d00374c9dd56d561c7\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
 MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\admin\.gradle\caches\transforms-3\b2eee46bd9f1e0d00374c9dd56d561c7\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.work:work-runtime-ktx:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\716a72eb48b3691adfa39fcafa77d22e\transformed\work-runtime-ktx-2.9.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.work:work-runtime-ktx:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\716a72eb48b3691adfa39fcafa77d22e\transformed\work-runtime-ktx-2.9.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-service:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a5f59f05a569d4df74238064dc50f0e2\transformed\lifecycle-service-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-service:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a5f59f05a569d4df74238064dc50f0e2\transformed\lifecycle-service-2.7.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a1f9a719f18dc616242305f79bd165da\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\a1f9a719f18dc616242305f79bd165da\transformed\lifecycle-livedata-core-2.7.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:21:5-44
@@ -452,6 +615,10 @@ MERGED from [androidx.lifecycle:lifecycle-livedata-ktx:2.7.0] C:\Users\admin\.gr
 MERGED from [androidx.lifecycle:lifecycle-livedata-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\8154d4536de802de383f8e9d6245e591\transformed\lifecycle-livedata-ktx-2.7.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\eda49eaeac6a01581e1655bd25543c4b\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
 MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\eda49eaeac6a01581e1655bd25543c4b\transformed\lifecycle-viewmodel-ktx-2.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\d59558a8a0219f91c870207e3cc35d02\transformed\room-ktx-2.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\d59558a8a0219f91c870207e3cc35d02\transformed\room-ktx-2.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:21:5-44
 MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\2a37f3f32c2783966bb14fed8f7c050c\transformed\cardview-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.cardview:cardview:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\2a37f3f32c2783966bb14fed8f7c050c\transformed\cardview-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.enterprise:enterprise-feedback:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\cb39423363c3832727c888bbc7986a42\transformed\enterprise-feedback-1.0.0\AndroidManifest.xml:5:5-7:41
@@ -470,12 +637,16 @@ MERGED from [androidx.tracing:tracing:1.0.0] C:\Users\admin\.gradle\caches\trans
 MERGED from [androidx.tracing:tracing:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\62c3b5f0a6aa838f5fd27533d60eb232\transformed\tracing-1.0.0\AndroidManifest.xml:20:5-22:41
 MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\admin\.gradle\caches\transforms-3\c96ffacf0b2a1d4d9fa5d7777ac9e002\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\admin\.gradle\caches\transforms-3\c96ffacf0b2a1d4d9fa5d7777ac9e002\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\b67252396667ac911b95525561301766\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\b67252396667ac911b95525561301766\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\50146a4b5c13b9372965dc0087ddcc19\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.documentfile:documentfile:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\50146a4b5c13b9372965dc0087ddcc19\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\fe1be72de5acf26ba4778c8bba88a4a7\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\fe1be72de5acf26ba4778c8bba88a4a7\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.print:print:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\b12164d51816564a3fa7e224a4608154\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.print:print:1.0.0] C:\Users\admin\.gradle\caches\transforms-3\b12164d51816564a3fa7e224a4608154\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\ba500a07a49d12ad129dc7aa956b1796\transformed\sqlite-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\admin\.gradle\caches\transforms-3\ba500a07a49d12ad129dc7aa956b1796\transformed\sqlite-2.3.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\52bb2409b4dbc51bb46e24e06de45831\transformed\annotation-experimental-1.3.0\AndroidManifest.xml:20:5-44
 MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\52bb2409b4dbc51bb46e24e06de45831\transformed\annotation-experimental-1.3.0\AndroidManifest.xml:20:5-44
 	android:targetSdkVersion
@@ -484,6 +655,8 @@ MERGED from [androidx.annotation:annotation-experimental:1.3.0] C:\Users\admin\.
 		INJECTED from C:\Desenvolvimento\device-owner\mdm-owner\app\src\main\AndroidManifest.xml
 provider#androidx.startup.InitializationProvider
 ADDED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:29:9-37:20
+MERGED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:29:9-37:20
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
 MERGED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:24:9-32:20
 MERGED from [androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:24:9-32:20
@@ -504,6 +677,198 @@ ADDED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transfor
 		ADDED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:31:17-49
 	android:name
 		ADDED from [androidx.emoji2:emoji2:1.2.0] C:\Users\admin\.gradle\caches\transforms-3\63f2656f4c4e33726e0fb3bc2ccc9a7c\transformed\emoji2-1.2.0\AndroidManifest.xml:30:17-75
+meta-data#androidx.work.WorkManagerInitializer
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:34:13-36:52
+	android:value
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:36:17-49
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:35:17-68
+service#androidx.work.impl.background.systemalarm.SystemAlarmService
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:39:9-45:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:42:13-72
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:43:13-37
+	tools:ignore
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:44:13-60
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:45:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:41:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:40:13-88
+service#androidx.work.impl.background.systemjob.SystemJobService
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:46:9-52:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:49:13-70
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:50:13-36
+	android:permission
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:51:13-69
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:52:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:48:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:47:13-84
+service#androidx.work.impl.foreground.SystemForegroundService
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:53:9-59:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:56:13-77
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:57:13-37
+	tools:ignore
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:58:13-60
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:59:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:55:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:54:13-81
+receiver#androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:61:9-66:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:64:13-35
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:65:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:66:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:63:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:62:13-88
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:67:9-77:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:70:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:71:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:72:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:69:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:68:13-106
+intent-filter#action:name:android.intent.action.ACTION_POWER_CONNECTED+action:name:android.intent.action.ACTION_POWER_DISCONNECTED
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:73:13-76:29
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:78:9-88:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:81:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:82:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:83:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:80:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:79:13-104
+intent-filter#action:name:android.intent.action.BATTERY_LOW+action:name:android.intent.action.BATTERY_OKAY
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:84:13-87:29
+action#android.intent.action.BATTERY_OKAY
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:85:17-77
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:85:25-74
+action#android.intent.action.BATTERY_LOW
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:86:17-76
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:86:25-73
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:89:9-99:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:92:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:93:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:94:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:91:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:90:13-104
+intent-filter#action:name:android.intent.action.DEVICE_STORAGE_LOW+action:name:android.intent.action.DEVICE_STORAGE_OK
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:95:13-98:29
+action#android.intent.action.DEVICE_STORAGE_LOW
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:96:17-83
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:96:25-80
+action#android.intent.action.DEVICE_STORAGE_OK
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:97:17-82
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:97:25-79
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$NetworkStateProxy
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:100:9-109:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:103:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:104:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:105:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:102:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:101:13-103
+intent-filter#action:name:android.net.conn.CONNECTIVITY_CHANGE
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:106:13-108:29
+receiver#androidx.work.impl.background.systemalarm.RescheduleReceiver
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:110:9-121:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:113:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:114:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:115:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:112:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:111:13-88
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.TIMEZONE_CHANGED+action:name:android.intent.action.TIME_SET
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:116:13-120:29
+action#android.intent.action.TIME_SET
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:118:17-73
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:118:25-70
+action#android.intent.action.TIMEZONE_CHANGED
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:119:17-81
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:119:25-78
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:122:9-131:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:125:13-72
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:126:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:127:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:124:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:123:13-99
+intent-filter#action:name:androidx.work.impl.background.systemalarm.UpdateProxies
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:128:13-130:29
+action#androidx.work.impl.background.systemalarm.UpdateProxies
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:129:17-98
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:129:25-95
+receiver#androidx.work.impl.diagnostics.DiagnosticsReceiver
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:132:9-142:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:135:13-35
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:136:13-36
+	android:permission
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:137:13-57
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:138:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:134:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:133:13-78
+intent-filter#action:name:androidx.work.diagnostics.REQUEST_DIAGNOSTICS
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:139:13-141:29
+action#androidx.work.diagnostics.REQUEST_DIAGNOSTICS
+ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:140:17-88
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.0] C:\Users\admin\.gradle\caches\transforms-3\3c5f35a4bc7f92acf5af5ccc1b6d539b\transformed\work-runtime-2.9.0\AndroidManifest.xml:140:25-85
 meta-data#androidx.lifecycle.ProcessLifecycleInitializer
 ADDED from [androidx.lifecycle:lifecycle-process:2.7.0] C:\Users\admin\.gradle\caches\transforms-3\fe62e8c6acbea00b64947fc4590e2b1a\transformed\lifecycle-process-2.7.0\AndroidManifest.xml:29:13-31:52
 	android:value
@@ -530,6 +895,16 @@ uses-permission#com.mdm.launcher.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
 ADDED from [androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:5-97
 	android:name
 		ADDED from [androidx.core:core:1.12.0] C:\Users\admin\.gradle\caches\transforms-3\7b6bd3c650bb1567b16fcbc9f5d17578\transformed\core-1.12.0\AndroidManifest.xml:26:22-94
+service#androidx.room.MultiInstanceInvalidationService
+ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:24:9-28:63
+	android:exported
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:27:13-37
+	tools:ignore
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:28:13-60
+	android:directBootAware
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:26:13-43
+	android:name
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\admin\.gradle\caches\transforms-3\515f7ba4ff145145068051e557ef9a72\transformed\room-runtime-2.5.0\AndroidManifest.xml:25:13-74
 meta-data#androidx.profileinstaller.ProfileInstallerInitializer
 ADDED from [androidx.profileinstaller:profileinstaller:1.3.0] C:\Users\admin\.gradle\caches\transforms-3\f6df412bd7cd95927cfdc3b842a3aef7\transformed\profileinstaller-1.3.0\AndroidManifest.xml:29:13-31:52
 	android:value

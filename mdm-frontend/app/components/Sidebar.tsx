@@ -22,6 +22,12 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Gerenciar dispositivos'
     },
     {
+      id: 'policies',
+      label: 'Políticas',
+      icon: '📋',
+      description: 'Grupos e políticas de apps'
+    },
+    {
       id: 'settings',
       label: 'Configurações',
       icon: '⚙️',

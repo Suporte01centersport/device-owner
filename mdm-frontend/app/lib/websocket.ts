@@ -28,11 +28,11 @@ const getWebSocketURL = () => {
 };
 
 const WEBSOCKET_URL = getWebSocketURL();
-const MAX_RECONNECT_ATTEMPTS = 10;
-const INITIAL_RECONNECT_DELAY = 1000; // 1 segundo
+const MAX_RECONNECT_ATTEMPTS = 20; // Aumentado para mais persistência
+const INITIAL_RECONNECT_DELAY = 2000; // 2 segundos - mais conservador
 const MAX_RECONNECT_DELAY = 30000; // 30 segundos
-const HEARTBEAT_INTERVAL = 30000; // 30 segundos
-const FALLBACK_DELAY = 10000; // 10 segundos para ativar fallback
+const HEARTBEAT_INTERVAL = 30000; // 30 segundos - sincronizado com servidor
+const FALLBACK_DELAY = 30000; // 30 segundos para ativar fallback - menos agressivo
 
 export const useWebSocket = (onMessage: (message: any) => void) => {
   const [isConnected, setIsConnected] = useState(false);

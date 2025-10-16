@@ -35,11 +35,10 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <TextView
-            android:id="@+id/connection_status_text"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Aguardando permissão da web..."
-            android:textColor="@color/connection_disconnected"
+            android:text="📱 Nenhum Aplicativo Permitido"
+            android:textColor="@color/md_grey_700"
             android:textSize="18sp"
             android:textStyle="bold"
             android:gravity="center" />
@@ -53,6 +52,16 @@
             android:textSize="14sp"
             android:gravity="center"
             android:lineSpacingExtra="4dp" />
+        
+        <TextView
+            android:id="@+id/connection_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Conectado"
+            android:textColor="@color/connection_connected"
+            android:textSize="12sp"
+            android:gravity="center" />
 
     </LinearLayout>
 

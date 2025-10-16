@@ -1,18 +1,22 @@
 [
     {
-        "merged": "com.mdm.launcher.app-mergeDebugResources-3:/layout/activity_setup.xml",
-        "source": "com.mdm.launcher.app-main-6:/layout/activity_setup.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-mergeDebugResources-3:\\layout\\modal_message.xml",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\modal_message.xml"
+    },
+    {
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-mergeDebugResources-3:\\layout\\activity_setup.xml",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\activity_setup.xml"
     },
     {
         "merged": "com.mdm.launcher.app-mergeDebugResources-3:/layout/modal_message.xml",
         "source": "com.mdm.launcher.app-main-6:/layout/modal_message.xml"
     },
     {
-        "merged": "com.mdm.launcher.app-mergeDebugResources-3:/layout/activity_main.xml",
-        "source": "com.mdm.launcher.app-main-6:/layout/activity_main.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-mergeDebugResources-3:\\layout\\activity_main.xml",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\activity_main.xml"
     },
     {
-        "merged": "com.mdm.launcher.app-mergeDebugResources-3:/layout/item_app.xml",
-        "source": "com.mdm.launcher.app-main-6:/layout/item_app.xml"
+        "merged": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-mergeDebugResources-3:\\layout\\item_app.xml",
+        "source": "C:\\Users\\admin\\.gradle\\daemon\\8.4\\com.mdm.launcher.app-main-6:\\layout\\item_app.xml"
     }
 ]

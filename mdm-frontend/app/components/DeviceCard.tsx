@@ -8,10 +8,11 @@ interface DeviceCardProps {
   onClick: () => void
   onDelete: () => void
   onSupport: () => void
+  onUpdate: () => void
   onSupportCountUpdate?: number
 }
 
-export default function DeviceCard({ device, onClick, onDelete, onSupport, onSupportCountUpdate }: DeviceCardProps) {
+export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
   
   // Debug: verificar dados do dispositivo
@@ -146,7 +147,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
         
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Bateria</span>
-          {isDataLoading() ? (
+          {device.status === 'offline' ? (
+            <span className="text-sm text-secondary">N/D</span>
+          ) : isDataLoading() ? (
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium text-gray-500">
                 Carregando...
@@ -173,7 +176,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
 
         <div className="flex justify-between items-center">
           <span className="text-sm text-secondary">Armazenamento</span>
-          {isDataLoading() ? (
+          {device.status === 'offline' ? (
+            <span className="text-sm text-secondary">N/D</span>
+          ) : isDataLoading() ? (
             <div className="text-right">
               <div className="text-sm font-medium text-gray-500">
                 Carregando...
@@ -214,9 +219,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
       </div>
 
       {/* Actions */}
-      <div className="flex justify-between items-center pt-4 border-t border-border">
+      <div className="flex gap-2 pt-4 border-t border-border">
         <button 
-          className="btn btn-sm btn-primary relative"
+          className="btn btn-sm btn-primary relative flex-1"
           onClick={(e) => {
             e.stopPropagation()
             onSupport()
@@ -231,7 +236,17 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onSup
           )}
         </button>
         <button 
-          className="btn btn-sm btn-error"
+          className="btn btn-sm btn-success flex-1"
+          onClick={(e) => {
+            e.stopPropagation()
+            onUpdate()
+          }}
+          title="Atualizar APK do dispositivo"
+        >
+          📥 Atualizar
+        </button>
+        <button 
+          className="btn btn-sm btn-error flex-1"
           onClick={(e) => {
             e.stopPropagation()
             onDelete()

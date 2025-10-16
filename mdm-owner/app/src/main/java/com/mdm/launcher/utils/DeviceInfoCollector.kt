@@ -9,6 +9,7 @@ import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import android.provider.Settings
+import android.telephony.TelephonyManager
 import android.util.Log
 import com.mdm.launcher.data.AppInfo
 import com.mdm.launcher.data.DeviceInfo
@@ -72,16 +73,26 @@ object DeviceInfoCollector {
             installedApps = installedApps,
             allowedApps = getAllowedApps(context),
             lastKnownLocation = locationInfo.first,
-            locationAccuracy = locationInfo.second,
-            locationProvider = locationInfo.third,
-            locationHistoryCount = locationInfo.fourth
+            latitude = locationInfo.second,
+            longitude = locationInfo.third,
+            locationAccuracy = locationInfo.fourth,
+            locationProvider = locationInfo.fifth,
+            lastLocationUpdate = locationInfo.sixth,
+            address = locationInfo.seventh,
+            locationHistoryCount = locationInfo.eighth
         )
     }
     
     private fun getDeviceId(context: Context): String {
-        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        Log.d("DeviceInfoCollector", "Android ID obtido: ${androidId?.takeLast(4) ?: "null"}")
-        return androidId ?: "unknown"
+        // Usar o DeviceIdManager para obter um ID persistente e confiável
+        val deviceId = DeviceIdManager.getDeviceId(context)
+        Log.d("DeviceInfoCollector", "DeviceId obtido: ${deviceId.takeLast(8)}")
+        
+        // Log adicional para debug
+        val deviceIdInfo = DeviceIdManager.getDeviceIdInfo(context)
+        Log.d("DeviceInfoCollector", "Fonte do DeviceId: ${deviceIdInfo["source"]}")
+        
+        return deviceId
     }
     
     private fun getBatteryInfo(context: Context): Triple<Int, String, Boolean> {
@@ -523,57 +534,99 @@ object DeviceInfoCollector {
         return commonSystemApps.any { packageName.startsWith(it) }
     }
     
+    fun getPublicSerialNumber(context: Context): String? {
+        return getSerialNumber(context)
+    }
+    
     private fun getSerialNumber(context: Context): String? {
         return try {
-            Log.d("DeviceInfoCollector", "=== COLETANDO SERIAL NUMBER (Device Owner) ===")
+            Log.d("DeviceInfoCollector", "")
+            Log.d("DeviceInfoCollector", "╔════════════════════════════════════════════════════════════╗")
+            Log.d("DeviceInfoCollector", "║  COLETANDO SERIAL NUMBER REAL DO HARDWARE                 ║")
+            Log.d("DeviceInfoCollector", "╚════════════════════════════════════════════════════════════╝")
+            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
+            Log.d("DeviceInfoCollector", "Device is Device Owner: ${(context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).isDeviceOwnerApp(context.packageName)}")
             
-            // Verificar se é Device Owner
-            val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
-            Log.d("DeviceInfoCollector", "É Device Owner: $isDeviceOwner")
-            
-            val serial = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                try {
-                    // Para Device Owner, tentar Build.getSerial() com tratamento especial
-                    val buildSerial = Build.getSerial()
-                    Log.d("DeviceInfoCollector", "Build.getSerial() retornou: ${buildSerial.takeLast(4)}")
-                    
-                    if (buildSerial != "unknown" && buildSerial.isNotEmpty() && buildSerial != "null") {
-                        Log.d("DeviceInfoCollector", "✓ Serial válido obtido via Build.getSerial(): ${buildSerial.takeLast(4)}")
+            val serial = when {
+                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
+                    try {
+                        // MÉTODO 1: Tentar Build.getSerial() (requer READ_PHONE_STATE)
+                        val buildSerial = Build.getSerial()
+                        if (buildSerial != "unknown" && buildSerial.isNotEmpty()) {
+                            Log.d("DeviceInfoCollector", "✓ Serial real obtido via Build.getSerial(): ${buildSerial}")
+                            buildSerial
+                        } else {
+                            Log.w("DeviceInfoCollector", "Build.getSerial() retornou 'unknown' ou vazio")
+                            throw SecurityException("Build.getSerial() retornou unknown")
+                        }
+                    } catch (e: SecurityException) {
+                        Log.w("DeviceInfoCollector", "SecurityException ao obter Serial via Build.getSerial(): ${e.message}")
+                        
+                        // MÉTODO 2: Tentar Build.SERIAL (pode funcionar em alguns casos)
+                        try {
+                            val buildSerialFallback = Build.SERIAL
+                            if (buildSerialFallback != "unknown" && buildSerialFallback.isNotEmpty()) {
+                                Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL: ${buildSerialFallback}")
+                                buildSerialFallback
+                            } else {
+                                throw Exception("Build.SERIAL também é 'unknown'")
+                            }
+                        } catch (e2: Exception) {
+                            Log.w("DeviceInfoCollector", "Build.SERIAL também falhou: ${e2.message}")
+                            
+                            // MÉTODO 3: Tentar via DevicePolicyManager (Device Owner)
+                            try {
+                                val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+                                val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
+                                if (isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    val enrollmentId = devicePolicyManager.enrollmentSpecificId
+                                    if (enrollmentId != null && enrollmentId.isNotEmpty()) {
+                                        Log.d("DeviceInfoCollector", "✓ Serial via DevicePolicyManager.enrollmentSpecificId: ${enrollmentId}")
+                                        enrollmentId
+                                    } else {
+                                        throw Exception("DevicePolicyManager.enrollmentSpecificId retornou null/vazio")
+                                    }
+                                } else {
+                                    throw Exception("Não é Device Owner ou API < 26")
+                                }
+                            } catch (e3: Exception) {
+                                Log.w("DeviceInfoCollector", "DevicePolicyManager também falhou: ${e3.message}")
+                                
+                                // ÚLTIMO RECURSO: Android ID
+                                val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                                Log.w("DeviceInfoCollector", "⚠️ Todos os métodos falharam, usando Android ID como último recurso: ${androidId}")
+                                androidId
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    // Android < 8.0 - usar Build.SERIAL diretamente
+                    val buildSerial = Build.SERIAL
+                    if (buildSerial != "unknown" && buildSerial.isNotEmpty()) {
+                        Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL (Android < 8): ${buildSerial}")
                         buildSerial
                     } else {
-                        Log.w("DeviceInfoCollector", "Build.getSerial() retornou valor inválido: '$buildSerial'")
-                        // Tentar Build.SERIAL como fallback
-                        val fallbackSerial = Build.SERIAL
-                        Log.d("DeviceInfoCollector", "Usando Build.SERIAL como fallback: ${fallbackSerial.takeLast(4)}")
-                        fallbackSerial
+                        Log.w("DeviceInfoCollector", "Build.SERIAL é 'unknown', usando Android ID")
+                        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
+                        androidId
                     }
-                } catch (e: SecurityException) {
-                    Log.w("DeviceInfoCollector", "SecurityException ao obter Serial: ${e.message}")
-                    val fallbackSerial = Build.SERIAL
-                    Log.d("DeviceInfoCollector", "Usando Build.SERIAL após SecurityException: ${fallbackSerial.takeLast(4)}")
-                    fallbackSerial
-                } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Exception ao obter Serial: ${e.message}")
-                    val fallbackSerial = Build.SERIAL
-                    Log.d("DeviceInfoCollector", "Usando Build.SERIAL após Exception: ${fallbackSerial.takeLast(4)}")
-                    fallbackSerial
                 }
-            } else {
-                // Android < 8.0 - usar Build.SERIAL diretamente
-                val fallbackSerial = Build.SERIAL
-                Log.d("DeviceInfoCollector", "Android < 8.0, usando Build.SERIAL: ${fallbackSerial.takeLast(4)}")
-                fallbackSerial
             }
             
-            Log.d("DeviceInfoCollector", "Serial final: ${serial?.let { "***${it.takeLast(4)}" } ?: "null"}")
-            Log.d("DeviceInfoCollector", "===============================================")
+            Log.d("DeviceInfoCollector", "")
+            Log.d("DeviceInfoCollector", "╔════════════════════════════════════════════════════════════╗")
+            Log.d("DeviceInfoCollector", "║  SERIAL NUMBER FINAL COLETADO:                            ║")
+            Log.d("DeviceInfoCollector", "║  ${serial?.padEnd(56) ?: "NULL".padEnd(56)} ║")
+            Log.d("DeviceInfoCollector", "╚════════════════════════════════════════════════════════════╝")
+            Log.d("DeviceInfoCollector", "")
             serial
         } catch (e: Exception) {
             Log.e("DeviceInfoCollector", "Erro geral ao obter Serial", e)
-            val fallbackSerial = Build.SERIAL
-            Log.d("DeviceInfoCollector", "Usando Build.SERIAL após erro geral: ${fallbackSerial.takeLast(4)}")
-            fallbackSerial
+            // Último fallback: Build.SERIAL
+            val buildSerial = Build.SERIAL
+            Log.d("DeviceInfoCollector", "Usando Build.SERIAL após erro: ${buildSerial}")
+            buildSerial
         }
     }
     
@@ -581,71 +634,61 @@ object DeviceInfoCollector {
         return try {
             Log.d("DeviceInfoCollector", "=== COLETANDO IMEI (Device Owner) ===")
             
-            // Verificar se é Device Owner
             val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
             Log.d("DeviceInfoCollector", "É Device Owner: $isDeviceOwner")
+            Log.d("DeviceInfoCollector", "Package Name: ${context.packageName}")
+            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
+            
+            // IMPORTANTE: No Android 10+, mesmo Device Owners precisam de READ_PRIVILEGED_PHONE_STATE
+            // para acessar IMEI, que é uma permissão privilegiada apenas para apps de sistema.
+            // Como alternativa, usaremos Android ID ou Enrollment ID que são únicos e acessíveis.
             
             val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
             
-            val imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                // Android 10+ - IMEI requer permissões privilegiadas que Device Owner não tem
+                // Usar identificador alternativo
                 try {
-                    // Para Device Owner, tentar obter IMEI com múltiplas abordagens
+                    Log.d("DeviceInfoCollector", "Android 10+: IMEI requer permissões privilegiadas")
+                    Log.d("DeviceInfoCollector", "Usando Android ID como identificador alternativo")
+                    null // Retornar null e usar deviceId (Android ID) como identificador principal
+                } catch (e: Exception) {
+                    Log.w("DeviceInfoCollector", "Erro: ${e.message}")
+                    null
+                }
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
                     Log.d("DeviceInfoCollector", "Tentando telephonyManager.imei...")
                     val imeiValue = telephonyManager.imei
-                    Log.d("DeviceInfoCollector", "telephonyManager.imei retornou: ${imeiValue?.takeLast(4) ?: "null"}")
                     
                     if (imeiValue != null && imeiValue.isNotEmpty() && imeiValue != "unknown") {
                         Log.d("DeviceInfoCollector", "✓ IMEI válido obtido: ${imeiValue.takeLast(4)}")
                         imeiValue
                     } else {
-                        Log.w("DeviceInfoCollector", "IMEI inválido ou vazio, tentando slot 0...")
-                        try {
-                            val imeiSlot0 = telephonyManager.getImei(0)
-                            Log.d("DeviceInfoCollector", "IMEI slot 0 retornou: ${imeiSlot0?.takeLast(4) ?: "null"}")
-                            if (imeiSlot0 != null && imeiSlot0.isNotEmpty() && imeiSlot0 != "unknown") {
-                                Log.d("DeviceInfoCollector", "✓ IMEI slot 0 válido: ${imeiSlot0.takeLast(4)}")
-                                imeiSlot0
-                            } else {
-                                Log.w("DeviceInfoCollector", "IMEI slot 0 também inválido")
-                                null
-                            }
-                        } catch (e: Exception) {
-                            Log.w("DeviceInfoCollector", "Erro ao obter IMEI slot 0: ${e.message}")
-                            null
-                        }
+                        null
                     }
                 } catch (e: SecurityException) {
-                    Log.w("DeviceInfoCollector", "SecurityException ao obter IMEI: ${e.message}")
-                    null
-                } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Exception ao obter IMEI: ${e.message}")
+                    Log.d("DeviceInfoCollector", "SecurityException esperada no Android 10+: IMEI indisponível para Device Owner")
                     null
                 }
             } else {
                 @Suppress("DEPRECATION")
                 try {
-                    Log.d("DeviceInfoCollector", "Android < 8.0, tentando telephonyManager.deviceId...")
                     val deviceId = telephonyManager.deviceId
-                    Log.d("DeviceInfoCollector", "telephonyManager.deviceId retornou: ${deviceId?.takeLast(4) ?: "null"}")
-                    
                     if (deviceId != null && deviceId.isNotEmpty() && deviceId != "unknown") {
                         Log.d("DeviceInfoCollector", "✓ DeviceId válido: ${deviceId.takeLast(4)}")
                         deviceId
                     } else {
-                        Log.w("DeviceInfoCollector", "DeviceId inválido ou vazio")
                         null
                     }
                 } catch (e: SecurityException) {
-                    Log.w("DeviceInfoCollector", "SecurityException ao obter DeviceId: ${e.message}")
-                    null
-                } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Exception ao obter DeviceId: ${e.message}")
+                    Log.d("DeviceInfoCollector", "SecurityException ao obter DeviceId")
                     null
                 }
             }
             
-            Log.d("DeviceInfoCollector", "IMEI final: ${imei?.let { "***${it.takeLast(4)}" } ?: "null"}")
+            Log.d("DeviceInfoCollector", "IMEI final: ${imei?.let { "***${it.takeLast(4)}" } ?: "N/A (usando Android ID)"}")
             Log.d("DeviceInfoCollector", "===============================================")
             imei
         } catch (e: Exception) {
@@ -750,10 +793,13 @@ object DeviceInfoCollector {
             val gson = com.google.gson.Gson()
             val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
             
+            Log.d("DeviceInfoCollector", "SharedPreferences raw: $savedAllowedApps")
+            
             if (savedAllowedApps != null) {
                 val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
                 val allowedApps = gson.fromJson<List<String>>(savedAllowedApps, type)
                 Log.d("DeviceInfoCollector", "Apps permitidos carregados: ${allowedApps.size}")
+                Log.d("DeviceInfoCollector", "Lista carregada: $allowedApps")
                 allowedApps
             } else {
                 Log.d("DeviceInfoCollector", "Nenhum app permitido encontrado")
@@ -765,10 +811,15 @@ object DeviceInfoCollector {
         }
     }
     
-    private fun getLocationInfo(context: Context): Quadruple<String?, Float?, String?, Int> {
+    private fun getLocationInfo(context: Context): Octuple<String?, Double?, Double?, Float?, String?, Long?, String?, Int> {
         return try {
+            Log.d("DeviceInfoCollector", "🔍 === COLETANDO INFORMAÇÕES DE LOCALIZAÇÃO ===")
+            
             val history = LocationHistoryManager.loadLocationHistory(context)
+            Log.d("DeviceInfoCollector", "Histórico carregado: ${history.size} entradas")
+            
             val lastLocation = history.maxByOrNull { it.timestamp }
+            Log.d("DeviceInfoCollector", "Última localização: $lastLocation")
             
             val locationString = if (lastLocation != null) {
                 "${lastLocation.latitude},${lastLocation.longitude}"
@@ -776,17 +827,47 @@ object DeviceInfoCollector {
                 null
             }
             
-            Quadruple(
+            Log.d("DeviceInfoCollector", "Location string: $locationString")
+            Log.d("DeviceInfoCollector", "Latitude: ${lastLocation?.latitude}")
+            Log.d("DeviceInfoCollector", "Longitude: ${lastLocation?.longitude}")
+            Log.d("DeviceInfoCollector", "Accuracy: ${lastLocation?.accuracy}")
+            Log.d("DeviceInfoCollector", "Provider: ${lastLocation?.provider}")
+            Log.d("DeviceInfoCollector", "Timestamp: ${lastLocation?.timestamp}")
+            Log.d("DeviceInfoCollector", "Address: ${lastLocation?.address}")
+            Log.d("DeviceInfoCollector", "History size: ${history.size}")
+            
+            val result = Octuple(
                 first = locationString,
-                second = lastLocation?.accuracy,
-                third = lastLocation?.provider,
-                fourth = history.size
+                second = lastLocation?.latitude,
+                third = lastLocation?.longitude,
+                fourth = lastLocation?.accuracy,
+                fifth = lastLocation?.provider,
+                sixth = lastLocation?.timestamp,
+                seventh = lastLocation?.address,
+                eighth = history.size
             )
+            
+            Log.d("DeviceInfoCollector", "✅ Informações de localização coletadas com sucesso")
+            Log.d("DeviceInfoCollector", "===============================================")
+            
+            result
         } catch (e: Exception) {
-            Log.e("DeviceInfoCollector", "Erro ao obter informações de localização", e)
-            Quadruple(null, null, null, 0)
+            Log.e("DeviceInfoCollector", "❌ Erro ao obter informações de localização", e)
+            Octuple(null, null, null, null, null, null, null, 0)
         }
     }
+    
+    // Classe para retornar 8 valores
+    data class Octuple<A, B, C, D, E, F, G, H>(
+        val first: A,
+        val second: B,
+        val third: C,
+        val fourth: D,
+        val fifth: E,
+        val sixth: F,
+        val seventh: G,
+        val eighth: H
+    )
 }
 
 // Classe auxiliar para retornar 4 valores

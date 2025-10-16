@@ -39,7 +39,11 @@ data class DeviceInfo(
     val installedApps: List<AppInfo> = emptyList(),
     val allowedApps: List<String> = emptyList(),
     val lastKnownLocation: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
     val locationAccuracy: Float? = null,
     val locationProvider: String? = null,
+    val lastLocationUpdate: Long? = null,
+    val address: String? = null,
     val locationHistoryCount: Int = 0
 )
