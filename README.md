@@ -9,6 +9,7 @@ Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher cu
 ### 1. **Servidor Backend (Node.js + PostgreSQL)**
 ```bash
 cd mdm-frontend/server
+npm install
 node websocket.js
 ```
 
