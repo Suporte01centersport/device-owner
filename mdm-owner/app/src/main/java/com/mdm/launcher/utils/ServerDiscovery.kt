@@ -324,5 +324,36 @@ object ServerDiscovery {
             Log.w(TAG, "Erro ao salvar URL descoberta: ${e.message}")
         }
     }
+    
+    /**
+     * Limpa cache e força nova descoberta
+     */
+    fun clearCache(context: Context) {
+        try {
+            Log.d(TAG, "🧹 Limpando cache de descoberta...")
+            
+            // Limpar cache em memória
+            cachedServerUrl = null
+            lastDiscoveryTime = 0L
+            
+            // Limpar SharedPreferences
+            val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            prefs.edit().remove("discovered_server_url").apply()
+            prefs.edit().remove("server_url").apply()
+            
+            Log.d(TAG, "✅ Cache limpo com sucesso - próxima descoberta será forçada")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao limpar cache: ${e.message}")
+        }
+    }
+    
+    /**
+     * Invalida cache forçando nova descoberta na próxima vez
+     */
+    fun invalidateCache() {
+        Log.d(TAG, "♻️ Invalidando cache de descoberta...")
+        cachedServerUrl = null
+        lastDiscoveryTime = 0L
+    }
 }
 

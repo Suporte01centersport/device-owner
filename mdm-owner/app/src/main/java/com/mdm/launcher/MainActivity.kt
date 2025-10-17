@@ -23,6 +23,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -215,10 +216,23 @@ class MainActivity : AppCompatActivity() {
             val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
             val hasConfiguredOptimizations = prefs.getBoolean("has_configured_battery_optimizations", false)
             
-            if (!hasConfiguredOptimizations) {
-                Log.d(TAG, "Primeira execução - configurando otimizações...")
+            if (!hasConfiguredOptimizations || !isIgnoringOptimizations) {
+                Log.d(TAG, "Configurando whitelist de bateria...")
                 
-                // Configurar todas as otimizações necessárias
+                // Solicitar whitelist de bateria diretamente via Settings
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    try {
+                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                            data = Uri.parse("package:$packageName")
+                        }
+                        startActivity(intent)
+                        Log.d(TAG, "✅ Solicitação de whitelist de bateria enviada")
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao solicitar whitelist de bateria", e)
+                    }
+                }
+                
+                // Configurar alarmes exatos (Android 12+)
                 helper.configureOptimizations(this)
                 
                 // Marcar como configurado
@@ -226,17 +240,7 @@ class MainActivity : AppCompatActivity() {
                 
                 Log.d(TAG, "✅ Otimizações configuradas")
             } else {
-                Log.d(TAG, "Otimizações já foram configuradas anteriormente")
-                
-                // Se não estiver mais na whitelist, avisar
-                if (!isIgnoringOptimizations) {
-                    Log.w(TAG, "⚠️ App foi removido da whitelist de bateria - recomendado adicionar novamente")
-                    
-                    // Mostrar notificação ou toast (opcional)
-                    handler.postDelayed({
-                        Toast.makeText(this, "Recomendado: Adicione o app à whitelist de bateria para conexão estável", Toast.LENGTH_LONG).show()
-                    }, 3000)
-                }
+                Log.d(TAG, "✅ Otimizações de bateria já configuradas e ativas")
             }
             
         } catch (e: Exception) {
@@ -342,12 +346,8 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "Erro ao registrar BroadcastReceiver", e)
         }
         
-        startWebSocketService()
-        // setupWebSocketClient() - REMOVIDO: usar apenas WebSocketService para evitar conexões duplicadas
-        startLocationService()
-        
-        // Configurar controle de tela para conexão persistente
-        setupScreenStateMonitoring()
+        // NÃO iniciar serviços aqui - aguardar permissões em onPermissionsComplete()
+        Log.d(TAG, "⏳ Aguardando permissões antes de iniciar serviços...")
         
         // Carregar dados salvos
         loadSavedData()
@@ -673,6 +673,41 @@ class MainActivity : AppCompatActivity() {
     }
     
     
+    /**
+     * Verifica permissões essenciais no onResume e solicita se não estiverem concedidas
+     */
+    private fun checkPermissionsOnResume() {
+        try {
+            Log.d(TAG, "🔍 Verificando permissões no onResume...")
+            
+            // Permissões essenciais
+            val essentialPermissions = mutableListOf(
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_COARSE_LOCATION
+            )
+            
+            // Adicionar permissão de notificação para Android 13+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                essentialPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+            
+            val missingPermissions = essentialPermissions.filter { permission ->
+                ContextCompat.checkSelfPermission(this, permission) != PackageManager.PERMISSION_GRANTED
+            }
+            
+            if (missingPermissions.isNotEmpty()) {
+                Log.w(TAG, "⚠️ Permissões faltando: $missingPermissions")
+                Log.d(TAG, "📋 Solicitando permissões automaticamente...")
+                ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), 1002)
+            } else {
+                Log.d(TAG, "✅ Todas as permissões essenciais estão concedidas")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao verificar permissões no onResume", e)
+        }
+    }
+    
     private fun onPermissionsComplete() {
         Log.d(TAG, "Permissões completadas - continuando inicialização")
         
@@ -719,13 +754,20 @@ class MainActivity : AppCompatActivity() {
         
         // Configurar rede e WebSocket
         setupNetworkMonitoring()
+        
+        // Iniciar serviços SOMENTE após permissões concedidas
+        Log.d(TAG, "🚀 Iniciando serviços (WebSocket e Location)...")
         startWebSocketService()
         setupWebSocketClient()
+        startLocationService()
+        
+        // Configurar controle de tela para conexão persistente
+        setupScreenStateMonitoring()
         
         // Carregar dados salvos
         loadSavedData()
         
-        Log.d(TAG, "App inicializado com sucesso")
+        Log.d(TAG, "✅ App inicializado com sucesso")
     }
 
     private fun checkPermissions() {
@@ -938,6 +980,10 @@ class MainActivity : AppCompatActivity() {
             
             if (isConnected) {
                 Log.d(TAG, "✅ Rede disponível - notificando mudança de rede...")
+                
+                // Invalidar cache do ServerDiscovery para forçar nova descoberta
+                Log.d(TAG, "🧹 Invalidando cache do ServerDiscovery para forçar redescoberta...")
+                ServerDiscovery.invalidateCache()
                 
                 // Notificar WebSocketService sobre mudança de rede
                 webSocketService?.onNetworkChanged()
@@ -2713,6 +2759,9 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "Activity foi destruída, ignorando onResume")
             return
         }
+        
+        // Verificar permissões essenciais a cada retorno ao foreground
+        checkPermissionsOnResume()
         
         // Tela desbloqueada - garantir conexão ativa
         handleScreenUnlocked()
