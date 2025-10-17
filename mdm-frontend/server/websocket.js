@@ -2292,6 +2292,14 @@ function handleSetAdminPassword(ws, data) {
     console.log('✅ Senha de administrador definida globalmente e salva no arquivo');
     console.log('Senha definida:', password);
     
+    // Notificar TODOS os clientes web sobre a nova senha
+    notifyWebClients({
+        type: 'admin_password_response',
+        password: password,
+        timestamp: Date.now()
+    });
+    console.log('📤 Senha de administrador notificada para clientes web');
+    
     // Enviar comando para o dispositivo específico
     if (deviceId) {
         console.log(`🎯 Enviando senha para dispositivo específico: ${deviceId}`);
