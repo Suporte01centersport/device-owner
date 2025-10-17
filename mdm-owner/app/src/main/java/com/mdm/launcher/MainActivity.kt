@@ -734,12 +734,19 @@ class MainActivity : AppCompatActivity() {
         // Verificar se precisa forçar verificação completa (após reinstalação)
         val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
         val forcePermissionCheck = sharedPreferences.getBoolean("force_permission_check", false)
+        val usageStatsNotSupported = sharedPreferences.getBoolean("usage_stats_not_supported", false)
         
         if (forcePermissionCheck) {
             Log.d(TAG, "🔄 FORÇANDO VERIFICAÇÃO COMPLETA DE PERMISSÕES (reinstalação detectada)")
             // Resetar contadores para permitir solicitações
             permissionRequestCount = 0
             lastPermissionRequestTime = 0L
+            
+            // Limpar o flag imediatamente após a primeira verificação para evitar loop infinito
+            sharedPreferences.edit()
+                .putBoolean("force_permission_check", false)
+                .apply()
+            Log.d(TAG, "✅ Flag de verificação forçada removida após primeira verificação")
         } else {
             // Evitar solicitações de permissão muito frequentes (comportamento normal)
             if (permissionRequestCount > 3 && (currentTime - lastPermissionRequestTime) < 30000) {
@@ -773,8 +780,8 @@ class MainActivity : AppCompatActivity() {
             ))
         }
         
-        // 3. Usage Stats (terceiro)
-        if (!isUsageStatsPermissionGranted()) {
+        // 3. Usage Stats (terceiro) - apenas se o dispositivo suportar
+        if (!usageStatsNotSupported && !isUsageStatsPermissionGranted()) {
             permissionsToCheck.add(PermissionItem(
                 type = PermissionType.USAGE_STATS,
                 title = "Permissão de Estatísticas de Uso",
@@ -818,15 +825,6 @@ class MainActivity : AppCompatActivity() {
         } else {
             // Todas as permissões concedidas, inicializar funcionalidades
             Log.d(TAG, "✅ TODAS AS PERMISSÕES CONCEDIDAS")
-            
-            // Remover flag de verificação forçada se estava ativa
-            if (forcePermissionCheck) {
-                sharedPreferences.edit()
-                    .putBoolean("force_permission_check", false)
-                    .apply()
-                Log.d(TAG, "✅ Flag de verificação forçada removida - todas as permissões OK")
-            }
-            
             initializeAllFeatures()
         }
     }
@@ -848,7 +846,25 @@ class MainActivity : AppCompatActivity() {
             }
             PermissionType.USAGE_STATS -> {
                 val intent = Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)
-                startActivityForResult(intent, REQUEST_CODE_USAGE_STATS)
+                // Verificar se existe uma atividade para lidar com esta Intent
+                if (intent.resolveActivity(packageManager) != null) {
+                    startActivityForResult(intent, REQUEST_CODE_USAGE_STATS)
+                } else {
+                    Log.w(TAG, "ActivityNotFoundException: Nenhuma atividade encontrada para USAGE_ACCESS_SETTINGS. Dispositivo pode não suportar esta funcionalidade.")
+                    // Marcar como não suportado permanentemente para não tentar novamente
+                    val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                    sharedPreferences.edit()
+                        .putBoolean("usage_stats_not_supported", true)
+                        .apply()
+                    Log.d(TAG, "✅ USAGE_STATS marcado como não suportado - não será solicitado novamente")
+                    
+                    // Aguardar um pouco e verificar próximas permissões (sem recursão infinita)
+                    handler.postDelayed({
+                        if (!isActivityDestroyed) {
+                            checkPermissions()
+                        }
+                    }, 500)
+                }
             }
             PermissionType.LOCATION -> {
                 checkLocationPermissions()

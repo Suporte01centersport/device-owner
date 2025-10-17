@@ -1,12 +1,1 @@
-{
-  "/_not-found/page": "app/_not-found/page.js",
-  "/api/groups/[groupId]/policies/route": "app/api/groups/[groupId]/policies/route.js",
-  "/api/uem/security/restrictions/route": "app/api/uem/security/restrictions/route.js",
-  "/api/devices/update-app/route": "app/api/devices/update-app/route.js",
-  "/api/groups/[groupId]/devices/route": "app/api/groups/[groupId]/devices/route.js",
-  "/api/uem/remote/execute/route": "app/api/uem/remote/execute/route.js",
-  "/page": "app/page.js",
-  "/policies/page": "app/policies/page.js",
-  "/api/support-messages/route": "app/api/support-messages/route.js",
-  "/api/uem/remote/actions/route": "app/api/uem/remote/actions/route.js"
-}
+{}

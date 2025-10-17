@@ -1,0 +1,73 @@
+#!/bin/bash
+# ============================================
+# SCRIPT DE DEPLOY PARA SERVIDOR UBUNTU
+# ============================================
+
+set -e  # Parar em caso de erro
+
+echo "🚀 Iniciando deploy de produção..."
+
+# Cores para output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Verificar se está no servidor Ubuntu
+if [ ! -f /etc/lsb-release ]; then
+    echo -e "${RED}❌ Este script deve ser executado no servidor Ubuntu!${NC}"
+    exit 1
+fi
+
+echo -e "${YELLOW}📦 Atualizando código do repositório...${NC}"
+git pull origin main
+
+echo -e "${YELLOW}🔧 Configurando ambiente de produção...${NC}"
+cd mdm-frontend
+
+# Copiar arquivo de produção se não existir
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}📝 Criando arquivo .env de produção...${NC}"
+    cp .env.production .env
+    echo -e "${RED}⚠️  ATENÇÃO: Edite o arquivo .env e altere as senhas!${NC}"
+    echo -e "${RED}   DB_PASSWORD, ADMIN_PASSWORD e JWT_SECRET${NC}"
+    read -p "Pressione ENTER após editar as senhas..."
+fi
+
+echo -e "${YELLOW}📚 Instalando dependências...${NC}"
+npm install --production
+
+echo -e "${YELLOW}🏗️  Buildando aplicação Next.js...${NC}"
+npm run build
+
+echo -e "${YELLOW}🗄️  Configurando banco de dados...${NC}"
+npm run db:setup
+
+echo -e "${YELLOW}🔄 Parando serviços antigos...${NC}"
+pm2 stop mdm-websocket 2>/dev/null || true
+pm2 stop mdm-frontend 2>/dev/null || true
+
+echo -e "${YELLOW}🚀 Iniciando serviços com PM2...${NC}"
+
+# Iniciar WebSocket
+pm2 start npm --name "mdm-websocket" -- run websocket:prod
+
+# Iniciar Frontend
+pm2 start npm --name "mdm-frontend" -- start
+
+# Salvar configuração PM2
+pm2 save
+
+# Configurar PM2 para iniciar no boot
+pm2 startup
+
+echo -e "${GREEN}✅ Deploy concluído com sucesso!${NC}"
+echo -e "${GREEN}📊 Serviços rodando:${NC}"
+pm2 list
+
+echo -e "${YELLOW}📝 Logs disponíveis em:${NC}"
+echo -e "   WebSocket: pm2 logs mdm-websocket"
+echo -e "   Frontend:  pm2 logs mdm-frontend"
+
+echo -e "${GREEN}🌐 Acesse: http://SEU_IP:3000${NC}"
+
