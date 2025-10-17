@@ -190,6 +190,25 @@ class MainActivity : AppCompatActivity() {
                         handleWebSocketMessage(message)
                     }
                 }
+                "com.mdm.launcher.ADMIN_PASSWORD_CHANGED" -> {
+                    val newPassword = intent.getStringExtra("password")
+                    Log.d(TAG, "🔐 === SENHA DE ADMINISTRADOR MUDOU ===")
+                    Log.d(TAG, "Senha antiga: '$adminPassword'")
+                    Log.d(TAG, "Senha nova: '$newPassword'")
+                    
+                    if (newPassword != null && newPassword.isNotEmpty()) {
+                        // Atualizar variável em memória
+                        adminPassword = newPassword
+                        
+                        // Garantir que está salva no SharedPreferences
+                        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                        prefs.edit().putString("admin_password", newPassword).apply()
+                        
+                        Log.d(TAG, "✅ adminPassword atualizado na MainActivity: '$adminPassword'")
+                        Log.d(TAG, "✅ Senha pronta para uso!")
+                    }
+                    Log.d(TAG, "========================================")
+                }
             }
         }
     }
@@ -335,6 +354,7 @@ class MainActivity : AppCompatActivity() {
                 addAction("com.mdm.launcher.LOCATION_UPDATE")
                 addAction("com.mdm.launcher.SET_KIOSK_MODE")
                 addAction("com.mdm.launcher.UEM_COMMAND")
+                addAction("com.mdm.launcher.ADMIN_PASSWORD_CHANGED")
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(serviceMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)

@@ -841,6 +841,12 @@ class WebSocketService : Service() {
                         val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                         prefs.edit().putString("admin_password", password).apply()
                         Log.d(TAG, "✅ Senha de administrador salva em background: $password")
+                        
+                        // Notificar MainActivity para recarregar a senha
+                        val intent = Intent("com.mdm.launcher.ADMIN_PASSWORD_CHANGED")
+                        intent.putExtra("password", password)
+                        sendBroadcast(intent)
+                        Log.d(TAG, "📢 Broadcast enviado para MainActivity recarregar senha")
                     } else {
                         Log.e(TAG, "❌ ERRO: Password é null ou vazia no Service")
                     }

@@ -42,10 +42,14 @@ object BatteryOptimizationHelper {
                 if (!isIgnoringBatteryOptimizations(activity)) {
                     Log.d(TAG, "Solicitando exclusão da otimização de bateria...")
                     
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:${activity.packageName}")
-                    }
+                    // Usar packageName da activity explicitamente
+                    val packageName = activity.packageName
+                    Log.d(TAG, "PackageName: $packageName")
                     
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    intent.data = Uri.parse("package:$packageName")
+                    
+                    Log.d(TAG, "URI criada: ${intent.data}")
                     activity.startActivity(intent)
                     Log.d(TAG, "Intent de otimização de bateria enviado")
                 } else {

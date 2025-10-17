@@ -17,15 +17,38 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        debug {
+            // Usar assinatura padrão de debug
+        }
+        release {
+            // Usar assinatura de debug para simplificar (apenas para MDM interno)
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
+    }
+    
     buildTypes {
         release {
             minifyEnabled true
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
+            
+            // URL do servidor de PRODUÇÃO (Linux)
+            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.100:3002"'
+            buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
         }
         debug {
             minifyEnabled false
             debuggable true
+            signingConfig signingConfigs.debug
+            
+            // Debug usa descoberta automática (servidor local Windows)
+            buildConfigField "String", "SERVER_URL", '""'
+            buildConfigField "Boolean", "USE_FIXED_SERVER", "false"
         }
     }
     compileOptions {
@@ -37,6 +60,7 @@ android {
     }
     buildFeatures {
         viewBinding true
+        buildConfig true
     }
 }
 

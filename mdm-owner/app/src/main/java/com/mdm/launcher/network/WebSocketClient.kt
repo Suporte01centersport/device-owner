@@ -35,15 +35,24 @@ class WebSocketClient private constructor(
     
     private val webSocketListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log.d(TAG, "🎉 WebSocket ABERTO - enviando ping inicial")
+            Log.d(TAG, "═══════════════════════════════════════")
+            Log.d(TAG, "🎉 WebSocket ABERTO!")
+            Log.d(TAG, "═══════════════════════════════════════")
             Log.d(TAG, "🌐 URL: $serverUrl")
-            Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(4)}")
+            Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(8)}")
+            Log.d(TAG, "🔌 Response Code: ${response.code}")
+            Log.d(TAG, "🔌 Response Message: ${response.message}")
             
-            // Aguardar primeira mensagem do servidor para confirmar
+            // Reset de tentativas
             isReconnecting = false
             reconnectAttempts = 0
             
-            // Enviar ping inicial para receber pong do servidor e confirmar conexão
+            // Marcar como conectado IMEDIATAMENTE ao abrir conexão
+            isConnected = true
+            onConnectionChange(true)
+            Log.d(TAG, "✅ MARCADO COMO CONECTADO após onOpen()")
+            
+            // Enviar ping inicial para receber pong do servidor
             try {
                 val pingMessage = mapOf(
                     "type" to "ping",
@@ -51,20 +60,21 @@ class WebSocketClient private constructor(
                     "timestamp" to System.currentTimeMillis()
                 )
                 val jsonMessage = com.google.gson.Gson().toJson(pingMessage)
-                webSocket.send(jsonMessage)
-                Log.d(TAG, "📤 Ping inicial enviado - aguardando pong do servidor")
+                val sent = webSocket.send(jsonMessage)
+                Log.d(TAG, "📤 Ping inicial enviado: ${if (sent) "SUCESSO" else "FALHOU"}")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao enviar ping inicial", e)
+                Log.e(TAG, "❌ Erro ao enviar ping inicial", e)
             }
             
             // Iniciar sistema de heartbeat
             startHeartbeat()
             
-            Log.d(TAG, "✅ Conexão WebSocket aberta - aguardando confirmação do servidor")
+            Log.d(TAG, "✅ Conexão WebSocket estabelecida com sucesso!")
+            Log.d(TAG, "═══════════════════════════════════════")
         }
         
         override fun onMessage(webSocket: WebSocket, text: String) {
-            Log.d(TAG, "Mensagem recebida: $text")
+            Log.d(TAG, "📩 Mensagem recebida: ${text.take(100)}...")
             val now = System.currentTimeMillis()
             lastSuccessfulMessage = now
             
@@ -76,15 +86,15 @@ class WebSocketClient private constructor(
                     lastPongReceived = now
                     val serverTime = (message["serverTime"] as? Double)?.toLong() ?: 0
                     val latency = if (serverTime > 0) now - serverTime else 0
-                    Log.d(TAG, "Pong recebido - latência: ${latency}ms")
+                    Log.d(TAG, "✅ Pong recebido - latência: ${latency}ms")
                 }
             } catch (e: Exception) {
                 // Ignorar erro de parse
             }
             
-            // Marcar como conectado na PRIMEIRA mensagem recebida do servidor
+            // Garantir que está marcado como conectado
             if (!isConnected) {
-                Log.d(TAG, "✅ PRIMEIRA MENSAGEM DO SERVIDOR RECEBIDA - conexão confirmada!")
+                Log.w(TAG, "⚠️ Recebeu mensagem mas não estava marcado como conectado - corrigindo...")
                 isConnected = true
                 onConnectionChange(true)
             }
@@ -159,14 +169,20 @@ class WebSocketClient private constructor(
             return
         }
         
+        Log.d(TAG, "═══════════════════════════════════════")
+        Log.d(TAG, "🔌 INICIANDO CONEXÃO WEBSOCKET")
+        Log.d(TAG, "═══════════════════════════════════════")
+        Log.d(TAG, "🌐 URL: $serverUrl")
+        Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(8)}")
+        Log.d(TAG, "🔄 Tentativa: #${reconnectAttempts + 1}")
+        
         isReconnecting = true
         scope.launch {
             try {
-                Log.d(TAG, "Tentativa de conexão #${reconnectAttempts + 1}")
-                
                 // Fechar conexões anteriores
                 client?.dispatcher?.executorService?.shutdown()
                 
+                Log.d(TAG, "⚙️ Configurando OkHttpClient...")
                 client = OkHttpClient.Builder()
                     .readTimeout(60, TimeUnit.SECONDS)
                     .connectTimeout(CONNECTION_TIMEOUT, TimeUnit.MILLISECONDS)
@@ -175,14 +191,20 @@ class WebSocketClient private constructor(
                     .retryOnConnectionFailure(true)
                     .build()
                 
+                Log.d(TAG, "📋 Criando requisição WebSocket...")
                 val request = Request.Builder()
                     .url(serverUrl)
                     .build()
                 
+                Log.d(TAG, "🚀 Criando WebSocket...")
                 webSocket = client?.newWebSocket(request, webSocketListener)
+                Log.d(TAG, "✅ WebSocket criado - aguardando onOpen()")
                 
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao conectar WebSocket", e)
+                Log.e(TAG, "❌ Erro ao conectar WebSocket", e)
+                Log.e(TAG, "Erro detalhado: ${e.message}")
+                Log.e(TAG, "Stack trace:", e)
+                isConnected = false
                 onConnectionChange(false)
                 isReconnecting = false
                 
