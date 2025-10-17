@@ -1,6 +1,24 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3002/api';
+// Detectar automaticamente o host correto para API HTTP
+const getAPIBaseURL = () => {
+  if (typeof window === 'undefined') return 'http://localhost:3002/api';
+  
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'http://localhost:3002/api';
+  }
+  
+  return `${protocol}//${hostname}:3002/api`;
+};
+
+const API_BASE_URL = getAPIBaseURL();
 const POLLING_INTERVAL = 10000; // 10 segundos
 const MAX_POLLING_ATTEMPTS = 10;
 

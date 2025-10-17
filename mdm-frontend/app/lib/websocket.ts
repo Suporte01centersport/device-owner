@@ -2,29 +2,28 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { useHttpFallback } from './http-fallback';
 import { useMessageQueue } from './message-queue';
 
-// Detectar se está em produção e usar WSS se necessário
+// Detectar automaticamente o host correto para WebSocket
 const getWebSocketURL = () => {
   if (typeof window === 'undefined') return 'ws://localhost:3002';
   
-  const isProduction = process.env.NODE_ENV === 'production';
-  const isSecure = window.location.protocol === 'https:';
-  
+  // Se há variável de ambiente configurada, usar ela
   if (process.env.NEXT_PUBLIC_WEBSOCKET_URL) {
     return process.env.NEXT_PUBLIC_WEBSOCKET_URL;
   }
   
-  if (isProduction && isSecure) {
-    // Em produção com HTTPS, usar WSS
-    const host = window.location.host;
-    return `wss://${host.replace('3000', '3002')}`;
-  } else if (isProduction) {
-    // Em produção sem HTTPS, usar WS
-    const host = window.location.host;
-    return `ws://${host.replace('3000', '3002')}`;
-  } else {
-    // Desenvolvimento
+  // Detectar automaticamente baseado no hostname
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  
+  // Se for localhost/127.0.0.1, sempre usar localhost
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'ws://localhost:3002';
   }
+  
+  // Para qualquer outro host (IP ou domínio), usar o mesmo host
+  // Extrair apenas hostname (sem porta se houver)
+  const wsHost = hostname;
+  return `${protocol}//${wsHost}:3002`;
 };
 
 const WEBSOCKET_URL = getWebSocketURL();

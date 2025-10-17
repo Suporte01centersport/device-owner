@@ -58,7 +58,18 @@ export default function Home() {
   useEffect(() => {
     const connectWebSocket = () => {
       try {
-        const websocket = new WebSocket('ws://localhost:3002')
+        // Detectar automaticamente o host correto
+        // Se acessando de localhost/127.0.0.1, usar localhost
+        // Caso contrário, usar o mesmo host da página web
+        const hostname = window.location.hostname
+        const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
+          ? 'localhost' 
+          : hostname
+        
+        const wsUrl = `ws://${wsHost}:3002`
+        console.log('🔌 Conectando ao WebSocket:', wsUrl)
+        
+        const websocket = new WebSocket(wsUrl)
         
         websocket.onopen = () => {
           console.log('WebSocket conectado')
