@@ -3,6 +3,7 @@ package com.mdm.launcher.utils
 import android.content.Context
 import android.net.wifi.WifiManager
 import android.util.Log
+import com.mdm.launcher.BuildConfig
 import kotlinx.coroutines.*
 import java.net.*
 
@@ -10,6 +11,7 @@ import java.net.*
  * Sistema de descoberta automática do servidor MDM
  * 
  * Estratégias (em ordem de prioridade):
+ * 0. URL FIXA do BuildConfig (debug: local, release: produção) - PRIORIDADE MÁXIMA
  * 1. Domínio fixo (mdm.local) - ideal para produção
  * 2. Broadcast UDP na rede local - descoberta automática
  * 3. IP configurado manualmente (fallback)
@@ -39,6 +41,24 @@ object ServerDiscovery {
         }
         
         Log.d(TAG, "=== INICIANDO DESCOBERTA DO SERVIDOR ===")
+        
+        // Estratégia 0: URL FIXA do BuildConfig (PRIORIDADE MÁXIMA)
+        if (BuildConfig.USE_FIXED_SERVER) {
+            val fixedUrl = BuildConfig.SERVER_URL
+            Log.d(TAG, "🎯 Usando URL FIXA do BuildConfig (${if (BuildConfig.DEBUG) "DEBUG" else "RELEASE"}): $fixedUrl")
+            
+            // Validar se o servidor está respondendo
+            val serverIp = fixedUrl.substringAfter("ws://").substringBefore(":")
+            if (isServerResponding(serverIp, 3002)) {
+                Log.d(TAG, "✅ Servidor FIXO respondendo: $fixedUrl")
+                cachedServerUrl = fixedUrl
+                lastDiscoveryTime = now
+                saveDiscoveredServerUrl(context, fixedUrl)
+                return@withContext fixedUrl
+            } else {
+                Log.w(TAG, "⚠️ Servidor FIXO não está respondendo, tentando descoberta automática...")
+            }
+        }
         
         // Estratégia 1: Tentar domínio fixo (mdm.local)
         tryDomainResolution()?.let { serverUrl ->
