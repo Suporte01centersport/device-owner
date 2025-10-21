@@ -2,9 +2,13 @@
 
 Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real via WebSocket.
 
-> **✅ ATUALIZADO (21/10/2024):** Android 13+ compatível | Descoberta automática otimizada | Launcher persistente | Histórico de mensagens com limite de 5
+> **✅ ATUALIZADO (21/10/2024):** Android 13+ compatível | Reconexão automática aprimorada | Descoberta otimizada (30s) | Sistema anti-travamento | Histórico de mensagens
+
+> **🌍 AMBIENTES:** Este sistema funciona tanto em **servidor Linux de produção** quanto em **localhost para testes**. Os caminhos nos exemplos podem variar conforme sua instalação.
 
 ## 🚀 Início Rápido
+
+> **📌 Consulte:** `SETUP-AMBIENTES.md` para guia completo de configuração de produção e desenvolvimento.
 
 ### 1. **Servidor Backend (Node.js + PostgreSQL)**
 ```bash
@@ -95,8 +99,10 @@ npm run fix-null-device-ids:confirm
 
 ### **App Android (Device Owner)**
 - ✅ **Launcher persistente** - não fecha ao limpar tarefas
-- ✅ **Descoberta automática do servidor** via UDP broadcast (cache de 1 min)
+- ✅ **Descoberta automática do servidor** via URL fixa/UDP broadcast (cache de 30s)
 - ✅ **Conexão WebSocket** com reconexão automática inteligente
+- ✅ **Sistema anti-travamento** - detecta e corrige estados de reconexão travados
+- ✅ **Invalidação inteligente** - força redescoberta após 3 falhas ou servidor reiniciado
 - ✅ **Android 13/14 compatível** - BroadcastReceiver otimizado
 - ✅ **Heartbeat adaptativo** - 15s tela ativa / 30s bloqueada
 - ✅ **GPS em tempo real** com histórico
@@ -139,19 +145,22 @@ npm run fix-null-device-ids:confirm
 ```bash
 # Criar banco
 psql -U postgres
-CREATE DATABASE mdm_devices;
+CREATE DATABASE mdm_owner;
 
 # Configurar .env
-DATABASE_URL=postgresql://user:password@localhost:5432/mdm_devices
+DB_NAME=mdm_owner
+DB_USER=mdm_user
+DB_PASSWORD=sua_senha_aqui
 ```
 
 ### **Descoberta Automática**
 O app descobre o servidor automaticamente (ordem de prioridade):
-1. **DNS Local** (`mdm.local`)
-2. **UDP Broadcast** na rede local (porta 3003)
-3. **IPs comuns** (.1, .100, .10, .2, .50, .254)
-4. **Cache** (60 segundos)
-5. **SharedPreferences** (última URL conhecida)
+1. **URL Fixa** (BuildConfig - produção/desenvolvimento)
+2. **DNS Local** (`mdm.local`)
+3. **UDP Broadcast** na rede local (porta 3003)
+4. **IPs comuns** (.1, .100, .10, .2, .50, .254)
+5. **Cache** (30 segundos - otimizado para reconexão rápida)
+6. **SharedPreferences** (última URL conhecida)
 
 ## 🚨 Troubleshooting
 
@@ -352,19 +361,28 @@ adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 4. **GPS**: Precisão varia 1-20m (normal)
 5. **Bateria**: WakeLock usado apenas quando tela ativa
 6. **Launcher**: Persiste mesmo ao limpar tarefas recentes
-7. **Cache**: Descoberta do servidor em cache por 60s
+7. **Cache**: Descoberta do servidor em cache por 30s (otimizado para reconexão)
 8. **Mensagens**: Histórico limitado às 5 mensagens mais recentes
+9. **Reconexão**: Detecta e corrige travamentos automaticamente (timeout 15s)
 
 ## 🎯 Melhorias Recentes (21/10/2024)
 
+### **Última Atualização - Reconexão Automática Aprimorada**
+✅ **Reconexão inteligente** - Invalidação automática de cache após 3 falhas consecutivas  
+✅ **Timeout de segurança** - Detecta travamento em reconexão (15s) e força reset  
+✅ **Detecção de servidor reiniciado** - Health check identifica travamento após 2 minutos  
+✅ **Cache otimizado** - Reduzido para 30s (antes 60s) para reconexão mais rápida  
+✅ **Sistema de falhas** - Registra e conta falhas para forçar redescoberta quando necessário  
+
+### **Atualizações Anteriores**
 ✅ **Android 13/14 compatível** - Correção BroadcastReceiver  
-✅ **Descoberta otimizada** - Cache de 60s, 90% menos chamadas  
+✅ **Descoberta otimizada** - Cache inteligente, 90% menos chamadas  
 ✅ **NetworkMonitor** - Debounce de 5s para evitar eventos repetidos  
 ✅ **Launcher persistente** - `singleTask` + `excludeFromRecents`  
 ✅ **Conexão estável** - Reconexão inteligente após mudança de rede  
-✅ **Boot loop resolvido** - Correções nos Broadcast Receivers para evitar crash após descarga completa da bateria  
-✅ **Device Owner melhorado** - Solução para erro "múltiplos usuários" com remoção de usuários secundários  
-✅ **Histórico de mensagens** - Sistema de notificações com histórico limitado a 5 mensagens  
+✅ **Boot loop resolvido** - Correções nos Broadcast Receivers  
+✅ **Device Owner melhorado** - Solução para erro "múltiplos usuários"  
+✅ **Histórico de mensagens** - Sistema com limite de 5 mensagens  
 ✅ **Badge de notificação** - Contador visual de mensagens não lidas  
 
 ## 🆘 Suporte
@@ -377,9 +395,10 @@ adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 | Device Owner não ativa | Remover usuários secundários + conta Google |
 | App crasha Android 13+ | Reinstalar versão atualizada |
 | Launcher some ao limpar tarefas | Reinstalar versão atualizada |
-| Descoberta muito lenta | Normal na primeira vez, depois usa cache |
+| Descoberta muito lenta | Normal na primeira vez, depois usa cache (30s) |
 | Boot loop após descarga bateria | ✅ RESOLVIDO - Correções nos Broadcast Receivers |
 | START_CLASS_NOT_FOUND após boot | **REALME**: Ver seção "Instalação Realme/ColorOS" abaixo |
+| Não reconecta após servidor reiniciar | ✅ RESOLVIDO - Sistema anti-travamento implementado |
 
 **Logs debug:**
 ```bash

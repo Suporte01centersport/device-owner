@@ -601,14 +601,15 @@ wss.on('connection', ws => {
                 
                 // Atualizar status para offline no armazenamento persistente
                 if (persistentDevices.has(deviceId)) {
-                    persistentDevices.set(deviceId, {
+                    const updatedDevice = {
                         ...persistentDevices.get(deviceId),
                         status: 'offline',
                         lastSeen: Date.now()
-                    });
+                    };
+                    persistentDevices.set(deviceId, updatedDevice);
                     
-                    // Salvar no arquivo
-                    // Dados já salvos no PostgreSQL via saveDeviceToDatabase
+                    // SALVAR NO BANCO para manter consistência
+                    saveDeviceToDatabase(updatedDevice);
                 }
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
@@ -616,19 +617,25 @@ wss.on('connection', ws => {
                 // Limpar dados sensíveis quando desconectado
                 if (persistentDevices.has(deviceId)) {
                     const device = persistentDevices.get(deviceId);
-                    persistentDevices.set(deviceId, {
+                    const cleanedDevice = {
                         ...device,
                         status: 'offline',
                         lastSeen: Date.now(),
                         // Limpar dados sensíveis - manter apenas identificação básica
+                        // IMPORTANTE: Preservar name, model, manufacturer para identificação
                         batteryLevel: 0,
                         storageTotal: 0,
                         storageUsed: 0,
                         installedAppsCount: 0,
                         allowedApps: [],
                         isCharging: false
-                    });
-                    log.info('Dados limpos para dispositivo offline', { deviceId });
+                    };
+                    persistentDevices.set(deviceId, cleanedDevice);
+                    
+                    // SALVAR NO BANCO para manter consistência
+                    saveDeviceToDatabase(cleanedDevice);
+                    
+                    log.info('Dados limpos para dispositivo offline e salvos no banco', { deviceId });
                 }
                 
                 // Notificar clientes web IMEDIATAMENTE sobre desconexão
@@ -873,9 +880,30 @@ function handleDeviceStatus(ws, data) {
     // Armazenar dispositivo conectado
     connectedDevices.set(deviceId, ws);
     
+    // PRESERVAR NOME DO BANCO: Verificar se há nome salvo no banco antes de sobrescrever
+    let finalName = data.data.name;
+    if (existingDevice && existingDevice.name) {
+        // Se já existe dispositivo com nome, verificar se mudou intencionalmente
+        const isCustomName = existingDevice.name !== existingDevice.model && 
+                            existingDevice.name !== `${existingDevice.manufacturer} ${existingDevice.model}`;
+        
+        // Se tinha nome personalizado e agora veio nome padrão (modelo), PRESERVAR o personalizado
+        const receivedDefaultName = data.data.name === data.data.model || 
+                                    data.data.name === `${data.data.manufacturer} ${data.data.model}`;
+        
+        if (isCustomName && receivedDefaultName) {
+            console.log('🛡️ PRESERVANDO NOME PERSONALIZADO DO BANCO');
+            console.log(`   Nome no banco: "${existingDevice.name}" (personalizado)`);
+            console.log(`   Nome recebido: "${data.data.name}" (padrão/modelo)`);
+            console.log(`   ✅ Mantendo: "${existingDevice.name}"`);
+            finalName = existingDevice.name; // PRESERVAR nome do banco
+        }
+    }
+    
     // Armazenar dispositivo persistente com informações completas
     const deviceData = {
         ...data.data,
+        name: finalName, // Usar nome preservado
         status: 'online',
         lastSeen: now, // Sempre atualizar com timestamp atual
         connectionId: ws.connectionId,
@@ -885,12 +913,12 @@ function handleDeviceStatus(ws, data) {
     console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
     
     // Verificar se o nome mudou (sempre, não apenas em reconexões)
-    const nameChanged = existingDevice && existingDevice.name !== data.data.name;
+    const nameChanged = existingDevice && existingDevice.name !== finalName;
     
     if (nameChanged) {
         console.log('🔔 Nome mudou durante atualização de status!');
         console.log(`   Nome anterior: "${existingDevice.name}"`);
-        console.log(`   Nome novo: "${data.data.name}"`);
+        console.log(`   Nome novo: "${finalName}"`);
     }
     
     persistentDevices.set(deviceId, deviceData);
@@ -1872,18 +1900,23 @@ setInterval(() => {
                 });
                 
                 // Atualizar status para offline e limpar dados sensíveis
-                persistentDevices.set(deviceId, {
+                const cleanedDevice = {
                     ...device,
                     status: 'offline',
                     lastSeen: device.lastSeen, // Manter o último timestamp visto
                     // Limpar dados sensíveis quando offline
+                    // IMPORTANTE: Preservar name, model, manufacturer para identificação
                     batteryLevel: 0,
                     storageTotal: 0,
                     storageUsed: 0,
                     installedAppsCount: 0,
                     allowedApps: [],
                     isCharging: false
-                });
+                };
+                persistentDevices.set(deviceId, cleanedDevice);
+                
+                // SALVAR NO BANCO para manter consistência
+                saveDeviceToDatabase(cleanedDevice);
                 
                 // Notificar clientes web sobre mudança de status
                 webClients.forEach(client => {
@@ -1941,11 +1974,16 @@ setInterval(() => {
                     });
                     healthMonitor.recordConnection(deviceId, false);
                     // Se falhou ao enviar ping, marcar como offline
-                    persistentDevices.set(deviceId, {
+                    const offlineDevice = {
                         ...device,
                         status: 'offline',
                         lastSeen: device.lastSeen
-                    });
+                    };
+                    persistentDevices.set(deviceId, offlineDevice);
+                    
+                    // SALVAR NO BANCO para manter consistência
+                    saveDeviceToDatabase(offlineDevice);
+                    
                     connectedDevices.delete(deviceId);
                 }
             } else {

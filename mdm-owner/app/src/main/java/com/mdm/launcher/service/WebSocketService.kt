@@ -1266,6 +1266,9 @@ class WebSocketService : Service() {
         }
     }
     
+    private var lastReconnectingTime = 0L
+    private val MAX_RECONNECTING_TIME = 120000L // 2 minutos máximo em estado de reconexão
+    
     private fun startHealthCheck() {
         // Cancelar verificação anterior se existir
         healthCheckJob?.cancel()
@@ -1278,24 +1281,51 @@ class WebSocketService : Service() {
                 try {
                     val isConnected = webSocketClient?.isConnected() ?: false
                     val isReconnecting = webSocketClient?.isReconnecting() ?: false
+                    val now = System.currentTimeMillis()
                     
                     Log.d(TAG, "🏥 Verificação de saúde: conectado=$isConnected, reconectando=$isReconnecting")
                     
-                    // Se já está reconectando, pular esta verificação
+                    // Se está reconectando, verificar há quanto tempo
                     if (isReconnecting) {
-                        Log.d(TAG, "⏳ Reconexão em andamento, pulando verificação...")
-                    } else if (!isConnected) {
-                        // Desconectado e não está reconectando: verificar saúde
-                        Log.w(TAG, "⚠️ WebSocket desconectado, verificando saúde...")
-                        val isHealthy = webSocketClient?.checkConnectionHealth() ?: false
-                        
-                        if (!isHealthy) {
-                            Log.w(TAG, "❌ Conexão não saudável, tentando reconectar...")
-                            webSocketClient?.forceReconnect()
+                        if (lastReconnectingTime == 0L) {
+                            lastReconnectingTime = now
+                            Log.d(TAG, "⏳ Reconexão iniciada, monitorando...")
+                        } else {
+                            val timeReconnecting = now - lastReconnectingTime
+                            
+                            if (timeReconnecting > MAX_RECONNECTING_TIME) {
+                                Log.w(TAG, "⚠️ TRAVADO em reconexão por ${timeReconnecting/1000}s - FORÇANDO RESET!")
+                                lastReconnectingTime = 0L
+                                
+                                // Invalidar cache do servidor
+                                com.mdm.launcher.utils.ServerDiscovery.invalidateCache()
+                                
+                                // Forçar reconexão completa
+                                webSocketClient?.forceReconnect()
+                            } else {
+                                Log.d(TAG, "⏳ Reconexão em andamento há ${timeReconnecting/1000}s...")
+                            }
                         }
                     } else {
-                        // Conectado: apenas verificar saúde silenciosamente
-                        webSocketClient?.checkConnectionHealth()
+                        // Resetar contador se não está mais reconectando
+                        if (lastReconnectingTime != 0L) {
+                            lastReconnectingTime = 0L
+                            Log.d(TAG, "✅ Saiu do estado de reconexão")
+                        }
+                        
+                        if (!isConnected) {
+                            // Desconectado e não está reconectando: verificar saúde
+                            Log.w(TAG, "⚠️ WebSocket desconectado, verificando saúde...")
+                            val isHealthy = webSocketClient?.checkConnectionHealth() ?: false
+                            
+                            if (!isHealthy) {
+                                Log.w(TAG, "❌ Conexão não saudável, tentando reconectar...")
+                                webSocketClient?.forceReconnect()
+                            }
+                        } else {
+                            // Conectado: apenas verificar saúde silenciosamente
+                            webSocketClient?.checkConnectionHealth()
+                        }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao verificar saúde da conexão", e)

@@ -1,10 +1,16 @@
 # 🚀 Guia de Deploy - Ambientes Produção e Desenvolvimento
 
+> **📌 IMPORTANTE:** 
+> - Caminhos como `/opt/mdm-owner` são **exemplos**. Use o caminho onde você clonou o projeto.
+> - Nome do banco de dados (`mdm_owner`) é padrão. Verifique seu `.env` se for diferente.
+> - Este guia serve tanto para **servidor Linux de produção** quanto **localhost para testes**.
+
 ## 📋 Sumário
 
 - [Servidor Ubuntu (Produção)](#servidor-ubuntu-produção)
 - [PC Windows (Desenvolvimento)](#pc-windows-desenvolvimento)
 - [Configurações de Rede](#configurações-de-rede)
+- [Reconexão Automática](#reconexão-automática-após-reiniciar-servidor)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -31,9 +37,12 @@ sudo apt-get install -y git
 ### Configuração Inicial
 
 ```bash
-# 1. Clonar o repositório (se ainda não clonou)
+# 1. Clonar o repositório (ajuste o caminho conforme preferir)
 git clone <seu-repositorio> /opt/mdm-owner
-cd /opt/mdm-owner
+# ou
+# git clone <seu-repositorio> /home/$USER/device-owner
+
+cd /opt/mdm-owner  # ou o caminho que você escolheu
 
 # 2. Tornar script executável
 chmod +x deploy-production.sh
@@ -41,6 +50,8 @@ chmod +x deploy-production.sh
 # 3. Executar deploy
 ./deploy-production.sh
 ```
+
+**Dica:** Anote o caminho escolhido para uso nos próximos comandos.
 
 ### Editar Configurações de Produção
 
@@ -54,10 +65,13 @@ nano .env
 Altere estas linhas:
 
 ```env
+DB_NAME=mdm_owner              # Nome do banco (ajuste se necessário)
 DB_PASSWORD=SUA_SENHA_SEGURA_AQUI
 ADMIN_PASSWORD=SUA_SENHA_ADMIN_AQUI
 JWT_SECRET=STRING_ALEATORIA_LONGA_AQUI
 ```
+
+**Dica:** Execute `sudo -u postgres psql -c "\l" | grep mdm` para ver o nome do seu banco.
 
 **Reinicie os serviços após alteração:**
 
@@ -223,8 +237,11 @@ sudo systemctl status postgresql
 # Iniciar PostgreSQL
 sudo systemctl start postgresql
 
-# Verificar conexão
+# Verificar conexão (substitua mdm_owner pelo nome do seu banco)
 psql -U mdm_user -d mdm_owner -h localhost
+
+# Ver bancos existentes
+sudo -u postgres psql -c "\l" | grep mdm
 ```
 
 #### Firewall bloqueando
@@ -267,6 +284,11 @@ taskkill /PID <PID> /F
 - Verifique se PostgreSQL está rodando
 - Verifique credenciais no `.env`
 - Verifique se banco foi criado (`npm run db:setup`)
+- Verifique nome do banco no `.env` (DB_NAME)
+  ```bash
+  # Ver bancos existentes
+  sudo -u postgres psql -c "\l" | grep mdm
+  ```
 
 #### "WebSocket connection failed"
 
@@ -332,6 +354,7 @@ pm2 set pm2-logrotate:retain 30
    Conteúdo:
    ```bash
    #!/bin/bash
+   # Substitua mdm_owner pelo nome do seu banco (ex: mdm_database)
    pg_dump -U mdm_user mdm_owner > /opt/backups/mdm_$(date +%Y%m%d_%H%M%S).sql
    ```
 
@@ -378,6 +401,34 @@ pm2 logs
 
 ---
 
+## 🔄 Reconexão Automática após Reiniciar Servidor
+
+O sistema agora **reconecta automaticamente** quando você reinicia o servidor:
+
+### **Novo Comportamento:**
+```bash
+# Reiniciar servidor
+pm2 restart mdm-websocket
+
+# ✅ Launchers reconectam automaticamente em 10-20 segundos
+# ❌ ANTES: Era necessário reinstalar o app
+```
+
+### **Melhorias Implementadas:**
+- ✅ **Timeout de 15s** - detecta tentativa travada e reseta
+- ✅ **3 tentativas** - após falhar 3x, invalida cache e redescobre servidor  
+- ✅ **Health check** - verifica a cada 60s se está travado (timeout 2min)
+- ✅ **Cache 30s** - reduzido de 60s para reconexão mais rápida
+
+### **Quando Testar:**
+- Após fazer `pm2 restart all`
+- Após atualizar código e fazer `git pull`
+- Após reiniciar servidor Linux completamente
+
+**Tempo esperado de reconexão:** 10-20 segundos
+
+---
+
 **Última atualização:** 21/10/2024
-**Versão:** 1.0.0
+**Versão:** 1.0.1
 

@@ -319,14 +319,19 @@ adb shell dumpsys package com.mdm.launcher | findstr permission
 Array.from(connectedDevices.keys())
 
 // 2. Verificar se o device ID está correto
-// 3. Aguardar dispositivo conectar
+// 3. Aguardar dispositivo conectar (pode levar até 20s após servidor reiniciar)
 // 4. Verificar logs do dispositivo
 ```
 
 ```bash
 # No Android
 adb logcat -s WebSocketService:* -v time
+
+# No servidor
+pm2 logs mdm-websocket | grep "device_connected"
 ```
+
+**Nota:** Após reiniciar servidor com `pm2 restart`, aguarde 20 segundos para launchers reconectarem automaticamente.
 
 ### Problema 4: Instalação Falha
 
@@ -385,6 +390,27 @@ Estados possíveis:
 - `progress: 1-99` - Download em andamento
 - `progress: 100, success: true` - Instalação em andamento
 - `success: false` - Erro ocorreu
+
+---
+
+## 🔄 Reconexão Automática (Atualização 21/10/2024)
+
+O sistema agora **reconecta automaticamente** após o servidor reiniciar:
+
+### **Melhorias:**
+- ✅ Launcher reconecta em 10-20s após servidor reiniciar
+- ✅ Não precisa mais reinstalar app após `pm2 restart`
+- ✅ Cache otimizado (30s) para reconexão mais rápida
+- ✅ Sistema anti-travamento detecta conexões presas
+
+### **Importante para Atualizações:**
+Quando enviar comando de atualização após servidor reiniciar:
+1. **Aguarde 20 segundos** para launcher reconectar
+2. **Verifique logs** para confirmar conexão:
+   ```bash
+   pm2 logs mdm-websocket | grep "device_connected"
+   ```
+3. **Envie o comando** de atualização normalmente
 
 ---
 

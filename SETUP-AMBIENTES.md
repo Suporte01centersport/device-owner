@@ -17,6 +17,8 @@ device-owner/
 
 ## 🖥️ SERVIDOR UBUNTU (PRODUÇÃO)
 
+> **📌 Nota:** Os caminhos usados neste guia (`/opt/mdm-owner`) são exemplos. Você pode usar qualquer caminho, como `/home/seu-usuario/device-owner`. Ajuste os comandos conforme necessário.
+
 ### 1️⃣ Preparar Servidor
 
 ```bash
@@ -27,10 +29,14 @@ sudo apt install -y nodejs npm postgresql postgresql-contrib git
 # Instalar PM2 globalmente
 sudo npm install -g pm2
 
-# Clonar projeto (se ainda não fez)
+# Clonar projeto (ajuste o caminho conforme sua preferência)
 cd /opt
 sudo git clone <seu-repo> mdm-owner
 sudo chown -R $USER:$USER mdm-owner
+
+# OU em outro local (exemplo):
+# cd /home/$USER
+# git clone <seu-repo> device-owner
 ```
 
 ### 2️⃣ Configurar Ambiente
@@ -46,9 +52,12 @@ nano .env
 ```
 
 **Altere estas linhas OBRIGATORIAMENTE:**
+- `DB_NAME=mdm_owner` → Nome do banco (ou deixe como está)
 - `DB_PASSWORD=` → Senha forte do banco
 - `ADMIN_PASSWORD=` → Senha forte do admin
 - `JWT_SECRET=` → String aleatória longa
+
+**Nota:** Se seu banco PostgreSQL tem nome diferente (ex: `mdm_database`), altere `DB_NAME`
 
 ### 3️⃣ Deploy Automático
 
@@ -208,6 +217,21 @@ npm install
 
 ## 🐛 Troubleshooting Rápido
 
+### Launcher não reconecta após reiniciar servidor
+
+**Sintoma:** Após `pm2 restart`, launcher mostra "conectado" mas não aparece na web.
+
+**Solução:**
+```bash
+# No celular, feche e abra o launcher
+# OU aguarde até 20 segundos - deve reconectar automaticamente
+
+# Se não resolver, verificar logs:
+pm2 logs mdm-websocket | grep "DEVICE_STATUS\|device_connected"
+```
+
+**Causa:** Cache do ServerDiscovery ou estado travado (✅ resolvido na última atualização)
+
 ### Porta em uso
 
 **Ubuntu:**
@@ -229,12 +253,22 @@ taskkill /PID <PID> /F
 ```bash
 sudo systemctl status postgresql
 sudo systemctl start postgresql
+
+# Verificar nome do banco criado
+sudo -u postgres psql -c "\l" | grep mdm
+
+# Conectar (use o nome correto do seu banco)
+sudo -u postgres psql -d mdm_owner
+# ou
+sudo -u postgres psql -d mdm_database
 ```
 
 **Windows:**
 - Abrir "Serviços"
 - Procurar "PostgreSQL"
 - Iniciar serviço
+
+**Nota:** O nome do banco pode variar (mdm_owner, mdm_database, mdm_owner_dev). Verifique o arquivo `.env`
 
 ### PM2 não encontrado
 
@@ -276,6 +310,32 @@ npx pm2 <comando>
 - `start-dev-windows.bat` - Script de desenvolvimento Windows
 - `env.production.example` - Template de produção
 - `env.development.example` - Template de desenvolvimento
+
+---
+
+## 🔄 Melhorias de Reconexão (21/10/2024)
+
+O sistema agora reconecta automaticamente quando o servidor reinicia, sem necessidade de reinstalar o app:
+
+### **Funcionalidades:**
+- ✅ **Cache reduzido** para 30s (antes 60s)
+- ✅ **Timeout de 15s** - detecta conexão travada e reseta
+- ✅ **Contador de falhas** - força redescoberta após 3 falhas
+- ✅ **Health check** - detecta travamento após 2 minutos
+- ✅ **Invalidação inteligente** - limpa cache quando servidor fica indisponível
+
+### **Como Funciona:**
+1. Servidor reinicia → WebSocket falha
+2. Após 3 falhas → Invalida cache e redescobre servidor
+3. Conecta automaticamente sem intervenção manual
+
+### **Testar:**
+```bash
+# No servidor Linux
+pm2 restart mdm-websocket
+
+# O launcher deve reconectar em até 20 segundos automaticamente
+```
 
 ---
 
