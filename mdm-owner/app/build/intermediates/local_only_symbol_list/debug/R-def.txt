@@ -37,6 +37,7 @@ color primary_color
 color primary_text
 color secondary_text
 color white
+drawable badge_background
 drawable btn_primary
 drawable ic_android
 drawable ic_apps
@@ -54,6 +55,7 @@ id device_id_edit_text
 id device_owner_status_text
 id empty_layout
 id loading_progress
+id message_badge
 id message_text
 id message_timestamp
 id modal_container

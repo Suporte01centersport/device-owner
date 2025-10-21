@@ -53,6 +53,7 @@ import java.lang.reflect.Modifier
 import com.google.gson.reflect.TypeToken
 import com.mdm.launcher.data.AppInfo
 import com.mdm.launcher.data.DeviceInfo
+import com.mdm.launcher.data.ReceivedMessage
 import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.service.WebSocketService
 import com.mdm.launcher.service.LocationService
@@ -64,6 +65,7 @@ import com.mdm.launcher.utils.GeofenceEvent
 import com.mdm.launcher.utils.PermissionManager
 import com.mdm.launcher.utils.NetworkMonitor
 import com.mdm.launcher.utils.ServerDiscovery
+import com.mdm.launcher.utils.RealmeHelper
 import kotlinx.coroutines.*
 
 // Enum para tipos de permissão
@@ -90,8 +92,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var loadingProgress: ProgressBar
     private lateinit var connectionStatusText: TextView
     private lateinit var configButton: com.google.android.material.floatingactionbutton.FloatingActionButton
+    private lateinit var messageBadge: android.widget.TextView
     
     private var appAdapter: AppAdapter? = null
+    
+    // Histórico de mensagens recebidas
+    private val receivedMessages = mutableListOf<ReceivedMessage>()
+    private var unreadMessagesCount = 0
     private var webSocketClient: WebSocketClient? = null
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val handler = Handler(Looper.getMainLooper())
@@ -161,6 +168,11 @@ class MainActivity : AppCompatActivity() {
     // BroadcastReceiver para mensagens do Service
     private val serviceMessageReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d(TAG, "🔔 === BROADCAST RECEIVER CHAMADO ===")
+            Log.d(TAG, "Action: ${intent?.action}")
+            Log.d(TAG, "Context: ${context != null}")
+            Log.d(TAG, "Intent: ${intent != null}")
+            
             when (intent?.action) {
                 "com.mdm.launcher.UPDATE_APP_PERMISSIONS" -> {
                     val message = intent.getStringExtra("message")
@@ -209,6 +221,30 @@ class MainActivity : AppCompatActivity() {
                     }
                     Log.d(TAG, "========================================")
                 }
+                "com.mdm.launcher.MESSAGE_RECEIVED" -> {
+                    val unreadCount = intent.getIntExtra("unread_count", 0)
+                    Log.d(TAG, "📬 ══════════════════════════════════════════")
+                    Log.d(TAG, "📬 BROADCAST MESSAGE_RECEIVED RECEBIDO!")
+                    Log.d(TAG, "📬 ══════════════════════════════════════════")
+                    Log.d(TAG, "Unread count do broadcast: $unreadCount")
+                    Log.d(TAG, "Mensagens antes de recarregar: ${receivedMessages.size}")
+                    
+                    // Recarregar mensagens do SharedPreferences
+                    loadReceivedMessages()
+                    
+                    Log.d(TAG, "Após carregar - Total: ${receivedMessages.size}, Não lidas: $unreadMessagesCount")
+                    
+                    // Listar mensagens carregadas
+                    receivedMessages.forEachIndexed { index, msg ->
+                        Log.d(TAG, "  Mensagem $index: ${msg.message.take(30)}... (lida=${msg.read})")
+                    }
+                    
+                    // Atualizar badge visual
+                    updateMessageBadge()
+                    
+                    Log.d(TAG, "✅ Badge atualizado via broadcast")
+                    Log.d(TAG, "════════════════════════════════════════════")
+                }
             }
         }
     }
@@ -236,22 +272,9 @@ class MainActivity : AppCompatActivity() {
             val hasConfiguredOptimizations = prefs.getBoolean("has_configured_battery_optimizations", false)
             
             if (!hasConfiguredOptimizations || !isIgnoringOptimizations) {
-                Log.d(TAG, "Configurando whitelist de bateria...")
+                Log.d(TAG, "Configurando otimizações de bateria via helper...")
                 
-                // Solicitar whitelist de bateria diretamente via Settings
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    try {
-                        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                            data = Uri.parse("package:$packageName")
-                        }
-                        startActivity(intent)
-                        Log.d(TAG, "✅ Solicitação de whitelist de bateria enviada")
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao solicitar whitelist de bateria", e)
-                    }
-                }
-                
-                // Configurar alarmes exatos (Android 12+)
+                // Usar helper que já tem todos os fallbacks
                 helper.configureOptimizations(this)
                 
                 // Marcar como configurado
@@ -355,6 +378,7 @@ class MainActivity : AppCompatActivity() {
                 addAction("com.mdm.launcher.SET_KIOSK_MODE")
                 addAction("com.mdm.launcher.UEM_COMMAND")
                 addAction("com.mdm.launcher.ADMIN_PASSWORD_CHANGED")
+                addAction("com.mdm.launcher.MESSAGE_RECEIVED")
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(serviceMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -387,19 +411,43 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun handleNotificationIntent() {
-        val intent = intent
-        if (intent.getBooleanExtra("show_message_modal", false)) {
-            val messageContent = intent.getStringExtra("message_content")
-            if (!messageContent.isNullOrEmpty()) {
-                Log.d(TAG, "Intent de notificação recebido, mostrando modal com mensagem: $messageContent")
-                // Resetar flag para permitir exibição da nova mensagem
-                hasShownPendingMessage = false
-                isMessageModalVisible = false
-                // Aguardar um pouco para garantir que a UI esteja pronta
-                messageModal?.postDelayed({
-                    showMessageModal(messageContent)
-                }, 500)
-            }
+        val intent = intent ?: return
+        
+        Log.d(TAG, "🔍 === VERIFICANDO INTENT PARA NOTIFICAÇÃO ===")
+        Log.d(TAG, "Extra 'mark_message_as_read': ${intent.hasExtra("mark_message_as_read")}")
+        Log.d(TAG, "Extra 'show_message_modal': ${intent.hasExtra("show_message_modal")}")
+        Log.d(TAG, "Valor mark_message_as_read: ${intent.getBooleanExtra("mark_message_as_read", false)}")
+        
+        // IMPORTANTE: Extrair valores ANTES de remover extras
+        val shouldMarkAsRead = intent.hasExtra("mark_message_as_read") && intent.getBooleanExtra("mark_message_as_read", false)
+        val shouldShowModal = intent.hasExtra("show_message_modal") && intent.getBooleanExtra("show_message_modal", false)
+        val messageContent = intent.getStringExtra("message_content")
+        
+        // Processar: marcar como lida
+        if (shouldMarkAsRead) {
+            Log.d(TAG, "🔔 Notificação clicada - carregando e marcando mensagens como lidas")
+            loadReceivedMessages()
+            markMessagesAsRead()
+        }
+        
+        // Processar: mostrar modal
+        if (shouldShowModal && !messageContent.isNullOrEmpty()) {
+            Log.d(TAG, "📬 Mostrando modal com mensagem: ${messageContent.take(50)}")
+            // Resetar flag para permitir exibição da nova mensagem
+            hasShownPendingMessage = false
+            isMessageModalVisible = false
+            // Aguardar um pouco para garantir que a UI esteja pronta
+            messageModal?.postDelayed({
+                showMessageModal(messageContent)
+            }, 500)
+        }
+        
+        // AGORA SIM: Limpar extras para não processar novamente
+        if (shouldMarkAsRead || shouldShowModal) {
+            intent.removeExtra("mark_message_as_read")
+            intent.removeExtra("show_message_modal")
+            intent.removeExtra("message_content")
+            Log.d(TAG, "✅ Extras removidos do intent")
         }
     }
     
@@ -460,6 +508,10 @@ class MainActivity : AppCompatActivity() {
         loadingProgress = findViewById(R.id.loading_progress)
         connectionStatusText = findViewById(R.id.connection_status_text)
         configButton = findViewById(R.id.config_button)
+        messageBadge = findViewById(R.id.message_badge)
+        
+        // Carregar mensagens do histórico
+        loadReceivedMessages()
     }
     
     private fun saveData() {
@@ -736,8 +788,16 @@ class MainActivity : AppCompatActivity() {
             createNotificationChannel()
         }
         
-        // Continuar com a inicialização normal do app
-        initializeApp()
+        // Continuar com a inicialização normal do app SOMENTE na primeira abertura
+        // Evita serviços iniciarem antes de o usuário ver e aceitar permissões
+        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+        val alreadyInitialized = prefs.getBoolean("already_initialized", false)
+        if (!alreadyInitialized) {
+            initializeApp()
+            prefs.edit().putBoolean("already_initialized", true).apply()
+        } else {
+            Log.d(TAG, "Inicialização já realizada anteriormente - evitando reinicialização precoce")
+        }
     }
     
     private fun createNotificationChannel() {
@@ -799,7 +859,7 @@ class MainActivity : AppCompatActivity() {
         val usageStatsNotSupported = sharedPreferences.getBoolean("usage_stats_not_supported", false)
         
         if (forcePermissionCheck) {
-            Log.d(TAG, "🔄 FORÇANDO VERIFICAÇÃO COMPLETA DE PERMISSÕES (reinstalação detectada)")
+            Log.d(TAG, "🔄 FORÇANDO VERIFICAÇÃO COMPLETA DE PERMISSÕES (reinstalação/primeira abertura)")
             // Resetar contadores para permitir solicitações
             permissionRequestCount = 0
             lastPermissionRequestTime = 0L
@@ -817,7 +877,7 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
-        // Sistema de permissões sequencial e organizado
+        // Sistema de permissões sequencial e organizado - guiado pela UI na primeira abertura
         val permissionsToCheck = mutableListOf<PermissionItem>()
         
         // 1. Device Admin (mais importante - deve ser primeiro)
@@ -941,6 +1001,32 @@ class MainActivity : AppCompatActivity() {
         // Inicializar todas as funcionalidades após permissões concedidas
         initializeLocationTracking()
         Log.d(TAG, "Todas as permissões concedidas - funcionalidades inicializadas")
+        
+        // Verificar se é dispositivo Realme e mostrar instruções se necessário
+        checkRealmeOptimizations()
+    }
+    
+    private fun checkRealmeOptimizations() {
+        if (RealmeHelper.isRealmeDevice()) {
+            Log.d(TAG, "📱 Dispositivo Realme detectado - verificando otimizações")
+            
+            // Verificar se é a primeira vez
+            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val hasShownRealmeInstructions = prefs.getBoolean("has_shown_realme_instructions", false)
+            
+            if (!hasShownRealmeInstructions) {
+                // Mostrar instruções apenas uma vez
+                prefs.edit().putBoolean("has_shown_realme_instructions", true).apply()
+                
+                // Delay para não aparecer junto com outras solicitações
+                scope.launch {
+                    delay(3000) // 3 segundos
+                    runOnUiThread {
+                        RealmeHelper.showRealmeSetupInstructions(this@MainActivity)
+                    }
+                }
+            }
+        }
     }
     
     private fun setupNetworkMonitoring() {
@@ -991,15 +1077,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // Flag para prevenir múltiplas reconexões simultâneas
+    @Volatile private var isReconnecting = false
+    @Volatile private var lastNetworkChangeTime = 0L
+    
     private fun initializeNetworkMonitor() {
         Log.d(TAG, "🌐 Inicializando NetworkMonitor...")
         networkMonitor = NetworkMonitor(this)
         
         networkMonitor?.startMonitoring { isConnected ->
+            val now = System.currentTimeMillis()
+            
+            // Debounce: ignorar mudanças muito rápidas (< 2 segundos)
+            if (now - lastNetworkChangeTime < 2000) {
+                Log.d(TAG, "⏭️ Mudança de rede muito rápida, ignorando (debounce)")
+                return@startMonitoring
+            }
+            lastNetworkChangeTime = now
+            
             Log.d(TAG, "🔄 Mudança de conectividade detectada: $isConnected")
             
             if (isConnected) {
                 Log.d(TAG, "✅ Rede disponível - notificando mudança de rede...")
+                
+                // Se já está reconectando, não fazer nada
+                if (isReconnecting) {
+                    Log.d(TAG, "⏳ Reconexão já em andamento, pulando...")
+                    return@startMonitoring
+                }
                 
                 // Invalidar cache do ServerDiscovery para forçar nova descoberta
                 Log.d(TAG, "🧹 Invalidando cache do ServerDiscovery para forçar redescoberta...")
@@ -1010,11 +1115,15 @@ class MainActivity : AppCompatActivity() {
                 
                 // Aguardar um pouco para a rede se estabilizar
                 scope.launch {
-                    delay(1000) // Reduzido de 2s para 1s - mais responsivo
+                    isReconnecting = true
+                    delay(2000) // 2 segundos para rede estabilizar
                     attemptReconnection()
+                    delay(1000) // Aguardar reconexão completar
+                    isReconnecting = false
                 }
             } else {
                 Log.d(TAG, "❌ Rede indisponível - atualizando status de conexão")
+                isReconnecting = false
                 // Atualizar status imediatamente quando rede é perdida
                 runOnUiThread {
                     updateConnectionStatus(false)
@@ -1053,7 +1162,8 @@ class MainActivity : AppCompatActivity() {
                 delay(3000) // Verificar a cada 3 segundos (era 10s) - mais responsivo
                 
                 val hasNetwork = networkMonitor?.isConnected?.value ?: false
-                val isWebSocketConnected = isServiceBound && webSocketService?.isConnected() == true
+                val isWebSocketConnected = (isServiceBound && webSocketService?.isConnected() == true) ||
+                    (webSocketClient?.isConnected() == true)
                 
                 // Se não há rede, garantir que status seja atualizado
                 if (!hasNetwork && connectionStatusText.text != "Sem Rede") {
@@ -1086,7 +1196,16 @@ class MainActivity : AppCompatActivity() {
         scope.launch {
             try {
                 // Aguardar um pouco para a rede se estabilizar completamente
-                delay(2000) // Reduzido de 3s para 2s - mais responsivo
+                delay(2000)
+                
+                // Verificar PRIMEIRO se já está conectado
+                val isWsClientConnected = webSocketClient?.isConnected() ?: false
+                val isWsServiceConnected = webSocketService?.isConnected() ?: false
+                
+                if (isWsClientConnected || isWsServiceConnected) {
+                    Log.d(TAG, "✅ WebSocket já conectado (client=$isWsClientConnected, service=$isWsServiceConnected) - não é necessário reconectar")
+                    return@launch
+                }
                 
                 Log.d(TAG, "🔍 Descobrindo servidor após reconexão de rede...")
                 val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
@@ -1095,42 +1214,47 @@ class MainActivity : AppCompatActivity() {
                 // Salvar URL descoberta para uso futuro
                 ServerDiscovery.saveDiscoveredServerUrl(this@MainActivity, newServerUrl)
                 
-                // SEMPRE reiniciar o WebSocketService para garantir nova conexão
-                Log.d(TAG, "🔄 Reiniciando WebSocketService com novo servidor...")
+                // Verificar novamente se conectou durante a descoberta
+                val stillDisconnected = !(webSocketClient?.isConnected() ?: false) && 
+                                       !(webSocketService?.isConnected() ?: false)
                 
-                // Parar serviço atual se estiver rodando
-                if (isServiceBound) {
-                    Log.d(TAG, "Parando WebSocketService atual...")
-                    stopService(Intent(this@MainActivity, WebSocketService::class.java))
-                    delay(1000) // Aguardar parada completa
+                if (!stillDisconnected) {
+                    Log.d(TAG, "✅ Conectou durante descoberta, cancelando restart")
+                    return@launch
                 }
                 
-                // Iniciar novo serviço
+                // Só reiniciar se realmente estiver desconectado
+                Log.d(TAG, "🔄 Reiniciando WebSocketService com novo servidor...")
+                
+                // Iniciar novo serviço (sem parar o anterior para evitar gaps)
                 Log.d(TAG, "Iniciando novo WebSocketService...")
                 startWebSocketService()
                 
-                // Aguardar um pouco e verificar se conectou
-                delay(3000) // Reduzido de 5s para 3s - mais responsivo
+                // Aguardar conexão
+                delay(3000)
                 
-                if (isServiceBound && webSocketService?.isConnected() == true) {
+                if (webSocketService?.isConnected() == true || webSocketClient?.isConnected() == true) {
                     Log.d(TAG, "✅ Reconexão bem-sucedida!")
                 } else {
                     Log.w(TAG, "⚠️ Reconexão pode ter falhado, tentando novamente...")
-                    // Tentar mais uma vez após 5 segundos (reduzido de 10s)
                     delay(5000)
-                    if (!isServiceBound || webSocketService?.isConnected() != true) {
+                    if (!(webSocketService?.isConnected() ?: false) && !(webSocketClient?.isConnected() ?: false)) {
                         Log.d(TAG, "🔄 Segunda tentativa de reconexão...")
                         startWebSocketService()
+                    } else {
+                        Log.d(TAG, "✅ Conectou enquanto aguardava, cancelando segunda tentativa")
                     }
                 }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Erro durante tentativa de reconexão", e)
                 
-                // Fallback: tentar reconectar mesmo sem descoberta
+                // Fallback: tentar reconectar apenas se não estiver conectado
                 try {
-                    Log.d(TAG, "🔄 Tentando fallback de reconexão...")
-                    startWebSocketService()
+                    if (!(webSocketClient?.isConnected() ?: false) && !(webSocketService?.isConnected() ?: false)) {
+                        Log.d(TAG, "🔄 Tentando fallback de reconexão...")
+                        startWebSocketService()
+                    }
                 } catch (fallbackError: Exception) {
                     Log.e(TAG, "❌ Fallback de reconexão também falhou", fallbackError)
                 }
@@ -1538,36 +1662,32 @@ class MainActivity : AppCompatActivity() {
     private fun setupWebSocketWithId(deviceId: String, serverUrl: String) {
         Log.d(TAG, "📡 setupWebSocketWithId chamado - URL: $serverUrl, DeviceId: ${deviceId.takeLast(8)}")
         
-        // Se o serviço estiver disponível, usar ele; senão, criar cliente local
-        if (isServiceBound && webSocketService != null) {
-            Log.d(TAG, "🔧 Usando WebSocketService para comunicação")
-            Log.d(TAG, "🔧 Service conectado: ${webSocketService?.isConnected()}")
-            // O serviço já está gerenciando a conexão WebSocket
-            // Forçar reconexão para garantir que use a URL descoberta
+        // SEMPRE usar WebSocketService - NUNCA criar cliente local
+        // O Service gerencia a conexão de forma robusta em background
+        Log.d(TAG, "🔧 Aguardando WebSocketService para comunicação...")
+        Log.d(TAG, "🔧 Service bound: $isServiceBound")
+        Log.d(TAG, "🔧 Service disponível: ${webSocketService != null}")
+        
+        // Se o serviço ainda não estiver disponível, aguardar
+        if (!isServiceBound || webSocketService == null) {
             scope.launch {
-                delay(2000) // Aguardar service inicializar
-                if (webSocketService?.isConnected() != true) {
-                    Log.w(TAG, "⚠️ Service não conectado, tentando forçar reconexão...")
+                var attempts = 0
+                while ((!isServiceBound || webSocketService == null) && attempts < 10) {
+                    Log.d(TAG, "⏳ Aguardando Service estar disponível (tentativa ${attempts + 1}/10)...")
+                    delay(500)
+                    attempts++
+                }
+                
+                if (isServiceBound && webSocketService != null) {
+                    Log.d(TAG, "✅ Service disponível após $attempts tentativas")
+                    Log.d(TAG, "🔧 Service conectado: ${webSocketService?.isConnected()}")
+                } else {
+                    Log.e(TAG, "❌ Service não ficou disponível após ${attempts} tentativas")
                 }
             }
         } else {
-            Log.d(TAG, "🔧 Usando WebSocketClient singleton como fallback")
-            
-            // Destruir instância antiga antes de criar nova
-            WebSocketClient.destroyInstance()
-            
-            webSocketClient = WebSocketClient.getInstance(
-                serverUrl = serverUrl,
-                deviceId = deviceId,
-                onMessage = { message -> handleWebSocketMessage(message) },
-                onConnectionChange = { connected -> updateConnectionStatus(connected) }
-            )
-            
-            Log.d(TAG, "🚀 Conectando WebSocket...")
-            webSocketClient?.connect()
-            
-            // Iniciar timer periódico para enviar dados a cada 30 segundos
-            startPeriodicSync()
+            Log.d(TAG, "✅ WebSocketService já disponível")
+            Log.d(TAG, "🔧 Service conectado: ${webSocketService?.isConnected()}")
         }
         
         // Enviar informações do dispositivo de forma otimizada
@@ -1773,27 +1893,15 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 "show_notification" -> {
-                    // Mostrar notificação no dispositivo
-                    val title = jsonObject["title"] as? String ?: "MDM Launcher"
-                    val body = jsonObject["body"] as? String ?: "Nova notificação"
-                    Log.d(TAG, "=== RECEBENDO NOTIFICAÇÃO ===")
-                    Log.d(TAG, "Título: $title")
-                    Log.d(TAG, "Corpo: $body")
-                    showNotification(title, body)
+                    // Mensagem processada pelo WebSocketService
+                    // MainActivity só precisa recarregar mensagens quando receber o broadcast
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "📬 SHOW_NOTIFICATION RECEBIDO (MAINACTIVITY)")
+                    Log.d(TAG, "⚠️ Esta mensagem deveria ter sido processada pelo WebSocketService")
+                    Log.d(TAG, "═══════════════════════════════════════════")
                     
-                    // Enviar confirmação de recebimento para o servidor
-                    val confirmationMessage = mapOf(
-                        "type" to "notification_received",
-                        "deviceId" to deviceId,
-                        "title" to title,
-                        "body" to body,
-                        "timestamp" to System.currentTimeMillis()
-                    )
-                    
-                    if (isServiceBound && webSocketService?.isConnected() == true) {
-                        webSocketService?.sendMessage(gson.toJson(confirmationMessage))
-                        Log.d(TAG, "Confirmação de notificação enviada via WebSocketService")
-                    }
+                    // Não processar aqui - o WebSocketService já processou
+                    // O broadcast MESSAGE_RECEIVED será recebido e atualizará tudo
                 }
                 "reboot_device" -> {
                     // Reiniciar dispositivo
@@ -1860,8 +1968,14 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             val currentText = connectionStatusText.text.toString()
             val hasNetwork = networkMonitor?.isConnected?.value ?: false
+            // Estado efetivo: usa callback + serviço + estado persistido do ConnectionStateManager
+            val serviceConnected = (isServiceBound && webSocketService?.isConnected() == true)
+            val clientConnected = (webSocketClient?.isConnected() == true)
+            val persistedConnected = com.mdm.launcher.utils.ConnectionStateManager
+                .getConnectionState(this@MainActivity).isConnected
+            val isConnectedEffective = connected || serviceConnected || clientConnected || persistedConnected
             
-            if (connected) {
+            if (isConnectedEffective) {
                 // Só atualizar se realmente mudou
                 if (currentText != "Conectado") {
                     connectionStatusText.text = "Conectado"
@@ -1909,7 +2023,7 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "🔄 Status de conexão: RECONECTANDO")
                         
                         // Forçar reconexão apenas se necessário
-                        if (!isServiceBound || webSocketService?.isConnected() != true) {
+                        if (!serviceConnected && !persistedConnected) {
                             Log.d(TAG, "Tentando reconectar WebSocketService")
                             startWebSocketService()
                         }
@@ -2001,7 +2115,11 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun showOptionsMenu() {
-        val options = arrayOf("Mudar Nome do Dispositivo", "Chat com Suporte")
+        val options = arrayOf(
+            "Mudar Nome do Dispositivo", 
+            "Chat com Suporte",
+            "📬 Ver Histórico de Mensagens ($unreadMessagesCount nova${if (unreadMessagesCount != 1) "s" else ""})"
+        )
         
         val builder = android.app.AlertDialog.Builder(this)
         builder.setTitle("Opções do Dispositivo")
@@ -2020,9 +2138,150 @@ class MainActivity : AppCompatActivity() {
                     // Chat com suporte
                     showSupportChat()
                 }
+                2 -> {
+                    // Ver histórico de mensagens
+                    showMessageHistoryDialog()
+                }
             }
         }
         builder.setNegativeButton("Cancelar", null)
+        builder.show()
+    }
+    
+    private fun loadReceivedMessages() {
+        try {
+            Log.d(TAG, "🔄 === CARREGANDO MENSAGENS DO SHAREDPREFERENCES ===")
+            Log.d(TAG, "SharedPreferences: ${sharedPreferences != null}")
+            
+            val messagesJson = sharedPreferences.getString("received_messages", null)
+            Log.d(TAG, "JSON recuperado (primeiros 300 chars): ${messagesJson?.take(300) ?: "null"}")
+            Log.d(TAG, "Tamanho do JSON: ${messagesJson?.length ?: 0} caracteres")
+            
+            if (messagesJson != null && messagesJson.isNotEmpty()) {
+                try {
+                    val type = object : com.google.gson.reflect.TypeToken<List<ReceivedMessage>>() {}.type
+                    val messages = gson.fromJson<List<ReceivedMessage>>(messagesJson, type)
+                    Log.d(TAG, "✅ Mensagens parseadas com sucesso: ${messages?.size ?: 0}")
+                    
+                    if (messages != null) {
+                        receivedMessages.clear()
+                        receivedMessages.addAll(messages)
+                        unreadMessagesCount = receivedMessages.count { !it.read }
+                        
+                        Log.d(TAG, "📬 Mensagens carregadas: ${receivedMessages.size} (${unreadMessagesCount} não lidas)")
+                        
+                        // Log detalhado de cada mensagem
+                        receivedMessages.forEachIndexed { index, msg ->
+                            Log.d(TAG, "  [$index] ID=${msg.id}, Msg=${msg.message.take(50)}..., Lida=${msg.read}")
+                        }
+                        
+                        updateMessageBadge()
+                    } else {
+                        Log.w(TAG, "⚠️ Parse resultou em null")
+                    }
+                } catch (parseError: Exception) {
+                    Log.e(TAG, "❌ Erro ao fazer parse do JSON", parseError)
+                    Log.e(TAG, "JSON problemático: $messagesJson")
+                }
+            } else {
+                Log.d(TAG, "⚠️ Nenhuma mensagem salva no SharedPreferences")
+                receivedMessages.clear()
+                unreadMessagesCount = 0
+                updateMessageBadge()
+            }
+            Log.d(TAG, "===============================================")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro geral ao carregar mensagens", e)
+            e.printStackTrace()
+        }
+    }
+    
+    private fun saveReceivedMessage(message: String) {
+        try {
+            val newMessage = ReceivedMessage(
+                id = "msg_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}",
+                message = message,
+                timestamp = System.currentTimeMillis(),
+                read = false
+            )
+            
+            receivedMessages.add(0, newMessage) // Adicionar no início (mais recente primeiro)
+            
+            // LIMITE: Manter apenas as 5 mensagens mais recentes
+            if (receivedMessages.size > 5) {
+                val removedCount = receivedMessages.size - 5
+                receivedMessages.subList(5, receivedMessages.size).clear()
+                Log.d(TAG, "🗑️ Removidas $removedCount mensagens antigas (limite: 5)")
+            }
+            
+            unreadMessagesCount = receivedMessages.count { !it.read }
+            
+            // Salvar no SharedPreferences SINCRONAMENTE
+            val messagesJson = gson.toJson(receivedMessages)
+            val success = sharedPreferences.edit().putString("received_messages", messagesJson).commit()
+            
+            Log.d(TAG, "✅ SharedPreferences commit (MainActivity): $success")
+            updateMessageBadge()
+            Log.d(TAG, "📬 Nova mensagem salva no histórico (total: ${receivedMessages.size}, não lidas: $unreadMessagesCount)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao salvar mensagem", e)
+        }
+    }
+    
+    private fun updateMessageBadge() {
+        runOnUiThread {
+            if (unreadMessagesCount > 0) {
+                messageBadge.text = if (unreadMessagesCount > 99) "99+" else unreadMessagesCount.toString()
+                messageBadge.visibility = View.VISIBLE
+                Log.d(TAG, "🔴 Badge atualizado: $unreadMessagesCount mensagens não lidas")
+            } else {
+                messageBadge.visibility = View.GONE
+                Log.d(TAG, "✅ Badge ocultado - sem mensagens não lidas")
+            }
+        }
+    }
+    
+    private fun markMessagesAsRead() {
+        try {
+            val updatedMessages = receivedMessages.map { it.copy(read = true) }
+            receivedMessages.clear()
+            receivedMessages.addAll(updatedMessages)
+            unreadMessagesCount = 0
+            
+            // Salvar no SharedPreferences SINCRONAMENTE
+            val messagesJson = gson.toJson(receivedMessages)
+            val success = sharedPreferences.edit().putString("received_messages", messagesJson).commit()
+            
+            Log.d(TAG, "✅ SharedPreferences commit (marcar lidas): $success")
+            updateMessageBadge()
+            Log.d(TAG, "✅ Todas as mensagens marcadas como lidas")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao marcar mensagens como lidas", e)
+        }
+    }
+    
+    private fun showMessageHistoryDialog() {
+        // Marcar todas como lidas ao abrir
+        markMessagesAsRead()
+        
+        val builder = android.app.AlertDialog.Builder(this)
+        builder.setTitle("📬 Histórico de Mensagens")
+        
+        if (receivedMessages.isEmpty()) {
+            builder.setMessage("Nenhuma mensagem recebida ainda.\n\nMensagens enviadas pelo painel web aparecerão aqui.")
+            builder.setPositiveButton("OK", null)
+        } else {
+            // Criar lista de mensagens formatadas
+            val messages = receivedMessages.map { msg ->
+                val date = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm", java.util.Locale.getDefault())
+                    .format(java.util.Date(msg.timestamp))
+                "🕐 $date\n${msg.message}"
+            }.toTypedArray()
+            
+            builder.setItems(messages, null)
+            builder.setNegativeButton("Fechar", null)
+        }
+        
         builder.show()
     }
     
@@ -2430,11 +2689,10 @@ class MainActivity : AppCompatActivity() {
                 createNotificationChannel()
             }
             
-            // Intent para abrir o app quando clicar na notificação
-            // IMPORTANTE: Usar FLAG_ACTIVITY_SINGLE_TOP para não recriar Activity
+            // Intent para abrir o app e marcar mensagem como lida quando clicar na notificação
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                putExtra("show_message_modal", true)
+                putExtra("mark_message_as_read", true)
                 putExtra("message_content", body)
             }
             
@@ -2770,6 +3028,11 @@ class MainActivity : AppCompatActivity() {
         val timeSinceLastResume = currentTime - lastResumeTime
         
         Log.d(TAG, "onResume() chamado - Activity retomada (${timeSinceLastResume}ms desde último resume)")
+        
+        // Recarregar mensagens e atualizar badge SEMPRE que a Activity retorna
+        loadReceivedMessages()
+        updateMessageBadge()
+        Log.d(TAG, "🔄 Mensagens recarregadas no onResume: total=${receivedMessages.size}, não lidas=$unreadMessagesCount")
         
         // Garantir que ainda somos o launcher padrão
         ensureDefaultLauncher()
@@ -3705,47 +3968,40 @@ class MainActivity : AppCompatActivity() {
         // Verificar e garantir conexão WebSocket ativa
         scope.launch {
             try {
-                // Aguardar um pouco para garantir que a tela esteja estável
-                delay(500)
+                // Aguardar tempo suficiente para WebSocket estabelecer conexão
+                delay(2000) // 2 segundos para onOpen() completar
                 
-                // Verificar conexão do WebSocketService
-                if (isServiceBound && webSocketService?.isConnected() == true) {
-                    Log.d(TAG, "✅ WebSocketService já conectado")
-                    
-                    // Notificar que tela está ativa
+                // Notificar WebSocketService que tela está ativa (se bound)
+                if (isServiceBound) {
                     webSocketService?.setScreenActive(true)
                     
-                    // Enviar ping imediato para confirmar conexão
-                    webSocketService?.sendMessage("""{"type":"ping","timestamp":${System.currentTimeMillis()}}""")
-                    Log.d(TAG, "📤 Ping enviado para confirmar conexão")
-                    
-                } else {
-                    Log.w(TAG, "⚠️ WebSocketService não conectado, tentando reconectar...")
-                    startWebSocketService()
-                    
-                    // Aguardar conexão
-                    delay(2000)
-                    
+                    // Verificar conexão apenas se serviço estiver bound
                     if (webSocketService?.isConnected() == true) {
-                        Log.d(TAG, "✅ WebSocketService reconectado com sucesso")
-                        webSocketService?.setScreenActive(true)
+                        Log.d(TAG, "✅ WebSocketService já conectado")
+                        webSocketService?.sendMessage("""{"type":"ping","timestamp":${System.currentTimeMillis()}}""")
+                        Log.d(TAG, "📤 Ping enviado para confirmar conexão")
                     } else {
-                        Log.w(TAG, "⚠️ Falha ao reconectar WebSocketService")
+                        Log.d(TAG, "⏳ WebSocketService ainda conectando, aguardando...")
                     }
                 }
                 
                 // Verificar conexão do WebSocketClient local
                 webSocketClient?.let { client ->
-                    if (!client.isConnected()) {
+                    // Notificar que a tela está ativa para heartbeat mais frequente
+                    client.setScreenActive(true)
+                    
+                    if (client.isConnected()) {
+                        Log.d(TAG, "✅ WebSocketClient local conectado")
+                    } else if (!client.isReconnecting()) {
                         Log.w(TAG, "⚠️ WebSocketClient local desconectado, reconectando...")
                         client.forceReconnect()
                     } else {
-                        Log.d(TAG, "✅ WebSocketClient local conectado")
+                        Log.d(TAG, "⏳ WebSocketClient reconectando, aguardando...")
                     }
-                    
-                    // Notificar que a tela está ativa para heartbeat mais frequente
-                    client.setScreenActive(true)
                 }
+                
+                // Aguardar mais um pouco antes de enviar status
+                delay(1000)
                 
                 // Enviar status do dispositivo imediatamente
                 sendDeviceStatusImmediately()

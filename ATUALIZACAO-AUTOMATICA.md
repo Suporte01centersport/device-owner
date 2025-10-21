@@ -1,4 +1,4 @@
-# Sistema de Atualização Automática de APK
+# 📦 Sistema de Atualização Automática de APK
 
 Sistema completo para atualizar o MDM Launcher automaticamente usando o link do GitHub, com instalação silenciosa via Device Owner.
 
@@ -402,14 +402,19 @@ Estados possíveis:
 
 Se encontrar problemas:
 
-1. Verificar logs do Android (`adb logcat`)
+1. Verificar logs do Android: `adb logcat -s AppUpdater:* WebSocketService:*`
 2. Verificar logs do servidor Node.js
 3. Consultar este documento
 4. Verificar conectividade WebSocket
+5. Confirmar Device Owner ativo: `adb shell dpm list-owners`
 
 ## 🔗 Links Úteis
 
-- **GitHub Release**: https://github.com/suporte04centersport/qrcode/releases
 - **Documentação Device Owner**: https://developer.android.com/work/dpc/dedicated-devices
 - **PackageInstaller API**: https://developer.android.com/reference/android/content/pm/PackageInstaller
+- **OkHttp WebSocket**: https://square.github.io/okhttp/
+
+---
+
+**Última atualização:** 21/10/2024
 

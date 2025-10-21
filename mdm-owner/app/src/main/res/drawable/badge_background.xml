@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Sombra -->
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#40000000" />
+            <size
+                android:width="26dp"
+                android:height="26dp" />
+        </shape>
+    </item>
+    
+    <!-- Badge com borda branca -->
+    <item
+        android:top="1dp"
+        android:left="1dp"
+        android:right="1dp"
+        android:bottom="1dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+            <size
+                android:width="26dp"
+                android:height="26dp" />
+        </shape>
+    </item>
+    
+    <!-- Cor vermelha do badge -->
+    <item
+        android:top="3dp"
+        android:left="3dp"
+        android:right="3dp"
+        android:bottom="3dp">
+        <shape android:shape="oval">
+            <solid android:color="#FF3B30" />
+            <size
+                android:width="26dp"
+                android:height="26dp" />
+        </shape>
+    </item>
+</layer-list>
+

@@ -13,22 +13,44 @@ class DefaultLauncherReceiver : BroadcastReceiver() {
     }
     
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            Intent.ACTION_PACKAGE_CHANGED,
-            Intent.ACTION_PACKAGE_REPLACED,
-            Intent.ACTION_PACKAGE_ADDED,
-            Intent.ACTION_PACKAGE_REMOVED -> {
-                Log.d(TAG, "Pacote alterado: ${intent.data}")
-                checkAndRestoreDefaultLauncher(context)
+        try {
+            Log.d(TAG, "DefaultLauncherReceiver recebeu: ${intent.action}")
+            
+            // Aguardar estabilização para evitar conflitos
+            Thread.sleep(1000)
+            
+            when (intent.action) {
+                Intent.ACTION_PACKAGE_CHANGED,
+                Intent.ACTION_PACKAGE_REPLACED,
+                Intent.ACTION_PACKAGE_REMOVED -> {
+                    Log.d(TAG, "Pacote alterado: ${intent.data}")
+                    checkAndRestoreDefaultLauncher(context)
+                }
+                // Não iniciar o Launcher automaticamente logo após instalação
+                // para não disparar solicitações de permissão antes da primeira abertura
+                Intent.ACTION_PACKAGE_ADDED -> {
+                    val addedPackage = intent.data?.schemeSpecificPart
+                    Log.d(TAG, "Pacote instalado: $addedPackage")
+                    if (addedPackage != context.packageName) {
+                        checkAndRestoreDefaultLauncher(context)
+                    } else {
+                        Log.d(TAG, "Instalação do próprio app - não iniciar Activity automaticamente")
+                    }
+                }
+                Intent.ACTION_BOOT_COMPLETED -> {
+                    Log.d(TAG, "Sistema inicializado - verificando launcher padrão")
+                    // Aguardar mais tempo após boot para evitar conflitos
+                    Thread.sleep(5000)
+                    checkAndRestoreDefaultLauncher(context)
+                }
+                Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                    Log.d(TAG, "MDM Launcher foi atualizado")
+                    checkAndRestoreDefaultLauncher(context)
+                }
             }
-            Intent.ACTION_BOOT_COMPLETED -> {
-                Log.d(TAG, "Sistema inicializado")
-                checkAndRestoreDefaultLauncher(context)
-            }
-            Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                Log.d(TAG, "MDM Launcher foi atualizado")
-                checkAndRestoreDefaultLauncher(context)
-            }
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro no DefaultLauncherReceiver - pode causar boot loop!", e)
+            // Não relançar exceção para evitar crash
         }
     }
     

@@ -378,6 +378,6 @@ pm2 logs
 
 ---
 
-**Última atualização:** $(date)
+**Última atualização:** 21/10/2024
 **Versão:** 1.0.0
 

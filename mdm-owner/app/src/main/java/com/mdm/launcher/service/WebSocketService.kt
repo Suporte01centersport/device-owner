@@ -10,6 +10,7 @@ import android.util.Log
 import com.mdm.launcher.MainActivity
 import com.mdm.launcher.R
 import com.mdm.launcher.data.DeviceInfo
+import com.mdm.launcher.data.ReceivedMessage
 import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.utils.ConnectionStateManager
 import com.mdm.launcher.utils.NetworkMonitor
@@ -339,12 +340,18 @@ class WebSocketService : Service() {
     
     private fun processBackgroundMessage(message: String) {
         try {
-            Log.d(TAG, "Processando mensagem em background: $message")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "🔄 PROCESSANDO MENSAGEM EM BACKGROUND (SERVICE)")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "Mensagem completa: $message")
             
             // Parse da mensagem JSON
             val gson = com.google.gson.Gson()
             val jsonObject = gson.fromJson(message, Map::class.java)
             val type = jsonObject["type"] as? String
+            
+            Log.d(TAG, "📋 Tipo de mensagem identificado: '$type'")
+            Log.d(TAG, "📋 JSON object keys: ${jsonObject.keys}")
             
             when (type) {
                 "device_status" -> {
@@ -806,11 +813,21 @@ class WebSocketService : Service() {
                     val title = dataMap["title"] as? String ?: "MDM Launcher"
                     val body = dataMap["body"] as? String ?: "Nova notificação"
                     
-                    Log.d(TAG, "Título: $title")
-                    Log.d(TAG, "Corpo: $body")
+                    Log.d(TAG, "📋 Dados extraídos:")
+                    Log.d(TAG, "  - Título: $title")
+                    Log.d(TAG, "  - Corpo: $body")
+                    Log.d(TAG, "  - dataMap: $dataMap")
+                    
+                    // SALVAR NO HISTÓRICO DE MENSAGENS
+                    val fullMessage = if (title != "MDM Launcher") "$title\n$body" else body
+                    Log.d(TAG, "📝 Mensagem completa a ser salva: $fullMessage")
+                    
+                    saveMessageToHistory(fullMessage)
+                    Log.d(TAG, "✅ saveMessageToHistory() chamado")
                     
                     // Mostrar notificação em background
                     showBackgroundNotification(title, body)
+                    Log.d(TAG, "🔔 Notificação em background exibida")
                     
                     // Enviar confirmação de recebimento
                     val confirmationMessage = mapOf(
@@ -821,7 +838,7 @@ class WebSocketService : Service() {
                         "timestamp" to System.currentTimeMillis()
                     )
                     webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
-                    Log.d(TAG, "✅ Confirmação de notificação enviada")
+                    Log.d(TAG, "✅ Confirmação de notificação enviada ao servidor")
                     Log.d(TAG, "═══════════════════════════════════════════")
                 }
                 "set_admin_password" -> {
@@ -875,11 +892,14 @@ class WebSocketService : Service() {
                     sendBroadcast(intent)
                 }
                 else -> {
-                    Log.d(TAG, "Tipo de mensagem não processado em background: $type")
+                    Log.w(TAG, "⚠️ Tipo de mensagem não processado em background: '$type'")
+                    Log.w(TAG, "⚠️ Mensagem: $message")
                 }
             }
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao processar mensagem em background", e)
+            Log.e(TAG, "❌ Erro ao processar mensagem em background", e)
+            e.printStackTrace()
         }
     }
     
@@ -1094,10 +1114,10 @@ class WebSocketService : Service() {
                 notificationManager.createNotificationChannel(channel)
             }
             
-            // Intent para abrir o app quando clicar na notificação
-            // IMPORTANTE: Usar FLAG_ACTIVITY_SINGLE_TOP para não recriar Activity
+            // Intent para abrir o app, mostrar modal e marcar mensagem como lida quando clicar na notificação
             val intent = Intent(this, com.mdm.launcher.MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                putExtra("mark_message_as_read", true)
                 putExtra("show_message_modal", true)
                 putExtra("message_content", body)
             }
@@ -1148,6 +1168,104 @@ class WebSocketService : Service() {
         }
     }
     
+    private fun saveMessageToHistory(message: String) {
+        try {
+            Log.d(TAG, "📝 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📝 SALVANDO NOVA MENSAGEM NO HISTÓRICO")
+            Log.d(TAG, "📝 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "Mensagem recebida: $message")
+            
+            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            Log.d(TAG, "SharedPreferences obtido: ${prefs != null}")
+            
+            // Carregar mensagens existentes
+            val messagesJson = prefs.getString("received_messages", null)
+            Log.d(TAG, "JSON atual (primeiros 200 chars): ${messagesJson?.take(200) ?: "null"}")
+            
+            val messages = if (messagesJson != null && messagesJson.isNotEmpty()) {
+                try {
+                    val type = object : com.google.gson.reflect.TypeToken<MutableList<ReceivedMessage>>() {}.type
+                    val parsed = com.google.gson.Gson().fromJson<MutableList<ReceivedMessage>>(messagesJson, type)
+                    Log.d(TAG, "✅ JSON parseado com sucesso: ${parsed?.size ?: 0} mensagens")
+                    parsed ?: mutableListOf()
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro ao fazer parse do JSON existente", e)
+                    mutableListOf()
+                }
+            } else {
+                Log.d(TAG, "Sem mensagens anteriores - criando lista nova")
+                mutableListOf()
+            }
+            
+            Log.d(TAG, "📊 Mensagens antes de adicionar: ${messages.size}")
+            messages.forEachIndexed { index, msg ->
+                Log.d(TAG, "  [$index] ${msg.message.take(30)}... (ID=${msg.id})")
+            }
+            
+            // Adicionar nova mensagem no início
+            val newMessage = ReceivedMessage(
+                id = "msg_${System.currentTimeMillis()}_${(Math.random() * 10000).toInt()}",
+                message = message,
+                timestamp = System.currentTimeMillis(),
+                read = false
+            )
+            messages.add(0, newMessage)
+            Log.d(TAG, "➕ Nova mensagem adicionada: ID=${newMessage.id}")
+            
+            // LIMITE: Manter apenas as 5 mensagens mais recentes
+            if (messages.size > 5) {
+                val removedMessages = messages.size - 5
+                val removedList = messages.subList(5, messages.size).toList()
+                messages.subList(5, messages.size).clear()
+                Log.d(TAG, "🗑️ Removidas $removedMessages mensagens antigas (limite: 5)")
+                removedList.forEach { removed ->
+                    Log.d(TAG, "  🗑️ Removida: ${removed.message.take(30)}... (ID=${removed.id})")
+                }
+            }
+            
+            Log.d(TAG, "📊 Mensagens após adicionar: ${messages.size}")
+            messages.forEachIndexed { index, msg ->
+                Log.d(TAG, "  [$index] ${msg.message.take(30)}... (ID=${msg.id}, Lida=${msg.read})")
+            }
+            
+            // Salvar de volta SINCRONAMENTE usando commit()
+            val updatedJson = com.google.gson.Gson().toJson(messages)
+            Log.d(TAG, "💾 Salvando JSON (primeiros 300 chars): ${updatedJson.take(300)}")
+            
+            val success = prefs.edit().putString("received_messages", updatedJson).commit()
+            Log.d(TAG, "💾 SharedPreferences commit resultado: $success")
+            
+            // Verificar se realmente salvou
+            val verification = prefs.getString("received_messages", null)
+            val verificationMatches = verification == updatedJson
+            Log.d(TAG, "🔍 Verificação - JSON foi salvo corretamente: $verificationMatches")
+            Log.d(TAG, "🔍 JSON verificado (primeiros 200 chars): ${verification?.take(200) ?: "null"}")
+            
+            // Enviar broadcast para MainActivity atualizar badge
+            val unreadCount = messages.count { !it.read }
+            val intent = Intent("com.mdm.launcher.MESSAGE_RECEIVED")
+            intent.putExtra("unread_count", unreadCount)
+            intent.setPackage(packageName) // Garantir que vai para o próprio app
+            
+            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📡 ENVIANDO BROADCAST MESSAGE_RECEIVED")
+            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "Action: com.mdm.launcher.MESSAGE_RECEIVED")
+            Log.d(TAG, "Unread count: $unreadCount")
+            Log.d(TAG, "Package: $packageName")
+            Log.d(TAG, "Total mensagens: ${messages.size}")
+            
+            sendBroadcast(intent)
+            
+            Log.d(TAG, "✅ Broadcast enviado com sucesso!")
+            Log.d(TAG, "📬 RESUMO: ${messages.size} mensagens no histórico, $unreadCount não lidas")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌❌❌ ERRO CRÍTICO ao salvar mensagem no histórico ❌❌❌", e)
+            e.printStackTrace()
+        }
+    }
+    
     private fun startHealthCheck() {
         // Cancelar verificação anterior se existir
         healthCheckJob?.cancel()
@@ -1159,9 +1277,15 @@ class WebSocketService : Service() {
                 
                 try {
                     val isConnected = webSocketClient?.isConnected() ?: false
-                    Log.d(TAG, "🏥 Verificação de saúde: conectado=$isConnected")
+                    val isReconnecting = webSocketClient?.isReconnecting() ?: false
                     
-                    if (!isConnected) {
+                    Log.d(TAG, "🏥 Verificação de saúde: conectado=$isConnected, reconectando=$isReconnecting")
+                    
+                    // Se já está reconectando, pular esta verificação
+                    if (isReconnecting) {
+                        Log.d(TAG, "⏳ Reconexão em andamento, pulando verificação...")
+                    } else if (!isConnected) {
+                        // Desconectado e não está reconectando: verificar saúde
                         Log.w(TAG, "⚠️ WebSocket desconectado, verificando saúde...")
                         val isHealthy = webSocketClient?.checkConnectionHealth() ?: false
                         
@@ -1170,7 +1294,7 @@ class WebSocketService : Service() {
                             webSocketClient?.forceReconnect()
                         }
                     } else {
-                        // Mesmo conectado, verificar saúde
+                        // Conectado: apenas verificar saúde silenciosamente
                         webSocketClient?.checkConnectionHealth()
                     }
                 } catch (e: Exception) {

@@ -46,12 +46,60 @@ object BatteryOptimizationHelper {
                     val packageName = activity.packageName
                     Log.d(TAG, "PackageName: $packageName")
                     
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                    intent.data = Uri.parse("package:$packageName")
+                    // 1) Tentar tela específica de whitelist
+                    Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }.also { intent ->
+                        Log.d(TAG, "URI criada: ${intent.data}")
+                        val pm = activity.packageManager
+                        if (intent.resolveActivity(pm) != null) {
+                            activity.startActivity(intent)
+                            Log.d(TAG, "Intent de otimização de bateria enviado")
+                            return
+                        } else {
+                            Log.w(TAG, "Tela ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS indisponível na ROM")
+                        }
+                    }
                     
-                    Log.d(TAG, "URI criada: ${intent.data}")
-                    activity.startActivity(intent)
-                    Log.d(TAG, "Intent de otimização de bateria enviado")
+                    // 2) Abrir tela geral de otimização (se existir)
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }.also { intent ->
+                        val pm = activity.packageManager
+                        if (intent.resolveActivity(pm) != null) {
+                            activity.startActivity(intent)
+                            Log.d(TAG, "Configurações gerais de otimização de bateria abertas")
+                            return
+                        } else {
+                            Log.w(TAG, "Tela ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS indisponível na ROM")
+                        }
+                    }
+                    
+                    // 3) Como fallback, abrir detalhes do app
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }.also { intent ->
+                        val pm = activity.packageManager
+                        if (intent.resolveActivity(pm) != null) {
+                            activity.startActivity(intent)
+                            Log.d(TAG, "Abrindo detalhes do app como fallback")
+                            return
+                        }
+                    }
+                    
+                    // 4) Último recurso: abrir configurações principais
+                    Intent(Settings.ACTION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }.also { intent ->
+                        val pm = activity.packageManager
+                        if (intent.resolveActivity(pm) != null) {
+                            activity.startActivity(intent)
+                            Log.d(TAG, "Abrindo configurações gerais como último fallback")
+                            return
+                        }
+                    }
                 } else {
                     Log.d(TAG, "✅ App já está na whitelist de otimização de bateria")
                 }
@@ -60,8 +108,15 @@ object BatteryOptimizationHelper {
                 
                 // Fallback: abrir configurações gerais de bateria
                 try {
-                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                    activity.startActivity(intent)
+                    val pm = activity.packageManager
+                    val intentSettings = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                    when {
+                        intentSettings.resolveActivity(pm) != null -> activity.startActivity(intentSettings)
+                        Intent(Settings.ACTION_SETTINGS).also { it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }.resolveActivity(pm) != null -> activity.startActivity(
+                            Intent(Settings.ACTION_SETTINGS).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                        )
+                        else -> Log.w(TAG, "Nenhuma tela de configurações disponível para abrir (ROM restritiva)")
+                    }
                 } catch (e2: Exception) {
                     Log.e(TAG, "Erro ao abrir configurações de bateria", e2)
                 }
@@ -75,10 +130,22 @@ object BatteryOptimizationHelper {
     fun openBatteryOptimizationSettings(context: Context) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context.startActivity(intent)
-                Log.d(TAG, "Configurações de otimização de bateria abertas")
+                val pm = context.packageManager
+                // Tenta telas disponíveis em ordem decrescente de especificidade
+                val intents = listOf(
+                    Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+                    // Algumas ROMs não expõem ACTION_POWER_USAGE_SUMMARY; pular se não existir
+                    Intent(Settings.ACTION_SETTINGS)
+                )
+                for (base in intents) {
+                    base.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (base.resolveActivity(pm) != null) {
+                        context.startActivity(base)
+                        Log.d(TAG, "Configurações abertas: ${base.action}")
+                        return
+                    }
+                }
+                Log.w(TAG, "Nenhuma Activity para configurações de bateria disponível nesta ROM")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao abrir configurações de otimização de bateria", e)

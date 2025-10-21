@@ -2,7 +2,7 @@
 
 Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real via WebSocket.
 
-> **✅ ATUALIZADO (14/10/2025):** Android 13+ compatível | Descoberta automática otimizada | Launcher persistente
+> **✅ ATUALIZADO (21/10/2024):** Android 13+ compatível | Descoberta automática otimizada | Launcher persistente | Histórico de mensagens com limite de 5
 
 ## 🚀 Início Rápido
 
@@ -102,14 +102,16 @@ npm run fix-null-device-ids:confirm
 - ✅ **GPS em tempo real** com histórico
 - ✅ **Monitoramento completo** - bateria, armazenamento, apps
 - ✅ **Otimizações de bateria** - cache e debouncing
+- ✅ **Histórico de mensagens** - limite de 5 com badge visual
 
 ### **Painel Web**
 - ✅ Dashboard em tempo real
 - ✅ Controle remoto via WebSocket
 - ✅ Mapas de localização (Leaflet)
-- ✅ Mensagens bidirecionais
+- ✅ Mensagens bidirecionais com histórico
 - ✅ Políticas de apps por dispositivo/grupo
 - ✅ Detecção rápida de offline (30s)
+- ✅ Envio de notificações para dispositivos
 
 ### **Servidor WebSocket**
 - ✅ **Discovery Server** UDP na porta 3003
@@ -184,18 +186,31 @@ netsh advfirewall firewall add rule name="MDM Discovery" dir=in action=allow pro
 
 ### **Device Owner não ativa**
 
-**Erro:** `Not allowed to set the device owner`
+**Erro:** `Not allowed to set the device owner because there are already several users on the device`
 
 **Solução:**
 ```bash
-# 1. Dispositivo deve estar sem conta Google
+# 1. Verificar usuários existentes
 adb shell pm list users
 
-# 2. Se tiver conta, fazer factory reset
-# 3. Instalar app ANTES de adicionar conta Google
-# 4. Ativar Device Owner:
+# 2. Se houver múltiplos usuários, remover os secundários
+# Exemplo: adb shell pm remove-user 10
+adb shell pm remove-user <USER_ID>
+
+# 3. Verificar usuários ocultos (perfis de trabalho, etc.)
+adb shell dumpsys user | grep "UserInfo"
+
+# 4. Dispositivo deve estar sem conta Google
+# 5. Se tiver conta, fazer factory reset
+# 6. Instalar app ANTES de adicionar conta Google
+# 7. Ativar Device Owner:
 adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
+
+# 8. Verificar se foi ativado:
+adb shell dpm list-owners
 ```
+
+**Causa comum:** Usuários secundários (privacy_app_user, perfis de trabalho) impedem Device Owner
 
 ### **App crashando no Android 13/14**
 
@@ -332,20 +347,25 @@ adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 ## 📝 Notas Importantes
 
 1. **Device Owner**: Dispositivo DEVE estar **sem conta Google** antes de ativar
-2. **Rede**: Dispositivo e servidor devem estar na **mesma rede WiFi**
+2. **Rede**: Dispositivo e servidor devem estar na **mesma rede WiFi** ou conexão direta
 3. **Portas**: 3002 (WebSocket) e 3003 (Discovery) devem estar **abertas no firewall**
 4. **GPS**: Precisão varia 1-20m (normal)
 5. **Bateria**: WakeLock usado apenas quando tela ativa
 6. **Launcher**: Persiste mesmo ao limpar tarefas recentes
 7. **Cache**: Descoberta do servidor em cache por 60s
+8. **Mensagens**: Histórico limitado às 5 mensagens mais recentes
 
-## 🎯 Melhorias Recentes (14/10/2025)
+## 🎯 Melhorias Recentes (21/10/2024)
 
 ✅ **Android 13/14 compatível** - Correção BroadcastReceiver  
 ✅ **Descoberta otimizada** - Cache de 60s, 90% menos chamadas  
 ✅ **NetworkMonitor** - Debounce de 5s para evitar eventos repetidos  
 ✅ **Launcher persistente** - `singleTask` + `excludeFromRecents`  
 ✅ **Conexão estável** - Reconexão inteligente após mudança de rede  
+✅ **Boot loop resolvido** - Correções nos Broadcast Receivers para evitar crash após descarga completa da bateria  
+✅ **Device Owner melhorado** - Solução para erro "múltiplos usuários" com remoção de usuários secundários  
+✅ **Histórico de mensagens** - Sistema de notificações com histórico limitado a 5 mensagens  
+✅ **Badge de notificação** - Contador visual de mensagens não lidas  
 
 ## 🆘 Suporte
 
@@ -354,10 +374,12 @@ adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 | Problema | Solução |
 |----------|---------|
 | App não conecta | Verificar firewall portas 3002/3003 |
-| Device Owner não ativa | Remover conta Google e fazer factory reset |
+| Device Owner não ativa | Remover usuários secundários + conta Google |
 | App crasha Android 13+ | Reinstalar versão atualizada |
 | Launcher some ao limpar tarefas | Reinstalar versão atualizada |
 | Descoberta muito lenta | Normal na primeira vez, depois usa cache |
+| Boot loop após descarga bateria | ✅ RESOLVIDO - Correções nos Broadcast Receivers |
+| START_CLASS_NOT_FOUND após boot | **REALME**: Ver seção "Instalação Realme/ColorOS" abaixo |
 
 **Logs debug:**
 ```bash
@@ -368,6 +390,62 @@ node mdm-frontend/server/websocket.js
 # Android
 adb logcat -s MDM:* WebSocketClient:* WebSocketService:* ServerDiscovery:* -v time
 ```
+
+---
+
+## 📱 Instalação em Dispositivos Realme/ColorOS
+
+Dispositivos **Realme** (ColorOS) requerem configuração especial devido a otimizações agressivas:
+
+### **Método Automatizado**
+
+```bash
+cd mdm-owner
+.\install-realme.bat
+```
+
+### **Método Manual**
+
+```bash
+# 1. Após factory reset, ativar USB Debugging (sem conta Google!)
+
+# 2. Compilar e instalar
+cd mdm-owner
+.\gradlew assembleDebug
+adb install app/build/outputs/apk/debug/app-debug.apk
+
+# 3. Ativar Device Owner
+adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver
+
+# 4. Adicionar à whitelist de bateria
+adb shell dumpsys deviceidle whitelist +com.mdm.launcher
+
+# 5. Iniciar app
+adb shell am start -n com.mdm.launcher/.MainActivity
+```
+
+### **Configuração Manual Obrigatória**
+
+Após instalação, configure **manualmente** no dispositivo:
+
+1. **Configurações** → **Gerenciamento de Apps** → **MDM Launcher**
+2. **Uso da Bateria**: **Sem restrições** ⚠️
+3. **Início Automático**: **ATIVADO** ⚠️
+4. **Executar em Segundo Plano**: **ATIVADO** ⚠️
+
+**Sem essas configurações o MDM NÃO funcionará na Realme!**
+
+### **Troubleshooting Realme**
+
+**Problema:** `START_CLASS_NOT_FOUND` ao iniciar o app
+
+**Causa:** ColorOS impede que o app execute em segundo plano e bloqueia DEX loading
+
+**Solução:**
+1. Garanta que NÃO há conta Google no dispositivo antes de instalar
+2. Configure manualmente as 3 opções acima (Bateria, Início Auto, Segundo Plano)
+3. Se o problema persistir, faça factory reset e reinstale seguindo o método automatizado
+4. **NUNCA adicione conta Google antes de instalar o MDM**
 
 ---
 

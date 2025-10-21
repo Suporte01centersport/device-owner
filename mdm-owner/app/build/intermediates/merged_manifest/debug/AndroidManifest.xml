@@ -220,15 +220,13 @@
         </receiver>
 
         <!-- Broadcast Receiver para eventos do sistema (BOOT, NETWORK, etc) -->
+        <!-- DESABILITADO para evitar boot loops - app inicia automaticamente como launcher padrão -->
         <receiver
             android:name="com.mdm.launcher.receivers.SystemBootReceiver"
-            android:directBootAware="true"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="false" >
-            <intent-filter android:priority="999" >
+            <intent-filter android:priority="500" >
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.net.conn.CONNECTIVITY_CHANGE" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.ACTION_POWER_CONNECTED" />

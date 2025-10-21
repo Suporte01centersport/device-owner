@@ -290,5 +290,7 @@ npx pm2 <comando>
 
 ---
 
+**Última atualização:** 21/10/2024
+
 **Dúvidas?** Consulte o `DEPLOY-GUIDE.md` para instruções detalhadas!
 

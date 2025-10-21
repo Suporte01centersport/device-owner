@@ -414,6 +414,8 @@ class WebSocketClient private constructor(
     
     fun isConnected(): Boolean = isConnected
     
+    fun isReconnecting(): Boolean = isReconnecting
+    
     fun forceReconnect() {
         Log.d(TAG, "🔄 Forçando reconexão completa...")
         disconnect()
@@ -435,20 +437,34 @@ class WebSocketClient private constructor(
     
     fun checkConnectionHealth(): Boolean {
         val now = System.currentTimeMillis()
-        val timeSinceLastMessage = now - lastSuccessfulMessage
+        val timeSinceLastMessage = if (lastSuccessfulMessage > 0) (now - lastSuccessfulMessage) / 1000 else -1
         
-        Log.d(TAG, "Verificando saúde da conexão: isConnected=$isConnected, última mensagem há ${timeSinceLastMessage/1000}s")
+        Log.d(TAG, "Verificando saúde: isConnected=$isConnected, reconectando=$isReconnecting, última msg há ${timeSinceLastMessage}s")
         
-        // Se não está conectado, tentar reconectar
-        if (!isConnected) {
-            Log.d(TAG, "Conexão perdida, tentando reconectar...")
+        // Se está reconectando, não fazer nada
+        if (isReconnecting) {
+            Log.d(TAG, "Reconexão em andamento, pulando verificação de saúde")
+            return false
+        }
+        
+        // Se não está conectado E não recebeu mensagens recentemente, tentar reconectar
+        if (!isConnected && (lastSuccessfulMessage == 0L || timeSinceLastMessage > (HEARTBEAT_INTERVAL / 1000))) {
+            Log.d(TAG, "Conexão perdida sem mensagens recentes, tentando reconectar...")
             forceReconnect()
             return false
         }
         
+        // Se está marcado como desconectado mas está recebendo mensagens, corrigir estado
+        if (!isConnected && lastSuccessfulMessage > 0 && timeSinceLastMessage < 60) {
+            Log.w(TAG, "⚠️ Marcado como desconectado mas recebeu mensagem há ${timeSinceLastMessage}s - corrigindo estado...")
+            isConnected = true
+            onConnectionChange(true)
+            return true
+        }
+        
         // Se não recebeu mensagens há muito tempo, considerar conexão morta
-        if (lastSuccessfulMessage > 0 && timeSinceLastMessage > (HEARTBEAT_INTERVAL * 2)) {
-            Log.w(TAG, "Conexão pode estar morta (sem mensagens há ${timeSinceLastMessage/1000}s), forçando reconexão")
+        if (lastSuccessfulMessage > 0 && timeSinceLastMessage > (HEARTBEAT_INTERVAL * 2 / 1000)) {
+            Log.w(TAG, "Conexão pode estar morta (sem mensagens há ${timeSinceLastMessage}s), forçando reconexão")
             forceReconnect()
             return false
         }
