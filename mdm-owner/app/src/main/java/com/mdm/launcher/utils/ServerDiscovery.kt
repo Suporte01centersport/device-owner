@@ -26,7 +26,9 @@ object ServerDiscovery {
     
     private var lastDiscoveryTime = 0L
     private var cachedServerUrl: String? = null
-    private const val DISCOVERY_CACHE_DURATION = 60000L // 1 minuto de cache
+    private const val DISCOVERY_CACHE_DURATION = 30000L // 30 segundos de cache (reduzido para melhor reconexão)
+    private var consecutiveFailures = 0
+    private const val MAX_FAILURES_BEFORE_REDISCOVERY = 3 // Forçar redescoberta após 3 falhas
     
     /**
      * Descobre automaticamente o servidor MDM (com cache de 1 minuto)
@@ -374,6 +376,30 @@ object ServerDiscovery {
         Log.d(TAG, "♻️ Invalidando cache de descoberta...")
         cachedServerUrl = null
         lastDiscoveryTime = 0L
+        consecutiveFailures = 0
+    }
+    
+    /**
+     * Registra falha de conexão - após múltiplas falhas, invalida cache automaticamente
+     */
+    fun registerConnectionFailure() {
+        consecutiveFailures++
+        Log.w(TAG, "⚠️ Falha de conexão registrada ($consecutiveFailures/$MAX_FAILURES_BEFORE_REDISCOVERY)")
+        
+        if (consecutiveFailures >= MAX_FAILURES_BEFORE_REDISCOVERY) {
+            Log.w(TAG, "🔄 Muitas falhas consecutivas - invalidando cache e forçando redescoberta")
+            invalidateCache()
+        }
+    }
+    
+    /**
+     * Reseta contador de falhas quando conecta com sucesso
+     */
+    fun registerConnectionSuccess() {
+        if (consecutiveFailures > 0) {
+            Log.d(TAG, "✅ Conexão bem-sucedida - resetando contador de falhas")
+            consecutiveFailures = 0
+        }
     }
 }
 

@@ -4,6 +4,13 @@ Ferramenta simples para gerar QR codes no terminal para download do APK.
 
 ## 🚀 Como Usar
 
+### Opção 1: Windows (Duplo Clique)
+
+Execute `gerar-qrcode.bat` diretamente ou:
+
+```bash
+.\gerar-qrcode.bat
+```
 
 ### Opção 2: Node.js Direto
 
@@ -202,10 +209,14 @@ for /f %i in (links.txt) do node gerar-qrcode.js "%i"
 
 ## 📞 Suporte
 
-- **GitHub Issues:** Para reportar bugs
-- **Email:** Para questões específicas
+Problemas comuns:
+- Verificar Node.js instalado
+- Executar `npm install` antes de usar
+- Terminal com suporte Unicode
 
 ---
+
+**Última atualização:** 21/10/2024
 
 **Criado com ❤️ para facilitar o compartilhamento do MDM Launcher**
 

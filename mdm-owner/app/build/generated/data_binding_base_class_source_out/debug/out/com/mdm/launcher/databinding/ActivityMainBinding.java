@@ -38,16 +38,20 @@ public final class ActivityMainBinding implements ViewBinding {
   @NonNull
   public final ProgressBar loadingProgress;
 
+  @NonNull
+  public final TextView messageBadge;
+
   private ActivityMainBinding(@NonNull ConstraintLayout rootView,
       @NonNull RecyclerView appsRecyclerView, @NonNull FloatingActionButton configButton,
       @NonNull TextView connectionStatusText, @NonNull LinearLayout emptyLayout,
-      @NonNull ProgressBar loadingProgress) {
+      @NonNull ProgressBar loadingProgress, @NonNull TextView messageBadge) {
     this.rootView = rootView;
     this.appsRecyclerView = appsRecyclerView;
     this.configButton = configButton;
     this.connectionStatusText = connectionStatusText;
     this.emptyLayout = emptyLayout;
     this.loadingProgress = loadingProgress;
+    this.messageBadge = messageBadge;
   }
 
   @Override
@@ -107,8 +111,14 @@ public final class ActivityMainBinding implements ViewBinding {
         break missingId;
       }
 
+      id = R.id.message_badge;
+      TextView messageBadge = ViewBindings.findChildViewById(rootView, id);
+      if (messageBadge == null) {
+        break missingId;
+      }
+
       return new ActivityMainBinding((ConstraintLayout) rootView, appsRecyclerView, configButton,
-          connectionStatusText, emptyLayout, loadingProgress);
+          connectionStatusText, emptyLayout, loadingProgress, messageBadge);
     }
     String missingId = rootView.getResources().getResourceName(id);
     throw new NullPointerException("Missing required view with ID: ".concat(missingId));

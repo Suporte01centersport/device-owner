@@ -1,4 +1,4 @@
-# Sistema de Atualização Automática de APK
+# 📦 Sistema de Atualização Automática de APK
 
 Sistema completo para atualizar o MDM Launcher automaticamente usando o link do GitHub, com instalação silenciosa via Device Owner.
 
@@ -319,14 +319,19 @@ adb shell dumpsys package com.mdm.launcher | findstr permission
 Array.from(connectedDevices.keys())
 
 // 2. Verificar se o device ID está correto
-// 3. Aguardar dispositivo conectar
+// 3. Aguardar dispositivo conectar (pode levar até 20s após servidor reiniciar)
 // 4. Verificar logs do dispositivo
 ```
 
 ```bash
 # No Android
 adb logcat -s WebSocketService:* -v time
+
+# No servidor
+pm2 logs mdm-websocket | grep "device_connected"
 ```
+
+**Nota:** Após reiniciar servidor com `pm2 restart`, aguarde 20 segundos para launchers reconectarem automaticamente.
 
 ### Problema 4: Instalação Falha
 
@@ -388,6 +393,27 @@ Estados possíveis:
 
 ---
 
+## 🔄 Reconexão Automática (Atualização 21/10/2024)
+
+O sistema agora **reconecta automaticamente** após o servidor reiniciar:
+
+### **Melhorias:**
+- ✅ Launcher reconecta em 10-20s após servidor reiniciar
+- ✅ Não precisa mais reinstalar app após `pm2 restart`
+- ✅ Cache otimizado (30s) para reconexão mais rápida
+- ✅ Sistema anti-travamento detecta conexões presas
+
+### **Importante para Atualizações:**
+Quando enviar comando de atualização após servidor reiniciar:
+1. **Aguarde 20 segundos** para launcher reconectar
+2. **Verifique logs** para confirmar conexão:
+   ```bash
+   pm2 logs mdm-websocket | grep "device_connected"
+   ```
+3. **Envie o comando** de atualização normalmente
+
+---
+
 ## 🚀 Próximos Passos
 
 1. **Integrar com UI**: Criar interface web para gerenciar atualizações
@@ -402,14 +428,19 @@ Estados possíveis:
 
 Se encontrar problemas:
 
-1. Verificar logs do Android (`adb logcat`)
+1. Verificar logs do Android: `adb logcat -s AppUpdater:* WebSocketService:*`
 2. Verificar logs do servidor Node.js
 3. Consultar este documento
 4. Verificar conectividade WebSocket
+5. Confirmar Device Owner ativo: `adb shell dpm list-owners`
 
 ## 🔗 Links Úteis
 
-- **GitHub Release**: https://github.com/suporte04centersport/qrcode/releases
 - **Documentação Device Owner**: https://developer.android.com/work/dpc/dedicated-devices
 - **PackageInstaller API**: https://developer.android.com/reference/android/content/pm/PackageInstaller
+- **OkHttp WebSocket**: https://square.github.io/okhttp/
+
+---
+
+**Última atualização:** 21/10/2024
 

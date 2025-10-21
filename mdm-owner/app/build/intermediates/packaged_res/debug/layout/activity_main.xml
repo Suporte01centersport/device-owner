@@ -65,16 +65,43 @@
 
     </LinearLayout>
 
-    <!-- Botão de configuração -->
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/config_button"
+    <!-- Botão de configuração com badge -->
+    <FrameLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_margin="16dp"
-        android:src="@android:drawable/ic_menu_preferences"
-        android:contentDescription="Configurações"
+        android:layout_margin="20dp"
+        android:padding="8dp"
+        android:clipChildren="false"
+        android:clipToPadding="false"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent">
+        
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/config_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@android:drawable/ic_menu_preferences"
+            android:contentDescription="Configurações"
+            app:elevation="0dp"
+            app:borderWidth="0dp" />
+        
+        <!-- Badge de mensagens não lidas -->
+        <TextView
+            android:id="@+id/message_badge"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="0dp"
+            android:layout_marginEnd="0dp"
+            android:background="@drawable/badge_background"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="3" />
+    </FrameLayout>
 
     <!-- Progress bar para loading -->
     <ProgressBar

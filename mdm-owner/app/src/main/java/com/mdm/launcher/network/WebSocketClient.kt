@@ -50,6 +50,9 @@ class WebSocketClient private constructor(
             // Marcar como conectado IMEDIATAMENTE ao abrir conexão
             isConnected = true
             onConnectionChange(true)
+            
+            // Registrar sucesso de conexão no ServerDiscovery
+            com.mdm.launcher.utils.ServerDiscovery.registerConnectionSuccess()
             Log.d(TAG, "✅ MARCADO COMO CONECTADO após onOpen()")
             
             // Enviar ping inicial para receber pong do servidor
@@ -136,6 +139,9 @@ class WebSocketClient private constructor(
             isConnected = false
             onConnectionChange(false)
             
+            // Registrar falha no ServerDiscovery para invalidar cache se necessário
+            com.mdm.launcher.utils.ServerDiscovery.registerConnectionFailure()
+            
             // Parar heartbeat
             stopHeartbeat()
             
@@ -199,6 +205,22 @@ class WebSocketClient private constructor(
                 Log.d(TAG, "🚀 Criando WebSocket...")
                 webSocket = client?.newWebSocket(request, webSocketListener)
                 Log.d(TAG, "✅ WebSocket criado - aguardando onOpen()")
+                
+                // TIMEOUT DE SEGURANÇA: Se não conectar em 15s, resetar estado
+                delay(15000L)
+                if (isReconnecting && !isConnected) {
+                    Log.w(TAG, "⏱️ Timeout de conexão (15s) - resetando estado de reconexão")
+                    isReconnecting = false
+                    
+                    // Fechar WebSocket anterior se existir
+                    webSocket?.close(1000, "Timeout de conexão")
+                    webSocket = null
+                    
+                    // Agendar nova tentativa
+                    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                        scheduleReconnect()
+                    }
+                }
                 
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Erro ao conectar WebSocket", e)
@@ -414,6 +436,8 @@ class WebSocketClient private constructor(
     
     fun isConnected(): Boolean = isConnected
     
+    fun isReconnecting(): Boolean = isReconnecting
+    
     fun forceReconnect() {
         Log.d(TAG, "🔄 Forçando reconexão completa...")
         disconnect()
@@ -435,20 +459,34 @@ class WebSocketClient private constructor(
     
     fun checkConnectionHealth(): Boolean {
         val now = System.currentTimeMillis()
-        val timeSinceLastMessage = now - lastSuccessfulMessage
+        val timeSinceLastMessage = if (lastSuccessfulMessage > 0) (now - lastSuccessfulMessage) / 1000 else -1
         
-        Log.d(TAG, "Verificando saúde da conexão: isConnected=$isConnected, última mensagem há ${timeSinceLastMessage/1000}s")
+        Log.d(TAG, "Verificando saúde: isConnected=$isConnected, reconectando=$isReconnecting, última msg há ${timeSinceLastMessage}s")
         
-        // Se não está conectado, tentar reconectar
-        if (!isConnected) {
-            Log.d(TAG, "Conexão perdida, tentando reconectar...")
+        // Se está reconectando, não fazer nada
+        if (isReconnecting) {
+            Log.d(TAG, "Reconexão em andamento, pulando verificação de saúde")
+            return false
+        }
+        
+        // Se não está conectado E não recebeu mensagens recentemente, tentar reconectar
+        if (!isConnected && (lastSuccessfulMessage == 0L || timeSinceLastMessage > (HEARTBEAT_INTERVAL / 1000))) {
+            Log.d(TAG, "Conexão perdida sem mensagens recentes, tentando reconectar...")
             forceReconnect()
             return false
         }
         
+        // Se está marcado como desconectado mas está recebendo mensagens, corrigir estado
+        if (!isConnected && lastSuccessfulMessage > 0 && timeSinceLastMessage < 60) {
+            Log.w(TAG, "⚠️ Marcado como desconectado mas recebeu mensagem há ${timeSinceLastMessage}s - corrigindo estado...")
+            isConnected = true
+            onConnectionChange(true)
+            return true
+        }
+        
         // Se não recebeu mensagens há muito tempo, considerar conexão morta
-        if (lastSuccessfulMessage > 0 && timeSinceLastMessage > (HEARTBEAT_INTERVAL * 2)) {
-            Log.w(TAG, "Conexão pode estar morta (sem mensagens há ${timeSinceLastMessage/1000}s), forçando reconexão")
+        if (lastSuccessfulMessage > 0 && timeSinceLastMessage > (HEARTBEAT_INTERVAL * 2 / 1000)) {
+            Log.w(TAG, "Conexão pode estar morta (sem mensagens há ${timeSinceLastMessage}s), forçando reconexão")
             forceReconnect()
             return false
         }
@@ -547,6 +585,12 @@ class WebSocketClient private constructor(
         }
         
         reconnectAttempts++
+        
+        // A cada 3 tentativas, forçar redescoberta do servidor
+        if (reconnectAttempts % 3 == 0) {
+            Log.w(TAG, "🔍 Após $reconnectAttempts tentativas, forçando redescoberta do servidor...")
+            com.mdm.launcher.utils.ServerDiscovery.invalidateCache()
+        }
         
         // Backoff exponencial mais conservador para evitar sobrecarga
         val delay = when {
