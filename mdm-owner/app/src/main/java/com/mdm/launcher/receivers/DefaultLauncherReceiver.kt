@@ -4,68 +4,84 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import kotlinx.coroutines.*
 
+/**
+ * VERSÃO NÃO-INVASIVA: Receiver desabilitado por padrão para evitar boot loops
+ * 
+ * Este receiver foi desabilitado no AndroidManifest porque:
+ * 1. O app já é configurado como HOME category no launcher
+ * 2. Thread.sleep() bloqueia o processo de boot
+ * 3. Iniciar Activities durante boot pode causar loops
+ * 
+ * Se precisar reabilitar, use:
+ * adb shell pm enable com.mdm.launcher/.receivers.DefaultLauncherReceiver
+ */
 class DefaultLauncherReceiver : BroadcastReceiver() {
     
     companion object {
         private const val TAG = "DefaultLauncherReceiver"
+        private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
     
     override fun onReceive(context: Context, intent: Intent) {
         try {
-            Log.d(TAG, "DefaultLauncherReceiver recebeu: ${intent.action}")
+            Log.d(TAG, "📱 DefaultLauncherReceiver recebeu: ${intent.action}")
             
-            // Aguardar estabilização para evitar conflitos
-            Thread.sleep(1000)
+            // IMPORTANTE: Usar goAsync() para não bloquear o boot
+            val pendingResult = goAsync()
             
-            when (intent.action) {
-                Intent.ACTION_PACKAGE_CHANGED,
-                Intent.ACTION_PACKAGE_REPLACED,
-                Intent.ACTION_PACKAGE_REMOVED -> {
-                    Log.d(TAG, "Pacote alterado: ${intent.data}")
-                    checkAndRestoreDefaultLauncher(context)
-                }
-                // Não iniciar o Launcher automaticamente logo após instalação
-                // para não disparar solicitações de permissão antes da primeira abertura
-                Intent.ACTION_PACKAGE_ADDED -> {
-                    val addedPackage = intent.data?.schemeSpecificPart
-                    Log.d(TAG, "Pacote instalado: $addedPackage")
-                    if (addedPackage != context.packageName) {
-                        checkAndRestoreDefaultLauncher(context)
-                    } else {
-                        Log.d(TAG, "Instalação do próprio app - não iniciar Activity automaticamente")
+            scope.launch {
+                try {
+                    when (intent.action) {
+                        Intent.ACTION_PACKAGE_CHANGED,
+                        Intent.ACTION_PACKAGE_REPLACED,
+                        Intent.ACTION_PACKAGE_REMOVED -> {
+                            Log.d(TAG, "Pacote alterado: ${intent.data}")
+                            delay(2000) // Aguardar assincronamente sem bloquear
+                            checkAndLogLauncherStatus(context)
+                        }
+                        Intent.ACTION_PACKAGE_ADDED -> {
+                            val addedPackage = intent.data?.schemeSpecificPart
+                            Log.d(TAG, "Pacote instalado: $addedPackage")
+                            if (addedPackage != context.packageName) {
+                                delay(2000)
+                                checkAndLogLauncherStatus(context)
+                            }
+                        }
+                        Intent.ACTION_MY_PACKAGE_REPLACED -> {
+                            Log.d(TAG, "MDM Launcher foi atualizado")
+                            delay(2000)
+                            checkAndLogLauncherStatus(context)
+                        }
                     }
-                }
-                Intent.ACTION_BOOT_COMPLETED -> {
-                    Log.d(TAG, "Sistema inicializado - verificando launcher padrão")
-                    // Aguardar mais tempo após boot para evitar conflitos
-                    Thread.sleep(5000)
-                    checkAndRestoreDefaultLauncher(context)
-                }
-                Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                    Log.d(TAG, "MDM Launcher foi atualizado")
-                    checkAndRestoreDefaultLauncher(context)
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro no processamento", e)
+                } finally {
+                    pendingResult.finish()
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro no DefaultLauncherReceiver - pode causar boot loop!", e)
-            // Não relançar exceção para evitar crash
+            Log.e(TAG, "❌ Erro no DefaultLauncherReceiver", e)
         }
     }
     
-    private fun checkAndRestoreDefaultLauncher(context: Context) {
+    /**
+     * VERSÃO NÃO-INVASIVA: Apenas loga o status sem tentar forçar
+     */
+    private fun checkAndLogLauncherStatus(context: Context) {
         try {
             val packageManager = context.packageManager
             val currentLauncher = getCurrentDefaultLauncher(packageManager)
             
-            Log.d(TAG, "Launcher padrão atual: $currentLauncher")
-            
-            if (currentLauncher != context.packageName) {
-                Log.w(TAG, "Launcher padrão não é o MDM Launcher! Tentando restaurar...")
-                restoreDefaultLauncher(context)
+            if (currentLauncher == context.packageName) {
+                Log.d(TAG, "✅ MDM Launcher é o launcher padrão")
             } else {
-                Log.d(TAG, "MDM Launcher é o launcher padrão ✓")
+                Log.w(TAG, "⚠️ Launcher padrão: $currentLauncher (não é o MDM)")
+                Log.w(TAG, "ℹ️ O usuário precisará configurar manualmente o launcher padrão")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao verificar launcher padrão", e)
@@ -82,21 +98,5 @@ class DefaultLauncherReceiver : BroadcastReceiver() {
             return resolveInfos[0].activityInfo.packageName
         }
         return null
-    }
-    
-    private fun restoreDefaultLauncher(context: Context) {
-        try {
-            // Tentar definir o MDM Launcher como padrão novamente
-            val intent = Intent(Intent.ACTION_MAIN).apply {
-                addCategory(Intent.CATEGORY_HOME)
-                setPackage(context.packageName)
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
-            }
-            
-            Log.d(TAG, "Tentando restaurar MDM Launcher como padrão...")
-            context.startActivity(intent)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao restaurar launcher padrão", e)
-        }
     }
 }

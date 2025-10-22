@@ -76,11 +76,11 @@
         android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="31">
 
-        <!-- Activity principal do launcher -->
+        <!-- Activity principal do launcher (versão menos invasiva) -->
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleInstance"
+            android:launchMode="singleTask"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.MDMLauncher.Launcher"
             android:windowSoftInputMode="adjustResize"
@@ -90,13 +90,12 @@
             android:finishOnTaskLaunch="false"
             android:excludeFromRecents="false"
             android:stateNotNeeded="false"
-            android:taskAffinity=""
             android:noHistory="false">
-            <intent-filter android:priority="1000">
+            <intent-filter android:priority="100">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <intent-filter android:priority="1000">
+            <intent-filter android:priority="100">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.HOME" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -165,21 +164,18 @@
         </receiver>
 
         <!-- Broadcast Receiver para manter launcher padrão -->
+        <!-- DESABILITADO: Causava boot loop. O launcher já é configurado como HOME category -->
         <receiver
             android:name=".receivers.DefaultLauncherReceiver"
-            android:enabled="true"
+            android:enabled="false"
             android:exported="false">
             <intent-filter android:priority="1000">
                 <action android:name="android.intent.action.PACKAGE_ADDED" />
                 <action android:name="android.intent.action.PACKAGE_REMOVED" />
                 <action android:name="android.intent.action.PACKAGE_REPLACED" />
                 <action android:name="android.intent.action.PACKAGE_CHANGED" />
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <data android:scheme="package" />
-            </intent-filter>
-            <intent-filter android:priority="1000">
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

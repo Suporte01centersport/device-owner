@@ -821,11 +821,145 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    /**
+     * REMOVIDO: ensureAdbAlwaysEnabled() - causava boot loop no Realme UI
+     * 
+     * Esta função tentava forçar ADB via Settings.Global.ADB_ENABLED,
+     * mas isso pode causar SecurityException e boot loops em dispositivos
+     * com SELinux restritivo (como Realme UI, MIUI, OneUI).
+     * 
+     * ADB pode ser ativado manualmente nas Configurações do desenvolvedor.
+     */
+    
+    /**
+     * Aplica restrições de Device Owner (chamado via comando remoto)
+     * NÃO é chamado automaticamente no boot
+     * 
+     * ⚠️ CUIDADO: Algumas restrições podem causar boot loop no Realme UI
+     */
+    private fun applyDeviceOwnerRestrictions() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (!dpm.isDeviceOwnerApp(packageName)) {
+                Log.w(TAG, "⚠️ App não é Device Owner - não pode aplicar restrições")
+                return
+            }
+            
+            Log.d(TAG, "🔒 Aplicando restrições de Device Owner via comando remoto...")
+            
+            // NOTA: Não bloqueia DISALLOW_DEBUGGING_FEATURES para manter ADB ativo
+            // NOTA: Removido DISALLOW_SAFE_BOOT - causava boot loop no Realme UI
+            val restrictions = listOf(
+                android.os.UserManager.DISALLOW_FACTORY_RESET,
+                android.os.UserManager.DISALLOW_ADD_USER,
+                android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
+                android.os.UserManager.DISALLOW_CONFIG_WIFI,
+                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH,
+                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
+                android.os.UserManager.DISALLOW_REMOVE_USER,
+                android.os.UserManager.DISALLOW_UNINSTALL_APPS,
+                android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS
+                // REMOVIDO: DISALLOW_SAFE_BOOT - causava boot loop no Realme UI
+            )
+            
+            var appliedCount = 0
+            for (restriction in restrictions) {
+                try {
+                    dpm.addUserRestriction(componentName, restriction)
+                    appliedCount++
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Não foi possível aplicar restrição: $restriction", e)
+                }
+            }
+            
+            Log.d(TAG, "✅ $appliedCount restrições aplicadas")
+            
+            // 🚨 BLOQUEAR ACESSO ÀS CONFIGURAÇÕES (COM CUIDADO)
+            blockSettingsAccess(dpm, componentName)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao aplicar restrições", e)
+        }
+    }
+    
+    /**
+     * 🚨 BLOQUEAR ACESSO ÀS CONFIGURAÇÕES
+     * ⚠️ CUIDADO: Pode causar boot loop se aplicado incorretamente
+     * ⚠️ TESTE PRIMEIRO: Aplique apenas via comando remoto, não no boot
+     */
+    private fun blockSettingsAccess(dpm: DevicePolicyManager, componentName: ComponentName) {
+        try {
+            Log.d(TAG, "🚫 Bloqueando acesso às configurações...")
+            
+            // MÉTODO 1: Ocultar app de configurações (MAIS SEGURO)
+            try {
+                val settingsHidden = dpm.setApplicationHidden(componentName, "com.android.settings", true)
+                Log.d(TAG, "🔒 Settings oculto: $settingsHidden")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível ocultar Settings: ${e.message}")
+            }
+            
+            // MÉTODO 2: Ocultar gerenciador de apps (CUIDADO)
+            try {
+                val packageInstallerHidden = dpm.setApplicationHidden(componentName, "com.android.packageinstaller", true)
+                Log.d(TAG, "🔒 Package Installer oculto: $packageInstallerHidden")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível ocultar Package Installer: ${e.message}")
+            }
+            
+            // MÉTODO 3: Restrições adicionais (TESTE CUIDADOSO)
+            val additionalRestrictions = listOf(
+                // android.os.UserManager.DISALLOW_CONFIG_APPLICATIONS,  // ⚠️ PODE CAUSAR BOOT LOOP
+                // android.os.UserManager.DISALLOW_CONFIG_LOCATION,      // ⚠️ PODE CAUSAR BOOT LOOP
+                android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT,   // Mais seguro
+                android.os.UserManager.DISALLOW_CONFIG_BRIGHTNESS        // Mais seguro
+            )
+            
+            for (restriction in additionalRestrictions) {
+                try {
+                    dpm.addUserRestriction(componentName, restriction)
+                    Log.d(TAG, "✅ Restrição adicional aplicada: $restriction")
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Não foi possível aplicar restrição adicional: $restriction", e)
+                }
+            }
+            
+            Log.d(TAG, "✅ Bloqueio de configurações aplicado com sucesso")
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao bloquear configurações", e)
+        }
+    }
+    
     private fun initializeApp() {
         Log.d(TAG, "Inicializando app após permissões")
         
         // Permissões processadas - log apenas
         Log.d(TAG, "Permissões processadas! Inicializando app...")
+        
+        // REMOVIDO: applyDeviceOwnerRestrictions() - causava boot loop
+        // Restrições serão aplicadas apenas via comando remoto
+        
+        // REMOVIDO: ensureAdbAlwaysEnabled() - causava boot loop no Realme UI
+        // ADB pode ser ativado manualmente nas Configurações do desenvolvedor
+        
+        // 🎯 INICIAR MONITOR DE APPS (COM CUIDADO)
+        // Só inicia se não estiver em modo manutenção
+        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+        val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
+        val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
+        val now = System.currentTimeMillis()
+        
+        if (!maintenanceMode || now >= maintenanceExpiry) {
+            Log.d(TAG, "🎯 Iniciando monitor de apps...")
+            com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
+            Log.d(TAG, "✅ Monitor de apps iniciado com sucesso")
+        } else {
+            Log.d(TAG, "🔧 Modo manutenção ativo - monitor de apps desabilitado")
+        }
         
         // Configurar UI
         initViews()
@@ -1133,13 +1267,23 @@ class MainActivity : AppCompatActivity() {
         
         Log.d(TAG, "✅ NetworkMonitor inicializado")
         
-        // Verificação adicional mais frequente para mudanças de rede
+        // ✅ CORREÇÃO: Verificação com timeout e condições de saída
         scope.launch {
-            while (isActive) {
+            var checkCount = 0
+            val maxChecks = 300 // Máximo 5 minutos (300 * 1s)
+            
+            while (isActive && checkCount < maxChecks) {
                 delay(1000) // Verificar a cada 1 segundo para mudanças rápidas
+                checkCount++
                 
                 val hasNetwork = networkMonitor?.isConnected?.value ?: false
                 val currentText = connectionStatusText.text.toString()
+                
+                // Condição de saída: se conectado e status correto
+                if (hasNetwork && currentText.contains("Conectado")) {
+                    Log.d(TAG, "✅ Status de conexão correto - saindo do loop de verificação")
+                    break
+                }
                 
                 // Detectar mudança de rede imediatamente
                 if (!hasNetwork && currentText != "Sem Rede") {
@@ -1154,16 +1298,30 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            
+            if (checkCount >= maxChecks) {
+                Log.w(TAG, "⚠️ Timeout atingido no loop de verificação de rede")
+            }
         }
         
-        // Verificação periódica de conectividade para garantir status correto
+        // ✅ CORREÇÃO: Verificação periódica com timeout e condições de saída
         scope.launch {
-            while (isActive) {
+            var checkCount = 0
+            val maxChecks = 100 // Máximo 5 minutos (100 * 3s)
+            
+            while (isActive && checkCount < maxChecks) {
                 delay(3000) // Verificar a cada 3 segundos (era 10s) - mais responsivo
+                checkCount++
                 
                 val hasNetwork = networkMonitor?.isConnected?.value ?: false
                 val isWebSocketConnected = (isServiceBound && webSocketService?.isConnected() == true) ||
                     (webSocketClient?.isConnected() == true)
+                
+                // Condição de saída: se conectado e status correto
+                if (hasNetwork && isWebSocketConnected && connectionStatusText.text.contains("Conectado")) {
+                    Log.d(TAG, "✅ Status de conexão correto - saindo do loop periódico")
+                    break
+                }
                 
                 // Se não há rede, garantir que status seja atualizado
                 if (!hasNetwork && connectionStatusText.text != "Sem Rede") {
@@ -1187,6 +1345,10 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            
+            if (checkCount >= maxChecks) {
+                Log.w(TAG, "⚠️ Timeout atingido no loop de verificação periódica")
+            }
         }
     }
     
@@ -1208,7 +1370,19 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 Log.d(TAG, "🔍 Descobrindo servidor após reconexão de rede...")
-                val newServerUrl = ServerDiscovery.discoverServer(this@MainActivity)
+                val newServerUrl = try {
+                    ServerDiscovery.discoverServer(this@MainActivity)
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro na descoberta do servidor: ${e.message}")
+                    Log.d(TAG, "🔄 Tentando redescoberta forçada...")
+                    
+                    try {
+                        ServerDiscovery.forceRediscovery(this@MainActivity)
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "❌ Redescoberta forçada também falhou: ${e2.message}")
+                        throw e2
+                    }
+                }
                 Log.d(TAG, "✅ Servidor descoberto: $newServerUrl")
                 
                 // Salvar URL descoberta para uso futuro
@@ -1611,11 +1785,23 @@ class MainActivity : AppCompatActivity() {
         val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
         Log.d(TAG, "🔧 DeviceId inicial: ${deviceId.takeLast(8)}")
         
-        // Descobrir servidor automaticamente em background
+        // Descobrir servidor automaticamente em background com resiliência
         scope.launch {
             try {
                 Log.d(TAG, "🔍 Iniciando descoberta do servidor...")
-                val serverUrl = com.mdm.launcher.utils.ServerDiscovery.discoverServer(this@MainActivity)
+                val serverUrl = try {
+                    com.mdm.launcher.utils.ServerDiscovery.discoverServer(this@MainActivity)
+                } catch (e: Exception) {
+                    Log.e(TAG, "❌ Erro na descoberta inicial do servidor: ${e.message}")
+                    Log.d(TAG, "🔄 Tentando redescoberta forçada...")
+                    
+                    try {
+                        com.mdm.launcher.utils.ServerDiscovery.forceRediscovery(this@MainActivity)
+                    } catch (e2: Exception) {
+                        Log.e(TAG, "❌ Redescoberta forçada também falhou: ${e2.message}")
+                        throw e2
+                    }
+                }
                 
                 val deviceIdInfo = com.mdm.launcher.utils.DeviceIdManager.getDeviceIdInfo(this@MainActivity)
                 
@@ -3034,8 +3220,8 @@ class MainActivity : AppCompatActivity() {
         updateMessageBadge()
         Log.d(TAG, "🔄 Mensagens recarregadas no onResume: total=${receivedMessages.size}, não lidas=$unreadMessagesCount")
         
-        // Garantir que ainda somos o launcher padrão
-        ensureDefaultLauncher()
+        // REMOVIDO: ensureDefaultLauncher() - causava boot loops
+        // O launcher é configurado automaticamente pelo Device Owner Policy
         
         // Evitar processamento desnecessário se a activity foi destruída
         if (isActivityDestroyed) {
@@ -3048,6 +3234,15 @@ class MainActivity : AppCompatActivity() {
         
         // Tela desbloqueada - garantir conexão ativa
         handleScreenUnlocked()
+        
+        // 🎯 GARANTIR QUE O MONITOR DE APPS ESTEJA ATIVO
+        try {
+            Log.d(TAG, "🎯 Verificando monitor de apps no onResume...")
+            com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
+            Log.d(TAG, "✅ Monitor de apps iniciado no onResume")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao iniciar monitor de apps no onResume", e)
+        }
         
         // SEMPRE recarregar allowedApps do SharedPreferences quando voltar ao foreground
         // Isso garante que mudanças feitas enquanto app estava em background sejam aplicadas
@@ -3156,8 +3351,8 @@ class MainActivity : AppCompatActivity() {
         super.onRestart()
         Log.d(TAG, "onRestart() chamado - Activity reiniciada")
         
-        // Garantir que ainda somos o launcher padrão
-        ensureDefaultLauncher()
+        // REMOVIDO: ensureDefaultLauncher() - causava boot loops
+        // O launcher é configurado automaticamente pelo Device Owner Policy
     }
     
     /**
@@ -3213,22 +3408,9 @@ class MainActivity : AppCompatActivity() {
                         val launcherPackage = launcher.activityInfo.packageName
                         if (launcherPackage != packageName) {
                             try {
-                                // Verificar se já está oculto
-                                val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
-                                
-                                if (!isHidden) {
-                                    // Ocultar launcher
-                                    val result = dpm.setApplicationHidden(componentName, launcherPackage, true)
-                                    if (result) {
-                                        hiddenCount++
-                                        Log.d(TAG, "🔒 Launcher desabilitado: $launcherPackage")
-                                    } else {
-                                        Log.w(TAG, "⚠️ Falha ao desabilitar: $launcherPackage")
-                                    }
-                                } else {
-                                    alreadyHiddenCount++
-                                    Log.d(TAG, "ℹ️ Launcher já desabilitado: $launcherPackage")
-                                }
+                                // REMOVIDO: Ocultação de launchers - causava boot loop no Realme UI
+                                // Realme UI tem launchers críticos que não podem ser ocultados
+                                Log.d(TAG, "ℹ️ Pulando ocultação de launcher: $launcherPackage (Realme UI)")
                             } catch (e: Exception) {
                                 Log.e(TAG, "❌ Erro ao desabilitar launcher $launcherPackage", e)
                             }
@@ -3453,6 +3635,9 @@ class MainActivity : AppCompatActivity() {
         stopNetworkMonitoring()
         stopPeriodicSync()
         
+        // 🛑 PARAR MONITOR DE APPS
+        com.mdm.launcher.utils.AppMonitor.stopMonitoring()
+        
         // Parar NetworkMonitor
         try {
             networkMonitor?.destroy()
@@ -3541,9 +3726,9 @@ class MainActivity : AppCompatActivity() {
                     val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                     val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
                     
-                    // Configurar apenas o app de quiosque como permitido no Lock Task
-                    devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
-                    Log.d(TAG, "App configurado como lock task package")
+                    // REMOVIDO: Lock Task Mode - causava problemas no Realme UI
+                    // devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
+                    Log.d(TAG, "ℹ️ Lock Task Mode desabilitado para Realme UI")
                     
                     // Iniciar o app
                     val intent = packageManager.getLaunchIntentForPackage(packageName)
@@ -3604,9 +3789,9 @@ class MainActivity : AppCompatActivity() {
                         val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                         val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
                         
-                        // Limpar lock task packages
-                        devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf())
-                        Log.d(TAG, "Lock task packages limpos")
+                        // REMOVIDO: Limpeza de lock task packages - não necessário
+                        // devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf())
+                        Log.d(TAG, "ℹ️ Lock Task Mode já estava desabilitado")
                     } catch (e: Exception) {
                         Log.e(TAG, "Erro ao limpar lock task packages", e)
                     }
