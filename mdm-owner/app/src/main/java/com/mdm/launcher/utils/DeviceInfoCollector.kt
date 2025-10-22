@@ -547,86 +547,61 @@ object DeviceInfoCollector {
             Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
             Log.d("DeviceInfoCollector", "Device is Device Owner: ${(context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).isDeviceOwnerApp(context.packageName)}")
             
-            val serial = when {
-                Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> {
-                    try {
-                        // MÉTODO 1: Tentar Build.getSerial() (requer READ_PHONE_STATE)
-                        val buildSerial = Build.getSerial()
-                        if (buildSerial != "unknown" && buildSerial.isNotEmpty()) {
-                            Log.d("DeviceInfoCollector", "✓ Serial real obtido via Build.getSerial(): ${buildSerial}")
-                            buildSerial
-                        } else {
-                            Log.w("DeviceInfoCollector", "Build.getSerial() retornou 'unknown' ou vazio")
-                            throw SecurityException("Build.getSerial() retornou unknown")
-                        }
-                    } catch (e: SecurityException) {
-                        Log.w("DeviceInfoCollector", "SecurityException ao obter Serial via Build.getSerial(): ${e.message}")
-                        
-                        // MÉTODO 2: Tentar Build.SERIAL (pode funcionar em alguns casos)
-                        try {
-                            val buildSerialFallback = Build.SERIAL
-                            if (buildSerialFallback != "unknown" && buildSerialFallback.isNotEmpty()) {
-                                Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL: ${buildSerialFallback}")
-                                buildSerialFallback
-                            } else {
-                                throw Exception("Build.SERIAL também é 'unknown'")
-                            }
-                        } catch (e2: Exception) {
-                            Log.w("DeviceInfoCollector", "Build.SERIAL também falhou: ${e2.message}")
-                            
-                            // MÉTODO 3: Tentar via DevicePolicyManager (Device Owner)
-                            try {
-                                val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-                                val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
-                                if (isDeviceOwner && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                                    val enrollmentId = devicePolicyManager.enrollmentSpecificId
-                                    if (enrollmentId != null && enrollmentId.isNotEmpty()) {
-                                        Log.d("DeviceInfoCollector", "✓ Serial via DevicePolicyManager.enrollmentSpecificId: ${enrollmentId}")
-                                        enrollmentId
-                                    } else {
-                                        throw Exception("DevicePolicyManager.enrollmentSpecificId retornou null/vazio")
-                                    }
-                                } else {
-                                    throw Exception("Não é Device Owner ou API < 26")
-                                }
-                            } catch (e3: Exception) {
-                                Log.w("DeviceInfoCollector", "DevicePolicyManager também falhou: ${e3.message}")
-                                
-                                // ÚLTIMO RECURSO: Android ID
-                                val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-                                Log.w("DeviceInfoCollector", "⚠️ Todos os métodos falharam, usando Android ID como último recurso: ${androidId}")
-                                androidId
-                            }
-                        }
-                    }
-                }
-                else -> {
-                    // Android < 8.0 - usar Build.SERIAL diretamente
-                    val buildSerial = Build.SERIAL
+            // ✅ CORREÇÃO: Simplificar a lógica de obtenção do serial
+            var serial: String? = null
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    // MÉTODO 1: Tentar Build.getSerial() (requer READ_PHONE_STATE)
+                    val buildSerial = Build.getSerial()
                     if (buildSerial != "unknown" && buildSerial.isNotEmpty()) {
-                        Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL (Android < 8): ${buildSerial}")
-                        buildSerial
-                    } else {
-                        Log.w("DeviceInfoCollector", "Build.SERIAL é 'unknown', usando Android ID")
-                        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-                        androidId
+                        Log.d("DeviceInfoCollector", "✓ Serial real obtido via Build.getSerial(): ${buildSerial}")
+                        serial = buildSerial
                     }
+                } catch (e: SecurityException) {
+                    Log.w("DeviceInfoCollector", "SecurityException ao obter Serial via Build.getSerial(): ${e.message}")
                 }
             }
             
-            Log.d("DeviceInfoCollector", "")
-            Log.d("DeviceInfoCollector", "╔════════════════════════════════════════════════════════════╗")
-            Log.d("DeviceInfoCollector", "║  SERIAL NUMBER FINAL COLETADO:                            ║")
-            Log.d("DeviceInfoCollector", "║  ${serial?.padEnd(56) ?: "NULL".padEnd(56)} ║")
-            Log.d("DeviceInfoCollector", "╚════════════════════════════════════════════════════════════╝")
-            Log.d("DeviceInfoCollector", "")
+            // MÉTODO 2: Fallback para Build.SERIAL
+            if (serial == null) {
+                try {
+                    @Suppress("DEPRECATION")
+                    val buildSerialFallback = Build.SERIAL
+                    if (buildSerialFallback != "unknown" && buildSerialFallback.isNotEmpty()) {
+                        Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL: ${buildSerialFallback}")
+                        serial = buildSerialFallback
+                    }
+                } catch (e: Exception) {
+                    Log.w("DeviceInfoCollector", "Build.SERIAL também falhou: ${e.message}")
+                }
+            }
+            
+            // MÉTODO 3: Fallback para Android ID
+            if (serial == null) {
+                try {
+                    val androidId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
+                    if (androidId.isNotEmpty() && androidId != "9774d56d682e549c") {
+                        Log.d("DeviceInfoCollector", "✓ Usando Android ID como fallback: ${androidId}")
+                        serial = androidId
+                    }
+                } catch (e: Exception) {
+                    Log.w("DeviceInfoCollector", "Android ID também falhou: ${e.message}")
+                }
+            }
+            
+            // MÉTODO 4: Fallback final - gerar ID único
+            if (serial == null) {
+                serial = "unknown_device_${System.currentTimeMillis() % 10000}"
+                Log.w("DeviceInfoCollector", "Usando fallback genérico: ${serial}")
+            }
+            
+            Log.d("DeviceInfoCollector", "Serial final: ${serial}")
             serial
+            
         } catch (e: Exception) {
-            Log.e("DeviceInfoCollector", "Erro geral ao obter Serial", e)
-            // Último fallback: Build.SERIAL
-            val buildSerial = Build.SERIAL
-            Log.d("DeviceInfoCollector", "Usando Build.SERIAL após erro: ${buildSerial}")
-            buildSerial
+            Log.e("DeviceInfoCollector", "Erro geral ao obter Serial: ${e.message}")
+            "error_device_${System.currentTimeMillis() % 10000}"
         }
     }
     

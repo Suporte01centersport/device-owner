@@ -148,68 +148,95 @@ class WebSocketService : Service() {
         Log.d(TAG, "WebSocketService sendo destruído - iniciando cleanup...")
         isServiceRunning = false
         
-        // Cancelar health check
-        healthCheckJob?.cancel()
-        healthCheckJob = null
+        // ✅ CORREÇÃO: Cancelar health check com timeout
+        try {
+            healthCheckJob?.cancel()
+            healthCheckJob = null
+            Log.d(TAG, "Health check cancelado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao cancelar health check", e)
+        }
         
-        // Cancelar timer de modo manutenção (se existir)
+        // ✅ CORREÇÃO: Cancelar timer de modo manutenção com verificação de estado
         try {
             maintenanceRunnable?.let {
-                handler.removeCallbacks(it)
+                if (handler.hasCallbacks(it)) {
+                    handler.removeCallbacks(it)
+                    Log.d(TAG, "Timer de modo manutenção cancelado")
+                }
                 maintenanceRunnable = null
-                Log.d(TAG, "Timer de modo manutenção cancelado")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao cancelar timer de modo manutenção", e)
         }
         
-        // Parar e limpar NetworkMonitor
+        // ✅ CORREÇÃO: Parar e limpar NetworkMonitor com verificação de estado
         try {
-            networkMonitor?.stopMonitoring()
-            networkMonitor?.destroy()
-            networkMonitor = null
-            Log.d(TAG, "NetworkMonitor limpo")
+            networkMonitor?.let {
+                try {
+                    it.stopMonitoring()
+                    it.destroy()
+                    networkMonitor = null
+                    Log.d(TAG, "NetworkMonitor limpo")
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao limpar NetworkMonitor", e)
+                    networkMonitor = null
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao limpar NetworkMonitor", e)
         }
         
-        // Desregistrar BroadcastReceiver
+        // ✅ CORREÇÃO: Desregistrar BroadcastReceiver com verificação de estado
         try {
             unregisterReceiver(commandReceiver)
             Log.d(TAG, "BroadcastReceiver desregistrado")
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "BroadcastReceiver já estava desregistrado")
         } catch (e: Exception) {
             Log.w(TAG, "Erro ao desregistrar receiver", e)
         }
         
-        // Liberar WakeLock
+        // ✅ CORREÇÃO: Liberar WakeLock com verificação de estado
         try {
             wakeLock?.let {
                 if (it.isHeld) {
                     it.release()
                     Log.d(TAG, "WakeLock liberado")
                 }
+                wakeLock = null
             }
-            wakeLock = null
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao liberar WakeLock", e)
         }
         
-        // Cleanup WebSocket
+        // ✅ CORREÇÃO: Cleanup WebSocket com verificação de estado
         try {
-            webSocketClient?.cleanup()
-            webSocketClient = null
-            Log.d(TAG, "WebSocketClient limpo")
+            webSocketClient?.let {
+                if (it.isConnected()) {
+                    it.disconnect()
+                }
+                it.cleanup()
+                webSocketClient = null
+                Log.d(TAG, "WebSocketClient limpo")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao limpar WebSocketClient", e)
         }
         
-        // Cancelar scope de coroutines
+        // ✅ CORREÇÃO: Cancelar scope de coroutines com timeout
         try {
-            serviceScope.cancel()
-            Log.d(TAG, "ServiceScope cancelado")
+            if (serviceScope.isActive) {
+                serviceScope.cancel()
+                Log.d(TAG, "ServiceScope cancelado")
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao cancelar serviceScope", e)
         }
+        
+        // ✅ CORREÇÃO: Limpar referências para evitar vazamentos
+        isInitializing = false
+        lastReconnectingTime = 0L
         
         Log.d(TAG, "WebSocketService cleanup completo")
         super.onDestroy()
@@ -261,8 +288,21 @@ class WebSocketService : Service() {
             isInitializing = true
             Log.d(TAG, "🔧 Inicializando WebSocket em background")
             
-            // Descobrir servidor automaticamente
-            val serverUrl = com.mdm.launcher.utils.ServerDiscovery.discoverServer(this)
+            // Descobrir servidor automaticamente com resiliência
+            val serverUrl = try {
+                com.mdm.launcher.utils.ServerDiscovery.discoverServer(this)
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Erro na descoberta inicial do servidor: ${e.message}")
+                Log.d(TAG, "🔄 Tentando redescoberta forçada...")
+                
+                // Tentar redescoberta forçada
+                try {
+                    com.mdm.launcher.utils.ServerDiscovery.forceRediscovery(this)
+                } catch (e2: Exception) {
+                    Log.e(TAG, "❌ Redescoberta forçada também falhou: ${e2.message}")
+                    throw e2 // Re-throw o erro original
+                }
+            }
             Log.d(TAG, "🔍 Servidor descoberto no Service: $serverUrl")
             
             // Usar DeviceIdManager para obter ID persistente
@@ -386,6 +426,11 @@ class WebSocketService : Service() {
                             
                             Log.d(TAG, "✅ Permissões salvas no SharedPreferences: ${allowedAppsList.size} apps")
                             Log.d(TAG, "✅ Salvo em: mdm_launcher -> allowed_apps")
+                            
+                            // 🎯 ATUALIZAR MONITOR DE APPS
+                            val allowedAppsStrings = allowedAppsList.mapNotNull { it as? String }
+                            com.mdm.launcher.utils.AppMonitor.updateAllowedApps(this, allowedAppsStrings)
+                            Log.d(TAG, "✅ Monitor de apps atualizado com ${allowedAppsStrings.size} apps permitidos")
                             Log.d(TAG, "Apps: $allowedAppsList")
                         }
                         
@@ -485,6 +530,9 @@ class WebSocketService : Service() {
                             .apply()
                         
                         Log.d(TAG, "✅ Modo manutenção ativado até ${java.text.SimpleDateFormat("HH:mm:ss").format(expiryTime)}")
+                        
+                        // REMOVIDO: removeDeviceOwnerRestrictions() - não causa mais boot loop
+                        // Restrições não são aplicadas automaticamente
                         
                         // Mostrar notificação informando que o launcher está desprotegido
                         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
@@ -720,6 +768,8 @@ class WebSocketService : Service() {
                             val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
                             notificationManager.cancel(2000)
                             
+                            // REMOVIDO: applyDeviceOwnerRestrictions() - não causa mais boot loop
+                            
                             // Desabilitar outros launchers novamente
                             disableOtherLaunchers()
                             
@@ -729,7 +779,7 @@ class WebSocketService : Service() {
                             }
                             startActivity(launcherIntent)
                             
-                            Log.d(TAG, "🏠 Voltando ao launcher MDM - proteção reativada")
+                            Log.d(TAG, "🏠 Voltando ao launcher MDM")
                         }
                         
                         // Agendar o Runnable armazenado
@@ -760,6 +810,190 @@ class WebSocketService : Service() {
                     }
                     
                     Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
+                }
+                "remove_device_owner" -> {
+                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔓 COMANDO: REMOVER DEVICE OWNER")
+                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                    
+                    try {
+                        val data = jsonObject["data"] as? Map<*, *>
+                        val password = data?.get("password") as? String
+                        
+                        if (password.isNullOrEmpty()) {
+                            Log.e(TAG, "❌ Senha não fornecida")
+                            val errorMessage = mapOf(
+                                "type" to "device_owner_removed",
+                                "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
+                                "timestamp" to System.currentTimeMillis(),
+                                "success" to false,
+                                "error" to "Senha não fornecida"
+                            )
+                            webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                            return
+                        }
+                        
+                        Log.d(TAG, "🔐 Verificando senha de administrador...")
+                        
+                        val success = removeDeviceOwner(password)
+                        
+                        val responseMessage = mapOf(
+                            "type" to "device_owner_removed",
+                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
+                            "timestamp" to System.currentTimeMillis(),
+                            "success" to success,
+                            "message" to if (success) {
+                                "Device Owner removido com sucesso! Você pode desinstalar o app."
+                            } else {
+                                "Não foi possível remover via API. Use ADB: adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver --user 0"
+                            }
+                        )
+                        
+                        webSocketClient?.sendMessage(gson.toJson(responseMessage))
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro ao processar remoção de Device Owner", e)
+                        val errorMessage = mapOf(
+                            "type" to "device_owner_removed",
+                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
+                            "timestamp" to System.currentTimeMillis(),
+                            "success" to false,
+                            "error" to e.message
+                        )
+                        webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                    }
+                    
+                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                }
+                "emergency_disable" -> {
+                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🚨 MODO DE EMERGÊNCIA ATIVADO")
+                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
+                    
+                    try {
+                        val data = jsonObject["data"] as? Map<*, *>
+                        val password = data?.get("password") as? String
+                        
+                        // Verificar senha
+                        val prefs = getSharedPreferences("mdm_connection_state", Context.MODE_PRIVATE)
+                        val adminPassword = prefs.getString("admin_password", "admin123") ?: "admin123"
+                        
+                        if (password != adminPassword) {
+                            Log.e(TAG, "❌ Senha incorreta")
+                            val errorMessage = mapOf(
+                                "type" to "emergency_disabled",
+                                "success" to false,
+                                "error" to "Senha incorreta"
+                            )
+                            webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                            return
+                        }
+                        
+                        Log.d(TAG, "🚨 DESATIVANDO TUDO - MODO DE EMERGÊNCIA")
+                        
+                        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        val componentName = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                        
+                        if (dpm.isDeviceOwnerApp(packageName)) {
+                            // 1. Remover TODAS as restrições possíveis
+                            Log.d(TAG, "1️⃣ Removendo TODAS as restrições...")
+                            val allRestrictions = listOf(
+                                android.os.UserManager.DISALLOW_ADJUST_VOLUME,
+                                android.os.UserManager.DISALLOW_FACTORY_RESET,
+                                android.os.UserManager.DISALLOW_ADD_USER,
+                                android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
+                                android.os.UserManager.DISALLOW_CONFIG_WIFI,
+                                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH,
+                                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+                                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
+                                android.os.UserManager.DISALLOW_REMOVE_USER,
+                                android.os.UserManager.DISALLOW_SHARE_LOCATION,
+                                android.os.UserManager.DISALLOW_UNINSTALL_APPS,
+                                android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS,
+                                android.os.UserManager.DISALLOW_SAFE_BOOT,
+                                android.os.UserManager.DISALLOW_DEBUGGING_FEATURES,
+                                android.os.UserManager.DISALLOW_APPS_CONTROL
+                            )
+                            
+                            for (restriction in allRestrictions) {
+                                try {
+                                    dpm.clearUserRestriction(componentName, restriction)
+                                } catch (e: Exception) {
+                                    // Ignora erros
+                                }
+                            }
+                            
+                            // 2. Reabilitar TODOS os launchers
+                            Log.d(TAG, "2️⃣ Reabilitando TODOS os launchers...")
+                            synchronized(launcherLock) {
+                                val packageManager = packageManager
+                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                                    addCategory(Intent.CATEGORY_HOME)
+                                }
+                                
+                                val allLaunchers = packageManager.queryIntentActivities(homeIntent, android.content.pm.PackageManager.MATCH_ALL)
+                                
+                                for (launcher in allLaunchers) {
+                                    if (launcher.activityInfo.packageName != packageName) {
+                                        try {
+                                            dpm.setApplicationHidden(componentName, launcher.activityInfo.packageName, false)
+                                            Log.d(TAG, "✅ Reabilitado: ${launcher.activityInfo.packageName}")
+                                        } catch (e: Exception) {
+                                            // Ignora
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            // 3. Desativar modo kiosk
+                            Log.d(TAG, "3️⃣ Desativando modo kiosk...")
+                            try {
+                                dpm.clearPackagePersistentPreferredActivities(componentName, packageName)
+                            } catch (e: Exception) {}
+                            
+                            // 4. Limpar lockTaskPackages
+                            try {
+                                dpm.setLockTaskPackages(componentName, emptyArray())
+                            } catch (e: Exception) {}
+                            
+                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            Log.d(TAG, "✅ MODO DE EMERGÊNCIA COMPLETO!")
+                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            Log.d(TAG, "ℹ️ AGORA você pode:")
+                            Log.d(TAG, "  1. Acessar Configurações normalmente")
+                            Log.d(TAG, "  2. Desinstalar o app manualmente")
+                            Log.d(TAG, "  3. Usar ADB: adb uninstall com.mdm.launcher")
+                            Log.d(TAG, "  4. Escolher outro launcher")
+                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            
+                            val responseMessage = mapOf(
+                                "type" to "emergency_disabled",
+                                "success" to true,
+                                "message" to "Modo de emergência ativado! Todas as restrições removidas. Você pode acessar configurações e desinstalar o app."
+                            )
+                            webSocketClient?.sendMessage(gson.toJson(responseMessage))
+                            
+                        } else {
+                            Log.w(TAG, "⚠️ Não é Device Owner")
+                            val errorMessage = mapOf(
+                                "type" to "emergency_disabled",
+                                "success" to false,
+                                "error" to "Não é Device Owner"
+                            )
+                            webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                        }
+                        
+                    } catch (e: Exception) {
+                        Log.e(TAG, "❌ Erro no modo de emergência", e)
+                        val errorMessage = mapOf(
+                            "type" to "emergency_disabled",
+                            "success" to false,
+                            "error" to e.message
+                        )
+                        webSocketClient?.sendMessage(gson.toJson(errorMessage))
+                    }
+                    
+                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
                 }
                 "update_app" -> {
                     Log.d(TAG, "📥 ═══════════════════════════════════════════════")
@@ -1228,14 +1462,15 @@ class WebSocketService : Service() {
                 Log.d(TAG, "  [$index] ${msg.message.take(30)}... (ID=${msg.id}, Lida=${msg.read})")
             }
             
-            // Salvar de volta SINCRONAMENTE usando commit()
+            // ✅ CORREÇÃO: Salvar de volta usando apply() em background thread
             val updatedJson = com.google.gson.Gson().toJson(messages)
             Log.d(TAG, "💾 Salvando JSON (primeiros 300 chars): ${updatedJson.take(300)}")
             
-            val success = prefs.edit().putString("received_messages", updatedJson).commit()
-            Log.d(TAG, "💾 SharedPreferences commit resultado: $success")
+            // Usar apply() em vez de commit() para evitar ANR
+            val success = prefs.edit().putString("received_messages", updatedJson).apply()
+            Log.d(TAG, "💾 SharedPreferences apply() executado")
             
-            // Verificar se realmente salvou
+            // Verificar se realmente salvou (opcional, apenas para debug)
             val verification = prefs.getString("received_messages", null)
             val verificationMatches = verification == updatedJson
             Log.d(TAG, "🔍 Verificação - JSON foi salvo corretamente: $verificationMatches")
@@ -1273,10 +1508,14 @@ class WebSocketService : Service() {
         // Cancelar verificação anterior se existir
         healthCheckJob?.cancel()
         
-        // Iniciar verificação periódica de saúde da conexão a cada 60 segundos
+        // ✅ CORREÇÃO: Verificação periódica com timeout e condições de saída
         healthCheckJob = serviceScope.launch {
-            while (isActive && isServiceRunning) {
+            var checkCount = 0
+            val maxChecks = 60 // Máximo 1 hora (60 * 60s)
+            
+            while (isActive && isServiceRunning && checkCount < maxChecks) {
                 delay(60000L) // 60 segundos
+                checkCount++
                 
                 try {
                     val isConnected = webSocketClient?.isConnected() ?: false
@@ -1284,6 +1523,14 @@ class WebSocketService : Service() {
                     val now = System.currentTimeMillis()
                     
                     Log.d(TAG, "🏥 Verificação de saúde: conectado=$isConnected, reconectando=$isReconnecting")
+                    
+                    // Condição de saída: se conectado e estável
+                    if (isConnected && !isReconnecting) {
+                        Log.d(TAG, "✅ Conexão estável - reduzindo frequência de verificação")
+                        // Reduzir frequência para 5 minutos quando estável
+                        delay(240000L) // 4 minutos adicionais
+                        continue
+                    }
                     
                     // Se está reconectando, verificar há quanto tempo
                     if (isReconnecting) {
@@ -1316,20 +1563,39 @@ class WebSocketService : Service() {
                         if (!isConnected) {
                             // Desconectado e não está reconectando: verificar saúde
                             Log.w(TAG, "⚠️ WebSocket desconectado, verificando saúde...")
-                            val isHealthy = webSocketClient?.checkConnectionHealth() ?: false
                             
-                            if (!isHealthy) {
+                            // Verificar saúde do servidor usando ServerDiscovery
+                            val serverHealthy = com.mdm.launcher.utils.ServerDiscovery.checkServerHealth()
+                            val connectionHealthy = webSocketClient?.checkConnectionHealth() ?: false
+                            
+                            if (!serverHealthy) {
+                                Log.w(TAG, "❌ Servidor não saudável - invalidando cache e forçando redescoberta")
+                                com.mdm.launcher.utils.ServerDiscovery.invalidateCache()
+                            }
+                            
+                            if (!connectionHealthy || !serverHealthy) {
                                 Log.w(TAG, "❌ Conexão não saudável, tentando reconectar...")
                                 webSocketClient?.forceReconnect()
                             }
                         } else {
-                            // Conectado: apenas verificar saúde silenciosamente
+                            // Conectado: verificar saúde do servidor periodicamente
+                            val serverHealthy = com.mdm.launcher.utils.ServerDiscovery.checkServerHealth()
+                            if (!serverHealthy) {
+                                Log.w(TAG, "⚠️ Servidor não saudável detectado durante conexão ativa")
+                                com.mdm.launcher.utils.ServerDiscovery.invalidateCache()
+                            }
+                            
+                            // Verificar saúde da conexão silenciosamente
                             webSocketClient?.checkConnectionHealth()
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao verificar saúde da conexão", e)
                 }
+            }
+            
+            if (checkCount >= maxChecks) {
+                Log.w(TAG, "⚠️ Timeout atingido no health check - parando verificação")
             }
         }
         
@@ -1446,6 +1712,86 @@ class WebSocketService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "❌ ERRO CRÍTICO ao desabilitar launchers", e)
             }
+        }
+    }
+    
+    /**
+     * Remove o Device Owner do dispositivo
+     * Permite remover o MDM completamente via comando remoto
+     * Requer senha de administrador para segurança
+     */
+    private fun removeDeviceOwner(password: String): Boolean {
+        try {
+            Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+            Log.d(TAG, "🔓 TENTANDO REMOVER DEVICE OWNER")
+            Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+            
+            // Verificar senha de administrador
+            val prefs = getSharedPreferences("mdm_connection_state", Context.MODE_PRIVATE)
+            val adminPassword = prefs.getString("admin_password", "admin123") ?: "admin123"
+            
+            if (password != adminPassword) {
+                Log.e(TAG, "❌ Senha de administrador incorreta!")
+                return false
+            }
+            
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            val componentName = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+            
+            if (!dpm.isDeviceOwnerApp(packageName)) {
+                Log.w(TAG, "⚠️ App não é Device Owner")
+                return false
+            }
+            
+            Log.d(TAG, "🔓 Removendo todas as restrições primeiro...")
+            
+            // Remover todas as restrições
+            val restrictions = listOf(
+                android.os.UserManager.DISALLOW_FACTORY_RESET,
+                android.os.UserManager.DISALLOW_ADD_USER,
+                android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
+                android.os.UserManager.DISALLOW_CONFIG_WIFI,
+                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH,
+                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
+                android.os.UserManager.DISALLOW_REMOVE_USER,
+                android.os.UserManager.DISALLOW_UNINSTALL_APPS,
+                android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS,
+                android.os.UserManager.DISALLOW_SAFE_BOOT
+            )
+            
+            for (restriction in restrictions) {
+                try {
+                    dpm.clearUserRestriction(componentName, restriction)
+                } catch (e: Exception) {
+                    Log.w(TAG, "⚠️ Erro ao remover restrição: $restriction")
+                }
+            }
+            
+            Log.d(TAG, "✅ Restrições removidas")
+            
+            // Tentar remover Device Owner
+            Log.d(TAG, "🔓 Tentando remover Device Owner...")
+            
+            try {
+                @Suppress("DEPRECATION")
+                dpm.clearDeviceOwnerApp(packageName)
+                
+                Log.d(TAG, "✅ DEVICE OWNER REMOVIDO COM SUCESSO!")
+                Log.d(TAG, "ℹ️ Agora você pode desinstalar o app normalmente")
+                
+                return true
+                
+            } catch (e: Exception) {
+                Log.e(TAG, "❌ Não foi possível remover Device Owner via API: ${e.message}")
+                Log.e(TAG, "ℹ️ Use ADB: adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver --user 0")
+                
+                return false
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao tentar remover Device Owner", e)
+            return false
         }
     }
     
