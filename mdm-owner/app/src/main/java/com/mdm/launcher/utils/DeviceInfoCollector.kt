@@ -1,16 +1,20 @@
 package com.mdm.launcher.utils
 
+import android.Manifest
 import android.app.ActivityManager
 import android.app.admin.DevicePolicyManager
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationManager
 import android.os.BatteryManager
 import android.os.Build
 import android.os.StatFs
 import android.provider.Settings
 import android.telephony.TelephonyManager
 import android.util.Log
+import androidx.core.app.ActivityCompat
 import com.mdm.launcher.data.AppInfo
 import com.mdm.launcher.data.DeviceInfo
 import com.mdm.launcher.utils.IconUtils
@@ -790,35 +794,95 @@ object DeviceInfoCollector {
         return try {
             Log.d("DeviceInfoCollector", "🔍 === COLETANDO INFORMAÇÕES DE LOCALIZAÇÃO ===")
             
+            // Verificar permissões primeiro
+            val hasFineLocation = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            val hasCoarseLocation = ActivityCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+            
+            Log.d("DeviceInfoCollector", "Permissões de localização:")
+            Log.d("DeviceInfoCollector", "ACCESS_FINE_LOCATION: $hasFineLocation")
+            Log.d("DeviceInfoCollector", "ACCESS_COARSE_LOCATION: $hasCoarseLocation")
+            
+            if (!hasFineLocation && !hasCoarseLocation) {
+                Log.w("DeviceInfoCollector", "❌ Nenhuma permissão de localização concedida")
+                return Octuple(null, null, null, null, null, null, null, 0)
+            }
+            
+            // Verificar se GPS está habilitado
+            val locationManager = context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
+            val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+            val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+            
+            Log.d("DeviceInfoCollector", "Provedores de localização:")
+            Log.d("DeviceInfoCollector", "GPS habilitado: $isGpsEnabled")
+            Log.d("DeviceInfoCollector", "Network habilitado: $isNetworkEnabled")
+            
+            if (!isGpsEnabled && !isNetworkEnabled) {
+                Log.w("DeviceInfoCollector", "❌ Nenhum provedor de localização habilitado")
+            }
+            
+            // Tentar obter última localização conhecida
+            var lastKnownLocation: Location? = null
+            try {
+                if (isGpsEnabled) {
+                    lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                    Log.d("DeviceInfoCollector", "📍 Última localização GPS: $lastKnownLocation")
+                }
+                
+                if (lastKnownLocation == null && isNetworkEnabled) {
+                    lastKnownLocation = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                    Log.d("DeviceInfoCollector", "📍 Última localização Network: $lastKnownLocation")
+                }
+            } catch (e: SecurityException) {
+                Log.w("DeviceInfoCollector", "SecurityException ao obter última localização: ${e.message}")
+            } catch (e: Exception) {
+                Log.w("DeviceInfoCollector", "Erro ao obter última localização: ${e.message}")
+            }
+            
+            // Carregar histórico
             val history = LocationHistoryManager.loadLocationHistory(context)
             Log.d("DeviceInfoCollector", "Histórico carregado: ${history.size} entradas")
             
             val lastLocation = history.maxByOrNull { it.timestamp }
-            Log.d("DeviceInfoCollector", "Última localização: $lastLocation")
+            Log.d("DeviceInfoCollector", "Última localização do histórico: $lastLocation")
             
-            val locationString = if (lastLocation != null) {
-                "${lastLocation.latitude},${lastLocation.longitude}"
+            // Usar última localização conhecida se não há histórico
+            val finalLocation = lastLocation ?: if (lastKnownLocation != null) {
+                Log.d("DeviceInfoCollector", "✅ Usando última localização conhecida do sistema")
+                LocationEntry(
+                    latitude = lastKnownLocation.latitude,
+                    longitude = lastKnownLocation.longitude,
+                    accuracy = lastKnownLocation.accuracy,
+                    timestamp = lastKnownLocation.time,
+                    provider = lastKnownLocation.provider ?: "unknown"
+                )
+            } else {
+                Log.w("DeviceInfoCollector", "❌ Nenhuma localização disponível")
+                null
+            }
+            
+            val locationString = if (finalLocation != null) {
+                "${finalLocation.latitude},${finalLocation.longitude}"
             } else {
                 null
             }
             
             Log.d("DeviceInfoCollector", "Location string: $locationString")
-            Log.d("DeviceInfoCollector", "Latitude: ${lastLocation?.latitude}")
-            Log.d("DeviceInfoCollector", "Longitude: ${lastLocation?.longitude}")
-            Log.d("DeviceInfoCollector", "Accuracy: ${lastLocation?.accuracy}")
-            Log.d("DeviceInfoCollector", "Provider: ${lastLocation?.provider}")
-            Log.d("DeviceInfoCollector", "Timestamp: ${lastLocation?.timestamp}")
-            Log.d("DeviceInfoCollector", "Address: ${lastLocation?.address}")
+            Log.d("DeviceInfoCollector", "Latitude: ${finalLocation?.latitude}")
+            Log.d("DeviceInfoCollector", "Longitude: ${finalLocation?.longitude}")
+            Log.d("DeviceInfoCollector", "Accuracy: ${finalLocation?.accuracy}")
+            Log.d("DeviceInfoCollector", "Provider: ${finalLocation?.provider}")
+            Log.d("DeviceInfoCollector", "Timestamp: ${finalLocation?.timestamp}")
+            Log.d("DeviceInfoCollector", "Address: ${finalLocation?.address}")
             Log.d("DeviceInfoCollector", "History size: ${history.size}")
             
             val result = Octuple(
                 first = locationString,
-                second = lastLocation?.latitude,
-                third = lastLocation?.longitude,
-                fourth = lastLocation?.accuracy,
-                fifth = lastLocation?.provider,
-                sixth = lastLocation?.timestamp,
-                seventh = lastLocation?.address,
+                second = finalLocation?.latitude,
+                third = finalLocation?.longitude,
+                fourth = finalLocation?.accuracy,
+                fifth = finalLocation?.provider,
+                sixth = finalLocation?.timestamp,
+                seventh = finalLocation?.address,
                 eighth = history.size
             )
             
