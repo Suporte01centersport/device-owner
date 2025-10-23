@@ -185,30 +185,6 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
     setMessageText('')
   }
 
-  const handleOpenSettings = async () => {
-    if (!confirm(`Deseja abrir as configurações do Android neste dispositivo?\n\nO launcher será desprotegido por 5 minutos para permitir acesso às configurações.\n\nApós 5 minutos, o launcher voltará automaticamente.`)) {
-      return
-    }
-
-    try {
-      console.log('Enviando comando para abrir configurações...')
-      
-      sendMessage({
-        type: 'open_settings',
-        deviceId: device.deviceId,
-        data: {
-          duration_minutes: 5
-        },
-        timestamp: Date.now()
-      })
-      
-      alert('✅ Comando enviado!\n\nAs configurações do Android serão abertas no dispositivo.\nO launcher será desprotegido por 5 minutos.')
-      
-    } catch (error) {
-      console.error('Erro ao abrir configurações:', error)
-      alert('❌ Erro ao enviar comando. Verifique o console.')
-    }
-  }
 
   const loadMessageHistory = () => {
     try {
@@ -511,22 +487,13 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
               {/* Controles Rápidos */}
               <div className="space-y-4">
                 <h3 className="text-lg font-semibold text-primary">Controles Rápidos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 justify-center">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 justify-center">
                   <button 
                     className="btn btn-primary"
                     onClick={handleOpenMessageModal}
                   >
                     <span>💬</span>
                     Mandar Mensagem
-                  </button>
-                  <button 
-                    className="btn btn-warning"
-                    onClick={handleOpenSettings}
-                    disabled={device.status !== 'online'}
-                    title={device.status !== 'online' ? 'Dispositivo offline' : 'Abrir configurações do Android (desprotege por 5 min)'}
-                  >
-                    <span>⚙️</span>
-                    Abrir Configurações
                   </button>
                   <button 
                     className="btn btn-secondary"

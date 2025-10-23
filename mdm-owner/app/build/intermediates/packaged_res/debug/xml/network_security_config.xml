@@ -2,6 +2,7 @@
 <network-security-config>
     <domain-config cleartextTrafficPermitted="true">
         <!-- Permitir comunicação HTTP para IPs locais -->
+        <domain includeSubdomains="false">192.168.2.74</domain>
         <domain includeSubdomains="false">192.168.1.100</domain>
         <domain includeSubdomains="false">10.0.2.2</domain>
         <domain includeSubdomains="false">localhost</domain>

@@ -784,9 +784,6 @@ async function handleMessage(ws, data) {
         case 'support_message':
             handleSupportMessage(ws, data);
             break;
-        case 'open_settings':
-            handleOpenSettings(ws, data);
-            break;
         default:
             console.log('Unknown message type:', data.type);
     }
@@ -2130,48 +2127,6 @@ process.on('SIGTERM', () => {
     });
 });
 
-// Função para lidar com mensagens de suporte
-function handleOpenSettings(ws, data) {
-    console.log('⚙️ ═══════════════════════════════════════════════');
-    console.log('⚙️ COMANDO: ABRIR CONFIGURAÇÕES DO DISPOSITIVO');
-    console.log('⚙️ ═══════════════════════════════════════════════');
-    console.log('Device ID:', data.deviceId);
-    console.log('Duration (min):', data.data?.duration_minutes || 5);
-    
-    try {
-        const deviceId = data.deviceId;
-        const deviceWs = connectedDevices.get(deviceId);
-        
-        if (!deviceWs || deviceWs.readyState !== WebSocket.OPEN) {
-            console.warn('⚠️ Dispositivo não conectado:', deviceId);
-            
-            // Enviar erro de volta ao cliente web
-            if (ws.readyState === WebSocket.OPEN) {
-                ws.send(JSON.stringify({
-                    type: 'settings_error',
-                    deviceId: deviceId,
-                    error: 'Dispositivo offline',
-                    timestamp: Date.now()
-                }));
-            }
-            return;
-        }
-        
-        // Encaminhar comando para o dispositivo Android
-        console.log('📤 Encaminhando comando para dispositivo Android...');
-        deviceWs.send(JSON.stringify({
-            type: 'open_settings',
-            data: data.data || { duration_minutes: 5 },
-            timestamp: Date.now()
-        }));
-        
-        console.log('✅ Comando enviado com sucesso!');
-        console.log('⚙️ ═══════════════════════════════════════════════');
-        
-    } catch (error) {
-        console.error('❌ Erro ao processar comando open_settings:', error);
-    }
-}
 
 function handleSupportMessage(ws, data) {
     console.log('=== MENSAGEM DE SUPORTE RECEBIDA ===');

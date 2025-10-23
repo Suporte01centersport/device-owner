@@ -947,19 +947,9 @@ class MainActivity : AppCompatActivity() {
         // ADB pode ser ativado manualmente nas Configurações do desenvolvedor
         
         // 🎯 INICIAR MONITOR DE APPS (COM CUIDADO)
-        // Só inicia se não estiver em modo manutenção
-        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-        val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
-        val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
-        val now = System.currentTimeMillis()
-        
-        if (!maintenanceMode || now >= maintenanceExpiry) {
-            Log.d(TAG, "🎯 Iniciando monitor de apps...")
-            com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
-            Log.d(TAG, "✅ Monitor de apps iniciado com sucesso")
-        } else {
-            Log.d(TAG, "🔧 Modo manutenção ativo - monitor de apps desabilitado")
-        }
+        Log.d(TAG, "🎯 Iniciando monitor de apps...")
+        com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
+        Log.d(TAG, "✅ Monitor de apps iniciado com sucesso")
         
         // Configurar UI
         initViews()
@@ -3362,25 +3352,6 @@ class MainActivity : AppCompatActivity() {
      */
     private fun ensureDefaultLauncher() {
         try {
-            // Verificar se está em modo manutenção
-            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-            val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
-            val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
-            val now = System.currentTimeMillis()
-            
-            if (maintenanceMode && now < maintenanceExpiry) {
-                Log.d(TAG, "🔧 Modo manutenção ativo - launcher desprotegido temporariamente")
-                Log.d(TAG, "⏱️ Expira em ${(maintenanceExpiry - now) / 1000} segundos")
-                return // Não forçar retorno ao launcher
-            } else if (maintenanceMode && now >= maintenanceExpiry) {
-                // Modo manutenção expirou - desativar
-                Log.d(TAG, "⏰ Modo manutenção expirou - reativando proteção")
-                prefs.edit()
-                    .putBoolean("maintenance_mode", false)
-                    .putLong("maintenance_expiry", 0)
-                    .apply()
-            }
-            
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
             

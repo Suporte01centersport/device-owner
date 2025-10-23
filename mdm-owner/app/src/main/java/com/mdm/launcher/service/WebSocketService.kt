@@ -1,4 +1,4 @@
-package com.mdm.launcher.service
+﻿package com.mdm.launcher.service
 
 import android.app.*
 import android.content.*
@@ -29,9 +29,6 @@ class WebSocketService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     
-    // Runnable para desativar modo manutenção (para poder cancelar timers antigos)
-    private var maintenanceRunnable: Runnable? = null
-    
     // Lock para evitar race conditions com launchers
     private val launcherLock = Object()
     
@@ -50,22 +47,6 @@ class WebSocketService : Service() {
                 "com.mdm.launcher.HEALTH_CHECK" -> {
                     Log.d(TAG, "🏥 Broadcast de health check recebido")
                     performHealthCheck()
-                }
-                "com.mdm.launcher.END_MAINTENANCE_INTERNAL" -> {
-                    Log.d(TAG, "🔧 ═══════════════════════════════════════════════")
-                    Log.d(TAG, "🔧 BROADCAST INTERNO RECEBIDO: END_MAINTENANCE_INTERNAL")
-                    Log.d(TAG, "🔧 Processando desabilitação de launchers...")
-                    Log.d(TAG, "🔧 ═══════════════════════════════════════════════")
-                    
-                    // Cancelar o timer agendado
-                    maintenanceRunnable?.let {
-                        handler.removeCallbacks(it)
-                        maintenanceRunnable = null
-                        Log.d(TAG, "✅ Timer de manutenção cancelado")
-                    }
-                    
-                    // Desabilitar outros launchers
-                    disableOtherLaunchers()
                 }
             }
         }
@@ -93,7 +74,6 @@ class WebSocketService : Service() {
             addAction("com.mdm.launcher.NETWORK_CHANGE")
             addAction("com.mdm.launcher.FORCE_RECONNECT")
             addAction("com.mdm.launcher.HEALTH_CHECK")
-            addAction("com.mdm.launcher.END_MAINTENANCE_INTERNAL")
         }
         // Android 13+ requer especificar se o receiver é exportado ou não
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -148,7 +128,7 @@ class WebSocketService : Service() {
         Log.d(TAG, "WebSocketService sendo destruído - iniciando cleanup...")
         isServiceRunning = false
         
-        // ✅ CORREÇÃO: Cancelar health check com timeout
+        // Cancelar health check com timeout
         try {
             healthCheckJob?.cancel()
             healthCheckJob = null
@@ -157,20 +137,7 @@ class WebSocketService : Service() {
             Log.e(TAG, "Erro ao cancelar health check", e)
         }
         
-        // ✅ CORREÇÃO: Cancelar timer de modo manutenção com verificação de estado
-        try {
-            maintenanceRunnable?.let {
-                if (handler.hasCallbacks(it)) {
-                    handler.removeCallbacks(it)
-                    Log.d(TAG, "Timer de modo manutenção cancelado")
-                }
-                maintenanceRunnable = null
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao cancelar timer de modo manutenção", e)
-        }
-        
-        // ✅ CORREÇÃO: Parar e limpar NetworkMonitor com verificação de estado
+        // Parar e limpar NetworkMonitor com verificação de estado
         try {
             networkMonitor?.let {
                 try {
@@ -187,7 +154,7 @@ class WebSocketService : Service() {
             Log.e(TAG, "Erro ao limpar NetworkMonitor", e)
         }
         
-        // ✅ CORREÇÃO: Desregistrar BroadcastReceiver com verificação de estado
+        // Desregistrar BroadcastReceiver com verificação de estado
         try {
             unregisterReceiver(commandReceiver)
             Log.d(TAG, "BroadcastReceiver desregistrado")
@@ -197,7 +164,7 @@ class WebSocketService : Service() {
             Log.w(TAG, "Erro ao desregistrar receiver", e)
         }
         
-        // ✅ CORREÇÃO: Liberar WakeLock com verificação de estado
+        // Liberar WakeLock com verificação de estado
         try {
             wakeLock?.let {
                 if (it.isHeld) {
@@ -210,7 +177,7 @@ class WebSocketService : Service() {
             Log.e(TAG, "Erro ao liberar WakeLock", e)
         }
         
-        // ✅ CORREÇÃO: Cleanup WebSocket com verificação de estado
+        // Cleanup WebSocket com verificação de estado
         try {
             webSocketClient?.let {
                 if (it.isConnected()) {
@@ -224,7 +191,7 @@ class WebSocketService : Service() {
             Log.e(TAG, "Erro ao limpar WebSocketClient", e)
         }
         
-        // ✅ CORREÇÃO: Cancelar scope de coroutines com timeout
+        // Cancelar scope de coroutines com timeout
         try {
             if (serviceScope.isActive) {
                 serviceScope.cancel()
@@ -234,7 +201,7 @@ class WebSocketService : Service() {
             Log.e(TAG, "Erro ao cancelar serviceScope", e)
         }
         
-        // ✅ CORREÇÃO: Limpar referências para evitar vazamentos
+        // Limpar referências para evitar vazamentos
         isInitializing = false
         lastReconnectingTime = 0L
         
@@ -303,7 +270,7 @@ class WebSocketService : Service() {
                     throw e2 // Re-throw o erro original
                 }
             }
-            Log.d(TAG, "🔍 Servidor descoberto no Service: $serverUrl")
+            Log.d(TAG, "🎯 Servidor descoberto no Service: $serverUrl")
             
             // Usar DeviceIdManager para obter ID persistente
             val deviceId = com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this)
@@ -322,9 +289,9 @@ class WebSocketService : Service() {
                     processBackgroundMessage(message)
                 },
                 onConnectionChange = { connected ->
-                    Log.d(TAG, "═══════════════════════════════════════")
-                    Log.d(TAG, "🔔 STATUS DE CONEXÃO MUDOU: $connected")
-                    Log.d(TAG, "═══════════════════════════════════════")
+                    Log.d(TAG, "═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔗 STATUS DE CONEXÃO MUDOU: $connected")
+                    Log.d(TAG, "═══════════════════════════════════════════════")
                     updateNotification(connected)
                     
                     // Salvar estado de conexão
@@ -354,7 +321,7 @@ class WebSocketService : Service() {
                         Log.d(TAG, "✅ Conexão estabelecida - enviando device_status")
                         sendDeviceStatusWithRealData()
                     } else {
-                        Log.w(TAG, "⚠️ Aguardando conexão ser estabelecida...")
+                        Log.w(TAG, "⏳ Aguardando conexão ser estabelecida...")
                         // Tentar novamente após mais 3s
                         delay(3000)
                         if (webSocketClient?.isConnected() == true) {
@@ -364,7 +331,7 @@ class WebSocketService : Service() {
                     }
                 }
             } else {
-                Log.d(TAG, "✓ WebSocket já está conectado - enviando device_status")
+                Log.d(TAG, "✅ WebSocket já está conectado - enviando device_status")
                 sendDeviceStatusWithRealData()
             }
             
@@ -380,9 +347,9 @@ class WebSocketService : Service() {
     
     private fun processBackgroundMessage(message: String) {
         try {
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "🔄 PROCESSANDO MENSAGEM EM BACKGROUND (SERVICE)")
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📨 PROCESSANDO MENSAGEM EM BACKGROUND (SERVICE)")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "Mensagem completa: $message")
             
             // Parse da mensagem JSON
@@ -411,9 +378,9 @@ class WebSocketService : Service() {
                         val data = jsonObject["data"] as? Map<*, *>
                         val allowedAppsList = data?.get("allowedApps") as? List<*>
                         
-                        Log.d(TAG, "═══════════════════════════════════════════")
+                        Log.d(TAG, "═══════════════════════════════════════════════════════════")
                         Log.d(TAG, "📱 PROCESSANDO PERMISSÕES DE APPS NO SERVICE")
-                        Log.d(TAG, "═══════════════════════════════════════════")
+                        Log.d(TAG, "═══════════════════════════════════════════════════════════")
                         Log.d(TAG, "Apps permitidos recebidos: $allowedAppsList")
                         
                         if (allowedAppsList != null) {
@@ -434,11 +401,11 @@ class WebSocketService : Service() {
                             Log.d(TAG, "Apps: $allowedAppsList")
                         }
                         
-                        Log.d(TAG, "═══════════════════════════════════════════")
+                        Log.d(TAG, "═══════════════════════════════════════════════════════════")
                         
                         // Encaminhar para MainActivity via Broadcast com FLAG explícito
                         val intent = Intent("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
-                        intent.setPackage(packageName) // Garantir que vá para nosso app
+                        intent.setPackage(packageName) // Garantir que vai para nosso app
                         intent.putExtra("message", message)
                         intent.addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES) // Enviar mesmo se app estiver parado
                         
@@ -458,9 +425,9 @@ class WebSocketService : Service() {
                     // Implementar envio de localização em background
                 }
                 "clear_location_history" -> {
-                    Log.d(TAG, "🗑️ ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🗑️ ════════════════════════════════════════════════════════════════════════════════")
                     Log.d(TAG, "🗑️ COMANDO: LIMPAR HISTÓRICO DE LOCALIZAÇÃO")
-                    Log.d(TAG, "🗑️ ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🗑️ ════════════════════════════════════════════════════════════════════════════════")
                     
                     try {
                         // Limpar histórico usando LocationHistoryManager
@@ -492,329 +459,12 @@ class WebSocketService : Service() {
                         webSocketClient?.sendMessage(gson.toJson(errorMessage))
                     }
                     
-                    Log.d(TAG, "🗑️ ═══════════════════════════════════════════════")
-                }
-                "open_settings" -> {
-                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
-                    Log.d(TAG, "⚙️ COMANDO: ABRIR CONFIGURAÇÕES")
-                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
-                    
-                    try {
-                        // CANCELAR TIMER ANTERIOR (se existir) para evitar múltiplos timers
-                        maintenanceRunnable?.let {
-                            handler.removeCallbacks(it)
-                            Log.d(TAG, "🗑️ Timer de manutenção anterior cancelado")
-                        }
-                        
-                        val data = jsonObject["data"] as? Map<*, *>
-                        var durationMinutes = (data?.get("duration_minutes") as? Number)?.toInt() ?: 5
-                        
-                        // VALIDAÇÃO: Limitar duração máxima para segurança
-                        if (durationMinutes < 1) {
-                            durationMinutes = 1
-                            Log.w(TAG, "⚠️ Duração ajustada para mínimo: 1 minuto")
-                        } else if (durationMinutes > 30) {
-                            durationMinutes = 30
-                            Log.w(TAG, "⚠️ Duração ajustada para máximo: 30 minutos")
-                        }
-                        
-                        Log.d(TAG, "🔧 Ativando modo manutenção por $durationMinutes minutos")
-                        
-                        // Ativar modo manutenção temporariamente
-                        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-                        val expiryTime = System.currentTimeMillis() + (durationMinutes * 60 * 1000)
-                        
-                        prefs.edit()
-                            .putBoolean("maintenance_mode", true)
-                            .putLong("maintenance_expiry", expiryTime)
-                            .apply()
-                        
-                        Log.d(TAG, "✅ Modo manutenção ativado até ${java.text.SimpleDateFormat("HH:mm:ss").format(expiryTime)}")
-                        
-                        // REMOVIDO: removeDeviceOwnerRestrictions() - não causa mais boot loop
-                        // Restrições não são aplicadas automaticamente
-                        
-                        // Mostrar notificação informando que o launcher está desprotegido
-                        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                        
-                        // Criar canal de notificação para Android 8+
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            val channel = android.app.NotificationChannel(
-                                "maintenance_mode",
-                                "Modo Manutenção",
-                                android.app.NotificationManager.IMPORTANCE_HIGH
-                            ).apply {
-                                description = "Notificações de modo manutenção"
-                            }
-                            notificationManager.createNotificationChannel(channel)
-                        }
-                        
-                        // Criar PendingIntent para abrir configurações ao clicar na notificação
-                        val settingsIntent = Intent(android.provider.Settings.ACTION_SETTINGS).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                        }
-                        
-                        val settingsPendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            android.app.PendingIntent.getActivity(
-                                this@WebSocketService,
-                                2001,
-                                settingsIntent,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                            )
-                        } else {
-                            @Suppress("DEPRECATION")
-                            android.app.PendingIntent.getActivity(
-                                this@WebSocketService,
-                                2001,
-                                settingsIntent,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT
-                            )
-                        }
-                        
-                        // Criar PendingIntent para encerrar modo manutenção
-                        val endMaintenanceIntent = Intent("com.mdm.launcher.END_MAINTENANCE").apply {
-                            setPackage(packageName) // Garantir que o intent é direcionado ao nosso app
-                        }
-                        
-                        Log.d(TAG, "🔧 Criando PendingIntent para END_MAINTENANCE")
-                        Log.d(TAG, "   Package: $packageName")
-                        Log.d(TAG, "   Action: com.mdm.launcher.END_MAINTENANCE")
-                        
-                        val endMaintenancePendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                            // Android 12+ (API 31+) - usar FLAG_MUTABLE para broadcasts
-                            android.app.PendingIntent.getBroadcast(
-                                this@WebSocketService,
-                                2002,
-                                endMaintenanceIntent,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
-                            )
-                        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                            android.app.PendingIntent.getBroadcast(
-                                this@WebSocketService,
-                                2002,
-                                endMaintenanceIntent,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
-                            )
-                        } else {
-                            @Suppress("DEPRECATION")
-                            android.app.PendingIntent.getBroadcast(
-                                this@WebSocketService,
-                                2002,
-                                endMaintenanceIntent,
-                                android.app.PendingIntent.FLAG_UPDATE_CURRENT
-                            )
-                        }
-                        
-                        Log.d(TAG, "✅ PendingIntent criado com sucesso")
-                        
-                        // Criar notificação
-                        val notificationBuilder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            android.app.Notification.Builder(this@WebSocketService, "maintenance_mode")
-                        } else {
-                            @Suppress("DEPRECATION")
-                            android.app.Notification.Builder(this@WebSocketService)
-                        }
-                        
-                        val notification = notificationBuilder
-                            .setSmallIcon(android.R.drawable.ic_menu_manage)
-                            .setContentTitle("🔧 Modo Manutenção Ativo")
-                            .setContentText("Launcher desprotegido por $durationMinutes minutos. Toque no botão abaixo para encerrar.")
-                            .setStyle(android.app.Notification.BigTextStyle()
-                                .bigText("O launcher MDM está temporariamente desprotegido.\n\n" +
-                                        "✅ Você pode:\n" +
-                                        "• Abrir as Configurações do Android\n" +
-                                        "• Navegar entre apps livremente\n" +
-                                        "• Usar o botão HOME\n\n" +
-                                        "⏰ Expira em $durationMinutes minutos\n" +
-                                        "⏰ Às ${java.text.SimpleDateFormat("HH:mm").format(expiryTime)}\n\n" +
-                                        "👆 Toque no botão \"Encerrar Modo\" abaixo para desativar antecipadamente"))
-                            .addAction(
-                                android.R.drawable.ic_menu_close_clear_cancel,
-                                "🔒 Encerrar Modo",
-                                endMaintenancePendingIntent
-                            )
-                            .setAutoCancel(false)
-                            .setOngoing(true)
-                            .build()
-                        
-                        notificationManager.notify(2000, notification)
-                        
-                        Log.d(TAG, "📱 Notificação de modo manutenção mostrada ao usuário")
-                        
-                        // Reabilitar outros launchers temporariamente para permitir navegação
-                        // SINCRONIZADO para evitar race conditions
-                        Log.d(TAG, "🔍 Iniciando reabilitação de launchers...")
-                        synchronized(launcherLock) {
-                        try {
-                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-                            val componentName = android.content.ComponentName(this@WebSocketService, com.mdm.launcher.DeviceAdminReceiver::class.java)
-                            
-                            Log.d(TAG, "🔍 Device Owner status: ${dpm.isDeviceOwnerApp(packageName)}")
-                            
-                            if (dpm.isDeviceOwnerApp(packageName)) {
-                                val pm = packageManager
-                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                                    addCategory(Intent.CATEGORY_HOME)
-                                }
-                                
-                                // Buscar TODOS os pacotes que podem ser launchers, incluindo ocultos e desabilitados
-                                Log.d(TAG, "🔍 Buscando TODOS os launchers do sistema...")
-                                val allLaunchers = pm.queryIntentActivities(
-                                    homeIntent, 
-                                    android.content.pm.PackageManager.MATCH_ALL or 
-                                    android.content.pm.PackageManager.MATCH_DISABLED_COMPONENTS or
-                                    android.content.pm.PackageManager.MATCH_UNINSTALLED_PACKAGES
-                                )
-                                Log.d(TAG, "🔍 Total de launchers encontrados (incluindo desabilitados): ${allLaunchers.size}")
-                                
-                                // Listar TODOS os pacotes do sistema para encontrar launchers conhecidos
-                                val knownLaunchers = listOf(
-                                    "com.android.launcher3",
-                                    "com.google.android.apps.nexuslauncher", 
-                                    "com.miui.home",
-                                    "com.huawei.android.launcher",
-                                    "com.oppo.launcher",
-                                    "com.coloros.launcher",
-                                    "com.realme.launcher",
-                                    "com.samsung.android.app.launcher",
-                                    "com.sec.android.app.launcher"
-                                )
-                                
-                                Log.d(TAG, "🔍 Verificando launchers conhecidos no sistema...")
-                                for (launcherPackage in knownLaunchers) {
-                                    try {
-                                        val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
-                                        Log.d(TAG, "  📦 $launcherPackage → oculto: $isHidden")
-                                    } catch (e: android.content.pm.PackageManager.NameNotFoundException) {
-                                        Log.d(TAG, "  📦 $launcherPackage → NÃO INSTALADO")
-                                    } catch (e: Exception) {
-                                        Log.d(TAG, "  📦 $launcherPackage → erro: ${e.message}")
-                                    }
-                                }
-                                
-                                Log.d(TAG, "🔍 Tentando reabilitar launchers ocultos...")
-                                
-                                var reenabledCount = 0
-                                
-                                // Primeiro: Reabilitar launchers encontrados na query
-                                for (launcher in allLaunchers) {
-                                    val launcherPackage = launcher.activityInfo.packageName
-                                    Log.d(TAG, "🔍 Analisando launcher: $launcherPackage (é nosso? ${launcherPackage == packageName})")
-                                    
-                                    if (launcherPackage != packageName) {
-                                        try {
-                                            // Verificar se está oculto
-                                            val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
-                                            Log.d(TAG, "🔍 Launcher $launcherPackage está oculto? $isHidden")
-                                            
-                                            if (isHidden) {
-                                                // Reabilitar launcher
-                                                val result = dpm.setApplicationHidden(componentName, launcherPackage, false)
-                                                Log.d(TAG, "🔓 Tentativa de reabilitar $launcherPackage: sucesso=$result")
-                                                if (result) {
-                                                    reenabledCount++
-                                                }
-                                            } else {
-                                                Log.d(TAG, "ℹ️ Launcher $launcherPackage já está visível")
-                                            }
-                                        } catch (e: Exception) {
-                                            Log.e(TAG, "❌ Erro ao reabilitar launcher $launcherPackage", e)
-                                        }
-                                    }
-                                }
-                                
-                                // Segundo: Tentar reabilitar launchers conhecidos forçadamente
-                                Log.d(TAG, "🔍 Tentando reabilitar launchers conhecidos forçadamente...")
-                                for (launcherPackage in knownLaunchers) {
-                                    try {
-                                        val isHidden = dpm.isApplicationHidden(componentName, launcherPackage)
-                                        if (isHidden) {
-                                            val result = dpm.setApplicationHidden(componentName, launcherPackage, false)
-                                            Log.d(TAG, "🔓 Forçada reabilitação de $launcherPackage: sucesso=$result")
-                                            if (result) {
-                                                reenabledCount++
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        // Ignorar erros de pacotes não instalados
-                                    }
-                                }
-                                
-                                if (reenabledCount > 0) {
-                                    Log.d(TAG, "✅ Launchers reabilitados: $reenabledCount")
-                                    Log.d(TAG, "✅ Navegação livre permitida - pressione HOME para escolher launcher")
-                                } else {
-                                    Log.w(TAG, "⚠️ Nenhum launcher foi reabilitado!")
-                                    Log.w(TAG, "⚠️ Este dispositivo pode ter apenas 1 launcher de fábrica.")
-                                    Log.w(TAG, "💡 SOLUÇÃO: Pressione HOME e use a barra de navegação para acessar apps do sistema")
-                                }
-                            } else {
-                                Log.w(TAG, "⚠️ App não é Device Owner - não pode gerenciar launchers")
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "❌ ERRO CRÍTICO ao reabilitar launchers", e)
-                        }
-                        } // fim synchronized(launcherLock)
-                        
-                        // Criar e armazenar o Runnable para poder cancelá-lo depois
-                        maintenanceRunnable = Runnable {
-                            Log.d(TAG, "⏰ Tempo de manutenção expirado - desativando modo manutenção")
-                            prefs.edit()
-                                .putBoolean("maintenance_mode", false)
-                                .putLong("maintenance_expiry", 0)
-                                .apply()
-                            
-                            // Remover notificação
-                            val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-                            notificationManager.cancel(2000)
-                            
-                            // REMOVIDO: applyDeviceOwnerRestrictions() - não causa mais boot loop
-                            
-                            // Desabilitar outros launchers novamente
-                            disableOtherLaunchers()
-                            
-                            // Voltar ao launcher MDM
-                            val launcherIntent = Intent(this@WebSocketService, com.mdm.launcher.MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-                            }
-                            startActivity(launcherIntent)
-                            
-                            Log.d(TAG, "🏠 Voltando ao launcher MDM")
-                        }
-                        
-                        // Agendar o Runnable armazenado
-                        handler.postDelayed(maintenanceRunnable!!, durationMinutes * 60 * 1000L)
-                        Log.d(TAG, "✅ Timer de desativação agendado para ${durationMinutes} minutos")
-                        
-                        // Enviar confirmação
-                        val confirmationMessage = mapOf(
-                            "type" to "settings_opened",
-                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
-                            "timestamp" to System.currentTimeMillis(),
-                            "success" to true,
-                            "expiresAt" to expiryTime
-                        )
-                        webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
-                        
-                    } catch (e: Exception) {
-                        Log.e(TAG, "❌ Erro ao abrir configurações", e)
-                        
-                        val errorMessage = mapOf(
-                            "type" to "settings_opened",
-                            "deviceId" to com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@WebSocketService),
-                            "timestamp" to System.currentTimeMillis(),
-                            "success" to false,
-                            "error" to e.message
-                        )
-                        webSocketClient?.sendMessage(gson.toJson(errorMessage))
-                    }
-                    
-                    Log.d(TAG, "⚙️ ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🗑️ ════════════════════════════════════════════════════════════════════════════════")
                 }
                 "remove_device_owner" -> {
-                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔓 ════════════════════════════════════════════════════════════════════════════════")
                     Log.d(TAG, "🔓 COMANDO: REMOVER DEVICE OWNER")
-                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔓 ════════════════════════════════════════════════════════════════════════════════")
                     
                     try {
                         val data = jsonObject["data"] as? Map<*, *>
@@ -863,12 +513,12 @@ class WebSocketService : Service() {
                         webSocketClient?.sendMessage(gson.toJson(errorMessage))
                     }
                     
-                    Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🔓 ════════════════════════════════════════════════════════════════════════════════")
                 }
                 "emergency_disable" -> {
-                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🚨 ════════════════════════════════════════════════════════════════════════════════")
                     Log.d(TAG, "🚨 MODO DE EMERGÊNCIA ATIVADO")
-                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🚨 ════════════════════════════════════════════════════════════════════════════════")
                     
                     try {
                         val data = jsonObject["data"] as? Map<*, *>
@@ -956,15 +606,15 @@ class WebSocketService : Service() {
                                 dpm.setLockTaskPackages(componentName, emptyArray())
                             } catch (e: Exception) {}
                             
-                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            Log.d(TAG, "✅ ════════════════════════════════════════════════════════════════════════════════")
                             Log.d(TAG, "✅ MODO DE EMERGÊNCIA COMPLETO!")
-                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            Log.d(TAG, "✅ ════════════════════════════════════════════════════════════════════════════════")
                             Log.d(TAG, "ℹ️ AGORA você pode:")
                             Log.d(TAG, "  1. Acessar Configurações normalmente")
                             Log.d(TAG, "  2. Desinstalar o app manualmente")
                             Log.d(TAG, "  3. Usar ADB: adb uninstall com.mdm.launcher")
                             Log.d(TAG, "  4. Escolher outro launcher")
-                            Log.d(TAG, "✅ ═══════════════════════════════════════════════")
+                            Log.d(TAG, "✅ ════════════════════════════════════════════════════════════════════════════════")
                             
                             val responseMessage = mapOf(
                                 "type" to "emergency_disabled",
@@ -993,12 +643,12 @@ class WebSocketService : Service() {
                         webSocketClient?.sendMessage(gson.toJson(errorMessage))
                     }
                     
-                    Log.d(TAG, "🚨 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "🚨 ════════════════════════════════════════════════════════════════════════════════")
                 }
                 "update_app" -> {
-                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
-                    Log.d(TAG, "📥 COMANDO: ATUALIZAR APLICATIVO")
-                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "📱 ════════════════════════════════════════════════════════════════════════════════")
+                    Log.d(TAG, "📱 COMANDO: ATUALIZAR APLICATIVO")
+                    Log.d(TAG, "📱 ════════════════════════════════════════════════════════════════════════════════")
                     
                     try {
                         val data = jsonObject["data"] as? Map<*, *>
@@ -1011,8 +661,8 @@ class WebSocketService : Service() {
                             return
                         }
                         
-                        Log.d(TAG, "📦 URL do APK: $apkUrl")
-                        Log.d(TAG, "🔢 Versão: ${version ?: "não especificada"}")
+                        Log.d(TAG, "🔗 URL do APK: $apkUrl")
+                        Log.d(TAG, "🏷️ Versão: ${version ?: "não especificada"}")
                         
                         // Enviar status de início
                         sendUpdateStatus(true, "Download iniciado", 0)
@@ -1036,12 +686,12 @@ class WebSocketService : Service() {
                         sendUpdateStatus(false, "Erro: ${e.message}")
                     }
                     
-                    Log.d(TAG, "📥 ═══════════════════════════════════════════════")
+                    Log.d(TAG, "📱 ════════════════════════════════════════════════════════════════════════════════")
                 }
                 "show_notification" -> {
-                    Log.d(TAG, "═══════════════════════════════════════════")
-                    Log.d(TAG, "📬 SHOW_NOTIFICATION RECEBIDO (SERVICE)")
-                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "═══════════════════════════════════════════════════════════════════════════════")
+                    Log.d(TAG, "🔔 SHOW_NOTIFICATION RECEBIDO (SERVICE)")
+                    Log.d(TAG, "═══════════════════════════════════════════════════════════════════════════════")
                     
                     val dataMap = jsonObject["data"] as? Map<*, *> ?: jsonObject
                     val title = dataMap["title"] as? String ?: "MDM Launcher"
@@ -1054,7 +704,7 @@ class WebSocketService : Service() {
                     
                     // SALVAR NO HISTÓRICO DE MENSAGENS
                     val fullMessage = if (title != "MDM Launcher") "$title\n$body" else body
-                    Log.d(TAG, "📝 Mensagem completa a ser salva: $fullMessage")
+                    Log.d(TAG, "💾 Mensagem completa a ser salva: $fullMessage")
                     
                     saveMessageToHistory(fullMessage)
                     Log.d(TAG, "✅ saveMessageToHistory() chamado")
@@ -1073,7 +723,7 @@ class WebSocketService : Service() {
                     )
                     webSocketClient?.sendMessage(gson.toJson(confirmationMessage))
                     Log.d(TAG, "✅ Confirmação de notificação enviada ao servidor")
-                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "═══════════════════════════════════════════════════════════════════════════════")
                 }
                 "set_admin_password" -> {
                     Log.d(TAG, "🔐 === RECEBENDO SENHA DE ADMINISTRADOR (SERVICE) ===")
@@ -1097,7 +747,7 @@ class WebSocketService : Service() {
                         val intent = Intent("com.mdm.launcher.ADMIN_PASSWORD_CHANGED")
                         intent.putExtra("password", password)
                         sendBroadcast(intent)
-                        Log.d(TAG, "📢 Broadcast enviado para MainActivity recarregar senha")
+                        Log.d(TAG, "📡 Broadcast enviado para MainActivity recarregar senha")
                     } else {
                         Log.e(TAG, "❌ ERRO: Password é null ou vazia no Service")
                     }
@@ -1130,7 +780,7 @@ class WebSocketService : Service() {
                     Log.w(TAG, "⚠️ Mensagem: $message")
                 }
             }
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao processar mensagem em background", e)
             e.printStackTrace()
@@ -1404,9 +1054,9 @@ class WebSocketService : Service() {
     
     private fun saveMessageToHistory(message: String) {
         try {
-            Log.d(TAG, "📝 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            Log.d(TAG, "📝 SALVANDO NOVA MENSAGEM NO HISTÓRICO")
-            Log.d(TAG, "📝 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "💾 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "💾 SALVANDO NOVA MENSAGEM NO HISTÓRICO")
+            Log.d(TAG, "💾 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "Mensagem recebida: $message")
             
             val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
@@ -1462,7 +1112,7 @@ class WebSocketService : Service() {
                 Log.d(TAG, "  [$index] ${msg.message.take(30)}... (ID=${msg.id}, Lida=${msg.read})")
             }
             
-            // ✅ CORREÇÃO: Salvar de volta usando apply() em background thread
+            // Salvar de volta usando apply() em background thread
             val updatedJson = com.google.gson.Gson().toJson(messages)
             Log.d(TAG, "💾 Salvando JSON (primeiros 300 chars): ${updatedJson.take(300)}")
             
@@ -1482,9 +1132,9 @@ class WebSocketService : Service() {
             intent.putExtra("unread_count", unreadCount)
             intent.setPackage(packageName) // Garantir que vai para o próprio app
             
-            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "📡 ENVIANDO BROADCAST MESSAGE_RECEIVED")
-            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📡 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
             Log.d(TAG, "Action: com.mdm.launcher.MESSAGE_RECEIVED")
             Log.d(TAG, "Unread count: $unreadCount")
             Log.d(TAG, "Package: $packageName")
@@ -1493,8 +1143,8 @@ class WebSocketService : Service() {
             sendBroadcast(intent)
             
             Log.d(TAG, "✅ Broadcast enviado com sucesso!")
-            Log.d(TAG, "📬 RESUMO: ${messages.size} mensagens no histórico, $unreadCount não lidas")
-            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+            Log.d(TAG, "📊 RESUMO: ${messages.size} mensagens no histórico, $unreadCount não lidas")
+            Log.d(TAG, "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
         } catch (e: Exception) {
             Log.e(TAG, "❌❌❌ ERRO CRÍTICO ao salvar mensagem no histórico ❌❌❌", e)
             e.printStackTrace()
@@ -1508,7 +1158,7 @@ class WebSocketService : Service() {
         // Cancelar verificação anterior se existir
         healthCheckJob?.cancel()
         
-        // ✅ CORREÇÃO: Verificação periódica com timeout e condições de saída
+        // Verificação periódica com timeout e condições de saída
         healthCheckJob = serviceScope.launch {
             var checkCount = 0
             val maxChecks = 60 // Máximo 1 hora (60 * 60s)
@@ -1613,7 +1263,7 @@ class WebSocketService : Service() {
             networkMonitor = NetworkMonitor(this)
             
             networkMonitor?.startMonitoring { isConnected ->
-                Log.d(TAG, "🔔 Mudança de conectividade detectada: $isConnected")
+                Log.d(TAG, "🔗 Mudança de conectividade detectada: $isConnected")
                 
                 if (isConnected) {
                     // Rede voltou - verificar se WebSocket está conectado
@@ -1695,7 +1345,7 @@ class WebSocketService : Service() {
                             try {
                                 // Desabilitar outros launchers novamente
                                 val result = dpm.setApplicationHidden(componentName, launcherPackage, true)
-                                Log.d(TAG, "🔒 Launcher $launcherPackage desabilitado: sucesso=$result")
+                                Log.d(TAG, "🚫 Launcher $launcherPackage desabilitado: sucesso=$result")
                                 if (result) {
                                     disabledCount++
                                 }
@@ -1722,9 +1372,9 @@ class WebSocketService : Service() {
      */
     private fun removeDeviceOwner(password: String): Boolean {
         try {
-            Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+            Log.d(TAG, "🔓 ════════════════════════════════════════════════════════════════════════════════")
             Log.d(TAG, "🔓 TENTANDO REMOVER DEVICE OWNER")
-            Log.d(TAG, "🔓 ═══════════════════════════════════════════════")
+            Log.d(TAG, "🔓 ════════════════════════════════════════════════════════════════════════════════")
             
             // Verificar senha de administrador
             val prefs = getSharedPreferences("mdm_connection_state", Context.MODE_PRIVATE)
