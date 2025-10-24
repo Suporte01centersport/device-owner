@@ -1,3 +1,4 @@
 {
-  "/api/devices/update-app/route": "app/api/devices/update-app/route.js"
+  "/_not-found/page": "app/_not-found/page.js",
+  "/page": "app/page.js"
 }
