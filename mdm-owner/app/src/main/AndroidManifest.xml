@@ -153,16 +153,6 @@
             </intent-filter>
         </receiver>
 
-        <!-- Broadcast Receiver para encerrar modo manutenção -->
-        <receiver
-            android:name=".receivers.MaintenanceModeReceiver"
-            android:enabled="true"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="com.mdm.launcher.END_MAINTENANCE" />
-            </intent-filter>
-        </receiver>
-
         <!-- Broadcast Receiver para manter launcher padrão -->
         <!-- DESABILITADO: Causava boot loop. O launcher já é configurado como HOME category -->
         <receiver

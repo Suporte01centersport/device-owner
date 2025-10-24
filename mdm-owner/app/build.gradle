@@ -46,9 +46,9 @@ android {
             debuggable true
             signingConfig signingConfigs.debug
             
-            // Debug usa descoberta automática (servidor local Windows)
-            buildConfigField "String", "SERVER_URL", '""'
-            buildConfigField "Boolean", "USE_FIXED_SERVER", "false"
+            // URL do servidor LOCAL (Windows PC) para DEBUG
+            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.74:3002"'
+            buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
         }
     }
     compileOptions {

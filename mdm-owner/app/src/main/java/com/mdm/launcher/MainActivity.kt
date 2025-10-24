@@ -2,6 +2,7 @@ package com.mdm.launcher
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.AlertDialog
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -947,19 +948,9 @@ class MainActivity : AppCompatActivity() {
         // ADB pode ser ativado manualmente nas Configurações do desenvolvedor
         
         // 🎯 INICIAR MONITOR DE APPS (COM CUIDADO)
-        // Só inicia se não estiver em modo manutenção
-        val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-        val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
-        val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
-        val now = System.currentTimeMillis()
-        
-        if (!maintenanceMode || now >= maintenanceExpiry) {
-            Log.d(TAG, "🎯 Iniciando monitor de apps...")
-            com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
-            Log.d(TAG, "✅ Monitor de apps iniciado com sucesso")
-        } else {
-            Log.d(TAG, "🔧 Modo manutenção ativo - monitor de apps desabilitado")
-        }
+        Log.d(TAG, "🎯 Iniciando monitor de apps...")
+        com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
+        Log.d(TAG, "✅ Monitor de apps iniciado com sucesso")
         
         // Configurar UI
         initViews()
@@ -1754,13 +1745,101 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun startLocationService() {
-        Log.d(TAG, "📍 Iniciando LocationService em foreground")
+        Log.d(TAG, "📍 === INICIANDO LOCATIONSERVICE ===")
+        
+        // Verificar permissões primeiro
+        if (!hasLocationPermissions()) {
+            Log.w(TAG, "❌ Permissões de localização não concedidas")
+            Log.w(TAG, "ACCESS_FINE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)}")
+            Log.w(TAG, "ACCESS_COARSE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)}")
+            
+            // Solicitar permissões
+            requestLocationPermissions()
+            return
+        }
+        
+        // Verificar se GPS está habilitado
+        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
+        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        
+        Log.d(TAG, "GPS habilitado: $isGpsEnabled")
+        Log.d(TAG, "Network habilitado: $isNetworkEnabled")
+        
+        if (!isGpsEnabled && !isNetworkEnabled) {
+            Log.w(TAG, "❌ Nenhum provedor de localização habilitado")
+            showLocationSettingsDialog()
+            return
+        }
+        
         try {
             val intent = Intent(this, LocationService::class.java)
             startForegroundService(intent)
             Log.d(TAG, "✅ LocationService iniciado com sucesso")
+            
+            // Verificar se o serviço realmente iniciou
+            handler.postDelayed({
+                checkLocationServiceStatus()
+            }, 2000)
+            
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao iniciar LocationService", e)
+        }
+    }
+    
+    private fun hasLocationPermissions(): Boolean {
+        return ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_FINE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED && 
+        ActivityCompat.checkSelfPermission(
+            this,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+    
+    private fun requestLocationPermissions() {
+        Log.d(TAG, "🔐 Solicitando permissões de localização")
+        val permissions = arrayOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        ActivityCompat.requestPermissions(this, permissions, 1003)
+    }
+    
+    private fun showLocationSettingsDialog() {
+        Log.d(TAG, "⚙️ Mostrando diálogo para habilitar localização")
+        val builder = AlertDialog.Builder(this)
+        builder.setTitle("📍 Localização Necessária")
+        builder.setMessage("Para rastrear a localização do dispositivo, é necessário habilitar o GPS nas configurações.")
+        builder.setPositiveButton("Configurações") { dialog, which ->
+            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
+            startActivity(intent)
+        }
+        builder.setNegativeButton("Cancelar") { dialog, which ->
+            dialog.dismiss()
+        }
+        builder.show()
+    }
+    
+    private fun checkLocationServiceStatus() {
+        Log.d(TAG, "🔍 Verificando status do LocationService")
+        try {
+            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val runningServices = activityManager.getRunningServices(Integer.MAX_VALUE)
+            
+            val locationServiceRunning = runningServices.any { serviceInfo ->
+                serviceInfo.service.className == "com.mdm.launcher.service.LocationService"
+            }
+            
+            Log.d(TAG, "LocationService está rodando: $locationServiceRunning")
+            
+            if (!locationServiceRunning) {
+                Log.w(TAG, "⚠️ LocationService não está rodando, tentando reiniciar")
+                startLocationService()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao verificar status do LocationService", e)
         }
     }
     
@@ -3179,6 +3258,20 @@ class MainActivity : AppCompatActivity() {
         }
         
         when (requestCode) {
+            1003 -> {
+                // Permissões de localização solicitadas pelo startLocationService
+                Log.d(TAG, "🔐 Resultado das permissões de localização")
+                if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                    Log.d(TAG, "✅ Permissões de localização concedidas")
+                    // Tentar iniciar o LocationService novamente
+                    startLocationService()
+                } else {
+                    Log.w(TAG, "❌ Permissões de localização negadas")
+                    runOnUiThread {
+                        Toast.makeText(this, "Localização negada. Ative nas configurações para rastrear o dispositivo.", Toast.LENGTH_LONG).show()
+                    }
+                }
+            }
             REQUEST_CODE_LOCATION -> {
                 if (grantResults.isNotEmpty() && 
                     grantResults[0] == PackageManager.PERMISSION_GRANTED && 
@@ -3362,25 +3455,6 @@ class MainActivity : AppCompatActivity() {
      */
     private fun ensureDefaultLauncher() {
         try {
-            // Verificar se está em modo manutenção
-            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-            val maintenanceMode = prefs.getBoolean("maintenance_mode", false)
-            val maintenanceExpiry = prefs.getLong("maintenance_expiry", 0)
-            val now = System.currentTimeMillis()
-            
-            if (maintenanceMode && now < maintenanceExpiry) {
-                Log.d(TAG, "🔧 Modo manutenção ativo - launcher desprotegido temporariamente")
-                Log.d(TAG, "⏱️ Expira em ${(maintenanceExpiry - now) / 1000} segundos")
-                return // Não forçar retorno ao launcher
-            } else if (maintenanceMode && now >= maintenanceExpiry) {
-                // Modo manutenção expirou - desativar
-                Log.d(TAG, "⏰ Modo manutenção expirou - reativando proteção")
-                prefs.edit()
-                    .putBoolean("maintenance_mode", false)
-                    .putLong("maintenance_expiry", 0)
-                    .apply()
-            }
-            
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
             

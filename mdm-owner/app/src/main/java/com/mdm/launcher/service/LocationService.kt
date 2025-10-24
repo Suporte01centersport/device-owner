@@ -123,6 +123,27 @@ class LocationService : Service(), LocationListener {
             Log.d(TAG, "NETWORK_PROVIDER habilitado: ${locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)}")
             Log.d(TAG, "PASSIVE_PROVIDER habilitado: ${locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)}")
             
+            // Verificar última localização conhecida primeiro
+            try {
+                val lastKnownGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                val lastKnownNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                
+                Log.d(TAG, "📍 Última localização GPS conhecida: $lastKnownGps")
+                Log.d(TAG, "📍 Última localização Network conhecida: $lastKnownNetwork")
+                
+                if (lastKnownGps != null) {
+                    Log.d(TAG, "✅ Usando última localização GPS conhecida")
+                    onLocationChanged(lastKnownGps)
+                } else if (lastKnownNetwork != null) {
+                    Log.d(TAG, "✅ Usando última localização Network conhecida")
+                    onLocationChanged(lastKnownNetwork)
+                } else {
+                    Log.w(TAG, "⚠️ Nenhuma localização conhecida disponível")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Erro ao obter última localização conhecida: ${e.message}")
+            }
+            
             // Tentar GPS primeiro (mais preciso)
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 Log.d(TAG, "✅ Iniciando atualizações GPS")
@@ -153,6 +174,13 @@ class LocationService : Service(), LocationListener {
             }
             
             Log.d(TAG, "✅ Atualizações de localização iniciadas - isLocationUpdatesActive: $isLocationUpdatesActive")
+            
+            // Verificar se pelo menos um provedor foi registrado
+            if (!isLocationUpdatesActive) {
+                Log.e(TAG, "❌ NENHUM provedor de localização foi registrado!")
+                Log.e(TAG, "❌ Verifique se o GPS está habilitado nas configurações")
+            }
+            
         } catch (e: SecurityException) {
             Log.e(TAG, "❌ Erro de permissão ao iniciar atualizações de localização", e)
         } catch (e: Exception) {
