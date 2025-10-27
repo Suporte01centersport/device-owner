@@ -257,12 +257,16 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
       console.log('📊 Quantidade de registros:', dailyUsageResult.data?.length || 0);
       
       // Processar dados para o dashboard
+      const totalAccesses = topAppsResult.data?.reduce((sum: number, app: any) => sum + parseInt(app.total_accesses || 0), 0) || 0;
+      
+      console.log('📊 Total accesses:', totalAccesses);
+      
       const dashboardStats = {
         totalApps: topAppsResult.data?.length || 0,
-        totalAccesses: topAppsResult.data?.reduce((sum: number, app: any) => sum + parseInt(app.total_accesses || 0), 0) || 0,
-        totalDuration: topAppsResult.data?.reduce((sum: number, app: any) => sum + parseInt(app.total_duration_ms || 0), 0) || 0,
+        totalAccesses: totalAccesses,
+        totalDuration: 0, // Duração não é mais rastreada
         topApps: topAppsResult.data?.slice(0, 5) || [],
-        dailyUsage: weeklyData, // ✅ CORREÇÃO: Usar dados processados da semana
+        dailyUsage: weeklyData,
         lastAccess: topAppsResult.data?.[0]?.last_access_time || null
       };
       
@@ -454,7 +458,7 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
           {/* Resumo Geral com Dados Reais */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h4 className="text-lg font-medium text-gray-900 mb-4">📈 Resumo Geral</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -482,20 +486,6 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                   <div className="ml-3">
                     <p className="text-sm font-medium text-green-600">Total de Acessos</p>
                     <p className="text-lg font-semibold text-green-900">{dashboardData.totalAccesses}</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-purple-50 rounded-lg p-4">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-8 w-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <div className="ml-3">
-                    <p className="text-sm font-medium text-purple-600">Tempo Total</p>
-                    <p className="text-lg font-semibold text-purple-900">{formatTime(dashboardData.totalDuration)}</p>
                   </div>
                 </div>
               </div>
@@ -535,7 +525,6 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-medium text-gray-900">{app.total_accesses} acessos</p>
-                      <p className="text-xs text-gray-500">{formatTime(app.total_duration_ms)}</p>
                     </div>
                   </div>
                 ))}

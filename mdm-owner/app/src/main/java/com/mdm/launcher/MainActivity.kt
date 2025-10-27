@@ -2,7 +2,6 @@ package com.mdm.launcher
 
 import android.Manifest
 import android.app.ActivityManager
-import android.app.AlertDialog
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -59,7 +58,6 @@ import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.service.WebSocketService
 import com.mdm.launcher.service.LocationService
 import com.mdm.launcher.ui.AppAdapter
-import com.mdm.launcher.utils.AppUsageTracker
 import com.mdm.launcher.utils.DeviceInfoCollector
 import com.mdm.launcher.utils.LocationHistoryManager
 import com.mdm.launcher.utils.GeofenceManager
@@ -166,7 +164,6 @@ class MainActivity : AppCompatActivity() {
     private var lastNotificationMessage: String = ""
     private var lastNotificationTimestamp: Long = 0L
     private var hasShownPendingMessage = false
-    private var appUsageTracker: AppUsageTracker? = null
     
     // BroadcastReceiver para mensagens do Service
     private val serviceMessageReceiver = object : android.content.BroadcastReceiver() {
@@ -328,24 +325,50 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         
-        // Garantir que esta é a única instância da MainActivity (previne boot loop)
+        // Garantir que esta é a única instância da MainActivity
         if (!isTaskRoot) {
             Log.d(TAG, "Activity não é root - finalizando instâncias extras")
             finish()
             return
         }
         
+        // ✅ NOVO: Garantir que Lock Task Mode está desabilitado ao iniciar
+        try {
+            stopLockTask()
+            Log.d(TAG, "✅ Lock Task Mode desabilitado no onCreate")
+        } catch (e: Exception) {
+            Log.d(TAG, "Lock Task Mode já estava desabilitado no onCreate")
+        }
+        
+        // ✅ NOVO: Garantir que Settings não está oculto (pode bloquear apps recentes)
+        reenableSettingsIfHidden()
+        
         // Inicializar PermissionManager
         permissionManager = PermissionManager(this)
         
-        // Inicializar AppUsageTracker
-        appUsageTracker = AppUsageTracker(this)
-        // Limpar dados antigos para começar contagem do zero
-        appUsageTracker?.clearAllData()
-        appUsageTracker?.startTracking()
-        
         // Configurar otimizações de bateria para garantir conexão persistente
         configureBatteryOptimizations()
+        
+        // Garantir que a barra de navegação seja visível usando API moderna
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            window.insetsController?.let { controller ->
+                controller.show(android.view.WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = 0
+        }
+        
+        // Forçar exibição da barra de navegação após um delay
+        window.decorView.post {
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                window.insetsController?.show(android.view.WindowInsets.Type.navigationBars())
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = 0
+            }
+        }
         
         // Inicializar SharedPreferences para persistência
         sharedPreferences = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
@@ -583,6 +606,52 @@ class MainActivity : AppCompatActivity() {
             lastConfigButtonClickTime = now
             
             showDeviceNameDialog()
+        }
+    }
+    
+    /**
+     * Limpa o cache de permissões e SharedPreferences
+     * Útil para forçar re-solicitação de permissões
+     */
+    private fun clearPermissionsCache() {
+        try {
+            Log.d(TAG, "Limpondo cache de permissões...")
+            
+            // Limpar SharedPreferences
+            val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+            val editor = prefs.edit()
+            
+            // Remover todas as flags de permissões
+            editor.remove("force_permission_check")
+            editor.remove("usage_stats_not_supported")
+            editor.remove("has_shown_realme_instructions")
+            editor.remove("has_configured_battery_optimizations")
+            
+            // Marcar para forçar verificação de permissões
+            editor.putBoolean("force_permission_check", true)
+            
+            editor.apply()
+            
+            Log.d(TAG, "✅ Cache de permissões limpo!")
+            
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "✅ Cache de permissões limpo! Reinicie o app.",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+            
+            // Reiniciar app após 1 segundo
+            handler.postDelayed({
+                finish()
+                val intent = Intent(this, MainActivity::class.java)
+                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                startActivity(intent)
+            }, 1000)
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar cache de permissões", e)
         }
     }
     
@@ -865,8 +934,8 @@ class MainActivity : AppCompatActivity() {
             
             Log.d(TAG, "✅ $appliedCount restrições aplicadas")
             
-            // 🚨 BLOQUEAR ACESSO ÀS CONFIGURAÇÕES (COM CUIDADO)
-            blockSettingsAccess(dpm, componentName)
+            // ❌ REMOVIDO: blockSettingsAccess - interfere com apps recentes
+            // blockSettingsAccess(dpm, componentName)
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao aplicar restrições", e)
@@ -919,6 +988,77 @@ class MainActivity : AppCompatActivity() {
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao bloquear configurações", e)
+        }
+    }
+    
+    /**
+     * ✅ NOVO: Reabilitar Settings caso tenha sido oculto
+     * Settings oculto pode bloquear funcionalidades como apps recentes
+     */
+    private fun reenableSettingsIfHidden() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
+            
+            if (!dpm.isDeviceOwnerApp(packageName)) {
+                Log.d(TAG, "Não é Device Owner - não precisa reabilitar Settings")
+                return
+            }
+            
+            Log.d(TAG, "🔧 Limpando configurações que podem bloquear apps recentes...")
+            
+            // Reabilitar Settings
+            try {
+                dpm.setApplicationHidden(componentName, "com.android.settings", false)
+                Log.d(TAG, "✅ Settings reabilitado")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível reabilitar Settings: ${e.message}")
+            }
+            
+            // Reabilitar Package Installer também
+            try {
+                dpm.setApplicationHidden(componentName, "com.android.packageinstaller", false)
+                Log.d(TAG, "✅ Package Installer reabilitado")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível reabilitar Package Installer: ${e.message}")
+            }
+            
+            // ✅ NOVO: Garantir que não há persistent preferred activities que bloqueiem recentes
+            try {
+                // Limpar qualquer persistent preferred activity que possa interferir
+                dpm.clearPackagePersistentPreferredActivities(componentName, packageName)
+                Log.d(TAG, "✅ Persistent preferred activities limpos")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível limpar persistent preferred activities: ${e.message}")
+            }
+            
+            // ✅ NOVO: Garantir que Lock Task Packages está limpo
+            try {
+                dpm.setLockTaskPackages(componentName, emptyArray())
+                Log.d(TAG, "✅ Lock task packages limpos")
+            } catch (e: Exception) {
+                Log.w(TAG, "⚠️ Não foi possível limpar lock task packages: ${e.message}")
+            }
+            
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao reabilitar Settings", e)
+        }
+    }
+    
+    /**
+     * Mostra um dialog de confirmação quando uma permissão é concedida
+     */
+    private fun showPermissionGrantedDialog(permissionName: String) {
+        try {
+            runOnUiThread {
+                Toast.makeText(
+                    this,
+                    "✅ Permissão de $permissionName concedida",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao mostrar dialog de permissão", e)
         }
     }
     
@@ -1112,10 +1252,19 @@ class MainActivity : AppCompatActivity() {
     private fun initializeAllFeatures() {
         // Inicializar todas as funcionalidades após permissões concedidas
         initializeLocationTracking()
-        Log.d(TAG, "Todas as permissões concedidas - funcionalidades inicializadas")
         
-        // Verificar se é dispositivo Realme e mostrar instruções se necessário
-        checkRealmeOptimizations()
+        // ✅ NOVO: Garantir que Lock Task Mode está desabilitado
+        try {
+            stopLockTask()
+            Log.d(TAG, "✅ Lock Task Mode desabilitado ao iniciar")
+        } catch (e: Exception) {
+            Log.d(TAG, "Lock Task Mode já estava desabilitado")
+        }
+        
+        // ✅ NOVO: Garantir que Settings está habilitado
+        reenableSettingsIfHidden()
+        
+        Log.d(TAG, "Todas as permissões concedidas - funcionalidades inicializadas")
     }
     
     private fun checkRealmeOptimizations() {
@@ -1686,20 +1835,19 @@ class MainActivity : AppCompatActivity() {
             val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
             
             if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                // Método 1: Usar addPersistentPreferredActivity
-                val launcherComponent = ComponentName(this, MainActivity::class.java)
-                val intentFilter = IntentFilter(Intent.ACTION_MAIN).apply {
-                    addCategory(Intent.CATEGORY_HOME)
-                }
-                devicePolicyManager.addPersistentPreferredActivity(
-                    adminComponent,
-                    intentFilter,
-                    launcherComponent
-                )
+                // ❌ REMOVIDO: addPersistentPreferredActivity - bloqueia apps recentes
+                // O launcher já está configurado no AndroidManifest.xml
+                // val launcherComponent = ComponentName(this, MainActivity::class.java)
+                // val intentFilter = IntentFilter(Intent.ACTION_MAIN).apply {
+                //     addCategory(Intent.CATEGORY_HOME)
+                // }
+                // devicePolicyManager.addPersistentPreferredActivity(
+                //     adminComponent,
+                //     intentFilter,
+                //     launcherComponent
+                // )
                 
-                // Método simplificado - apenas definir como preferido
-                
-                Log.d(TAG, "MDM Launcher definido como padrão com sucesso")
+                Log.d(TAG, "MDM Launcher é o padrão (configurado via AndroidManifest)")
                 
                 // Mostrar mensagem de confirmação
                 runOnUiThread {
@@ -1732,101 +1880,13 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun startLocationService() {
-        Log.d(TAG, "📍 === INICIANDO LOCATIONSERVICE ===")
-        
-        // Verificar permissões primeiro
-        if (!hasLocationPermissions()) {
-            Log.w(TAG, "❌ Permissões de localização não concedidas")
-            Log.w(TAG, "ACCESS_FINE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)}")
-            Log.w(TAG, "ACCESS_COARSE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)}")
-            
-            // Solicitar permissões
-            requestLocationPermissions()
-            return
-        }
-        
-        // Verificar se GPS está habilitado
-        val locationManager = getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val isGpsEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        val isNetworkEnabled = locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
-        
-        Log.d(TAG, "GPS habilitado: $isGpsEnabled")
-        Log.d(TAG, "Network habilitado: $isNetworkEnabled")
-        
-        if (!isGpsEnabled && !isNetworkEnabled) {
-            Log.w(TAG, "❌ Nenhum provedor de localização habilitado")
-            showLocationSettingsDialog()
-            return
-        }
-        
+        Log.d(TAG, "📍 Iniciando LocationService em foreground")
         try {
             val intent = Intent(this, LocationService::class.java)
             startForegroundService(intent)
             Log.d(TAG, "✅ LocationService iniciado com sucesso")
-            
-            // Verificar se o serviço realmente iniciou
-            handler.postDelayed({
-                checkLocationServiceStatus()
-            }, 2000)
-            
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao iniciar LocationService", e)
-        }
-    }
-    
-    private fun hasLocationPermissions(): Boolean {
-        return ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_FINE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED && 
-        ActivityCompat.checkSelfPermission(
-            this,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        ) == PackageManager.PERMISSION_GRANTED
-    }
-    
-    private fun requestLocationPermissions() {
-        Log.d(TAG, "🔐 Solicitando permissões de localização")
-        val permissions = arrayOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
-        ActivityCompat.requestPermissions(this, permissions, 1003)
-    }
-    
-    private fun showLocationSettingsDialog() {
-        Log.d(TAG, "⚙️ Mostrando diálogo para habilitar localização")
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("📍 Localização Necessária")
-        builder.setMessage("Para rastrear a localização do dispositivo, é necessário habilitar o GPS nas configurações.")
-        builder.setPositiveButton("Configurações") { dialog, which ->
-            val intent = Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)
-            startActivity(intent)
-        }
-        builder.setNegativeButton("Cancelar") { dialog, which ->
-            dialog.dismiss()
-        }
-        builder.show()
-    }
-    
-    private fun checkLocationServiceStatus() {
-        Log.d(TAG, "🔍 Verificando status do LocationService")
-        try {
-            val activityManager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val runningServices = activityManager.getRunningServices(Integer.MAX_VALUE)
-            
-            val locationServiceRunning = runningServices.any { serviceInfo ->
-                serviceInfo.service.className == "com.mdm.launcher.service.LocationService"
-            }
-            
-            Log.d(TAG, "LocationService está rodando: $locationServiceRunning")
-            
-            if (!locationServiceRunning) {
-                Log.w(TAG, "⚠️ LocationService não está rodando, tentando reiniciar")
-                startLocationService()
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao verificar status do LocationService", e)
         }
     }
     
@@ -2025,9 +2085,6 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "───────────────────────────────────────────")
                     Log.d(TAG, "Apps instalados ATUAIS: ${installedApps.size}")
                     Log.d(TAG, "───────────────────────────────────────────")
-                    
-                    // Atualizar lista de apps permitidos no AppUsageTracker
-                    appUsageTracker?.updateAllowedApps(allowedApps)
                     
                     saveData() // Salvar dados recebidos da web
                     Log.d(TAG, "✅ Dados salvos em SharedPreferences")
@@ -2898,27 +2955,19 @@ class MainActivity : AppCompatActivity() {
     
     private fun launchApp(app: AppInfo) {
         try {
-            Log.d(TAG, "🚀 === LAUNCH APP CHAMADO ===")
-            Log.d(TAG, "🚀 App: ${app.appName} (${app.packageName})")
-            Log.d(TAG, "🚀 Timestamp: ${System.currentTimeMillis()}")
-            
-            // ❌ REMOVIDO: Não registrar acesso aqui - deixar AppMonitor fazer isso
-            // appUsageTracker?.recordAppAccess(app.packageName, app.appName)
-
             val intent = packageManager.getLaunchIntentForPackage(app.packageName)
             if (intent != null) {
                 // Adicionar flags para evitar que o launcher seja destruído
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-
+                
                 // Manter o launcher vivo em background
                 intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-
+                
                 startActivity(intent)
                 Log.d(TAG, "App ${app.appName} lançado com sucesso")
                 Log.d(TAG, "Launcher mantido ativo em background")
-                Log.d(TAG, "📱 AppMonitor irá detectar e contar o acesso automaticamente")
             } else {
                 Log.w(TAG, "Não foi possível abrir o app: ${app.packageName}")
             }
@@ -3214,19 +3263,39 @@ class MainActivity : AppCompatActivity() {
         when (requestCode) {
             REQUEST_CODE_ENABLE_ADMIN -> {
                 if (resultCode == RESULT_OK) {
-                    Log.d(TAG, "Device Admin habilitado")
-                    // Tentar definir como launcher padrão após ativar Device Admin
-                    setAsDefaultLauncher()
+                    Log.d(TAG, "✅ Device Admin habilitado")
+                    showPermissionGrantedDialog("Administrador do Dispositivo")
+                    
+                    // Definir como launcher padrão após ativar Device Admin
+                    handler.postDelayed({
+                        setAsDefaultLauncher()
+                        
+                        // Após definir launcher, verificar próxima permissão
+                        handler.postDelayed({
+                            checkPermissions()
+                        }, 1000)
+                    }, 500)
                 } else {
-                    Log.w(TAG, "Device Admin não foi habilitado")
+                    Log.w(TAG, "⚠️ Device Admin não foi habilitado")
+                    // Continuar mesmo assim para não bloquear
+                    checkPermissions()
                 }
             }
             REQUEST_CODE_USAGE_STATS -> {
                 if (isUsageStatsPermissionGranted()) {
-                    Log.d(TAG, "Permissão de Usage Stats concedida")
+                    Log.d(TAG, "✅ Permissão de Usage Stats concedida")
+                    showPermissionGrantedDialog("Estatísticas de Uso")
                 } else {
-                    Log.w(TAG, "Permissão de Usage Stats não foi concedida")
+                    Log.w(TAG, "⚠️ Permissão de Usage Stats não foi concedida")
+                    // Marcar como não suportado
+                    val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                    sharedPreferences.edit().putBoolean("usage_stats_not_supported", true).apply()
                 }
+                
+                // Continuar para próxima permissão
+                handler.postDelayed({
+                    checkPermissions()
+                }, 500)
             }
         }
     }
@@ -3256,46 +3325,44 @@ class MainActivity : AppCompatActivity() {
         }
         
         when (requestCode) {
-            1003 -> {
-                // Permissões de localização solicitadas pelo startLocationService
-                Log.d(TAG, "🔐 Resultado das permissões de localização")
-                if (grantResults.isNotEmpty() && grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                    Log.d(TAG, "✅ Permissões de localização concedidas")
-                    // Tentar iniciar o LocationService novamente
-                    startLocationService()
-                } else {
-                    Log.w(TAG, "❌ Permissões de localização negadas")
-                    runOnUiThread {
-                        Toast.makeText(this, "Localização negada. Ative nas configurações para rastrear o dispositivo.", Toast.LENGTH_LONG).show()
-                    }
-                }
-            }
             REQUEST_CODE_LOCATION -> {
                 if (grantResults.isNotEmpty() && 
                     grantResults[0] == PackageManager.PERMISSION_GRANTED && 
                     grantResults[1] == PackageManager.PERMISSION_GRANTED) {
-                    Log.d(TAG, "Permissões de localização concedidas")
+                    Log.d(TAG, "✅ Permissões de localização concedidas")
+                    showPermissionGrantedDialog("Localização")
                     initializeLocationTracking()
+                    
+                    // Continuar para próxima permissão
+                    handler.postDelayed({
+                        checkPermissions()
+                    }, 500)
                 } else {
-                    Log.w(TAG, "Permissões de localização negadas")
+                    Log.w(TAG, "⚠️ Permissões de localização negadas")
                     runOnUiThread {
                         connectionStatusText.text = "Localização necessária para rastreamento"
                         connectionStatusText.setTextColor(resources.getColor(R.color.connection_disconnected, null))
                     }
+                    
+                    // Continuar mesmo assim
+                    checkPermissions()
                 }
             }
             REQUEST_CODE_NOTIFICATIONS -> {
                 if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    Log.d(TAG, "Permissão de notificações concedida")
+                    Log.d(TAG, "✅ Permissão de notificações concedida")
+                    showPermissionGrantedDialog("Notificações")
                     createNotificationChannel()
                 } else {
-                    Log.w(TAG, "Permissão de notificações negada")
+                    Log.w(TAG, "⚠️ Permissão de notificações negada")
                 }
+                
+                // Última permissão - finalizar
+                handler.postDelayed({
+                    initializeAllFeatures()
+                }, 500)
             }
         }
-        
-        // Verificar se ainda há permissões pendentes
-        checkPermissions()
     }
     
     override fun onResume() {
@@ -3335,30 +3402,39 @@ class MainActivity : AppCompatActivity() {
             Log.e(TAG, "❌ Erro ao iniciar monitor de apps no onResume", e)
         }
         
-        // SEMPRE recarregar allowedApps do SharedPreferences quando voltar ao foreground
-        // Isso garante que mudanças feitas enquanto app estava em background sejam aplicadas
-        val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
-        if (savedAllowedApps != null) {
+        // ✅ NOVO: Garantir que Settings e Lock Task estão desabilitados
+        // Isso garante que apps recentes funcionem corretamente
+        try {
+            // Garantir que Lock Task está desabilitado
             try {
-                val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
-                val newAllowedApps = gson.fromJson<List<String>>(savedAllowedApps, type)
-                
-                // Só atualizar se mudou
-                if (newAllowedApps != allowedApps) {
-                    Log.d(TAG, "🔄 Detectada mudança em allowedApps no onResume!")
-                    Log.d(TAG, "   ANTES: ${allowedApps.size} apps")
-                    Log.d(TAG, "   DEPOIS: ${newAllowedApps.size} apps")
-                    allowedApps = newAllowedApps
-                    
-                    // Forçar atualização da UI
-                    if (installedApps.isNotEmpty()) {
-                        updateAppsList()
-                        Log.d(TAG, "✅ UI atualizada com novos apps permitidos")
-                    }
-                }
+                stopLockTask()
+                Log.d(TAG, "✅ Lock Task Mode garantido como desabilitado no onResume")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao recarregar allowedApps no onResume", e)
+                Log.d(TAG, "Lock Task já estava desabilitado no onResume")
             }
+            
+            // Reabilitar Settings
+            reenableSettingsIfHidden()
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao reabilitar Settings no onResume", e)
+        }
+        
+        // ✅ CORREÇÃO: SEMPRE recarregar allowedApps do SharedPreferences
+        // Carregar dados salvos para garantir que a lista esteja atualizada
+        loadSavedData()
+        
+        Log.d(TAG, "✅ Apps permitidos recarregados no onResume: ${allowedApps.size}")
+        Log.d(TAG, "✅ Apps instalados disponíveis: ${installedApps.size}")
+        
+        // Se ainda estiver vazio, tentar carregar do WebSocketService
+        if (allowedApps.isEmpty() && installedApps.isNotEmpty()) {
+            Log.w(TAG, "⚠️ allowedApps está vazio mas temos apps instalados")
+            Log.w(TAG, "Tentando recarregar do servidor via WebSocket...")
+        }
+        
+        // Forçar atualização da UI
+        if (installedApps.isNotEmpty()) {
+            updateAppsList()
         }
         
         // Evitar processamento muito frequente (menos de 1 segundo)
@@ -3396,6 +3472,17 @@ class MainActivity : AppCompatActivity() {
             markUserInteraction()
         }
         
+        // Garantir que a barra de navegação permaneça visível
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            window.insetsController?.let { controller ->
+                controller.show(android.view.WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            }
+        } else {
+            @Suppress("DEPRECATION")
+            window.decorView.systemUiVisibility = 0
+        }
+        
         // Verificar saúde da conexão WebSocket após inatividade
         checkWebSocketHealth()
         
@@ -3408,9 +3495,6 @@ class MainActivity : AppCompatActivity() {
         lastPauseTime = System.currentTimeMillis()
         pauseResumeCount++
         Log.d(TAG, "onPause() chamado - Activity pausada (ciclo #$pauseResumeCount)")
-        
-        // Pausar rastreamento de uso
-        appUsageTracker?.pauseTracking()
         
         // Tela pode estar sendo bloqueada - verificar estado
         checkScreenState()
@@ -3674,9 +3758,6 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Log.d(TAG, "onDestroy() chamado - Activity destruída")
         
-        // Parar rastreamento de uso
-        appUsageTracker?.stopTracking()
-        
         // Verificar se a destruição é necessária
         if (!isFinishing && !isChangingConfigurations) {
             Log.e(TAG, "ERRO: Activity sendo destruída desnecessariamente! Isso pode causar travamento ao voltar para o launcher")
@@ -3807,10 +3888,12 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "Iniciando app: $packageName")
                         startActivity(intent)
                         
-                        // REMOVIDO: Lock Task Mode desabilitado para permitir uso normal
-                        // O Lock Task Mode bloqueia o botão recente e navegação
+                        // ❌ REMOVIDO: Lock Task Mode - bloqueia apps recentes
+                        // Log.d(TAG, "Ativando Lock Task Mode...")
                         // startLockTask()
-                        Log.d(TAG, "App $packageName aberto (sem Lock Task Mode)")
+                        // Log.d(TAG, "Lock Task Mode ativado - app travado!")
+                        
+                        Log.d(TAG, "App $packageName iniciado normalmente (sem lock)")
                         return
                     }
                 } else {
@@ -3823,12 +3906,19 @@ class MainActivity : AppCompatActivity() {
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                         
-                        Log.d(TAG, "Abrindo app sem Device Owner")
+                        Log.d(TAG, "Iniciando app sem Device Owner")
                         startActivity(intent)
                         
-                        // REMOVIDO: Lock Task Mode desabilitado
-                        // startLockTask()
-                        Log.d(TAG, "App $packageName aberto normalmente")
+                        // ❌ REMOVIDO: Lock Task Mode - bloqueia apps recentes
+                        // try {
+                        //     startLockTask()
+                        //     Log.d(TAG, "Lock Task Mode ativado (sem Device Owner)")
+                        //     
+                        //     Log.d(TAG, "App $packageName travado na tela!")
+                        // } catch (e: Exception) {
+                        //     Log.e(TAG, "Erro ao ativar Lock Task Mode", e)
+                        //     Log.w(TAG, "Erro: Precisa ser Device Owner para travar app")
+                        // }
                     }
                 }
             } else {
@@ -3929,24 +4019,10 @@ class MainActivity : AppCompatActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         
-        // Verificar se estamos em Lock Task Mode e manter o app ativo
-        val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
-        val kioskApp = prefs.getString("kiosk_app", null)
-        
-        if (kioskApp != null && hasFocus) {
-            Log.d(TAG, "App perdeu foco em Lock Task Mode - tentando restaurar")
-            try {
-                val intent = packageManager.getLaunchIntentForPackage(kioskApp)
-                if (intent != null) {
-                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                    startActivity(intent)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Erro ao tentar restaurar app em Lock Task Mode", e)
-            }
-        }
+        // ❌ REMOVIDO: Lógica que mantinha app forçado em foco
+        // Isso bloqueava a visualização de apps recentes
+        // O launcher agora funciona normalmente sem forçar retornos
+        Log.d(TAG, "onWindowFocusChanged: hasFocus=$hasFocus (comportamento normal)")
     }
     
     /**

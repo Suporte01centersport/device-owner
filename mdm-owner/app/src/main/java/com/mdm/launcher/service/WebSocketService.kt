@@ -423,6 +423,11 @@ class WebSocketService : Service() {
                             com.mdm.launcher.utils.AppMonitor.updateAllowedApps(this, allowedAppsStrings)
                             Log.d(TAG, "✅ Monitor de apps atualizado com ${allowedAppsStrings.size} apps permitidos")
                             Log.d(TAG, "Apps: $allowedAppsList")
+                            
+                            // 🎯 ATUALIZAR APPUSAGETRACKER
+                            val appUsageTracker = com.mdm.launcher.utils.AppUsageTracker(this)
+                            appUsageTracker.updateAllowedApps(allowedAppsStrings)
+                            Log.d(TAG, "✅ AppUsageTracker atualizado com ${allowedAppsStrings.size} apps permitidos")
                         }
                         
                         Log.d(TAG, "═══════════════════════════════════════════════════════════")

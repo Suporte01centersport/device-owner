@@ -17,7 +17,6 @@ data class AccessedApp(
     val packageName: String,
     val appName: String,
     val accessTime: Long,
-    val duration: Long = 0L,
     val isAllowed: Boolean = true // Se o app está na lista de permitidos
 )
 
@@ -29,7 +28,7 @@ class AppUsageTracker(private val context: Context) {
     
     companion object {
         private const val TAG = "AppUsageTracker"
-        private const val PREF_NAME = "app_usage_tracking"
+        private const val PREF_NAME = "mdm_launcher" // ✅ CORREÇÃO: Usar o mesmo SharedPreferences que o resto do app
         private const val KEY_LAST_ACCESS = "last_access_time"
         private const val KEY_ACCESS_COUNT = "access_count"
         private const val KEY_TOTAL_TIME = "total_time_ms"
@@ -121,6 +120,9 @@ class AppUsageTracker(private val context: Context) {
         Log.d(TAG, "📱 Timestamp: $currentTime")
         Log.d(TAG, "📱 Apps já acessados: ${accessedApps.size}")
         
+        // Verificar se o app está na lista de permitidos
+        val isAllowed = isAppAllowed(packageName)
+        
         // Verificar se já existe um acesso recente (últimos 5 minutos)
         val recentAccess = accessedApps.find { 
             it.packageName == packageName && 
@@ -128,28 +130,29 @@ class AppUsageTracker(private val context: Context) {
         }
         
         if (recentAccess == null) {
-            // Verificar se o app está na lista de permitidos
-            val isAllowed = isAppAllowed(packageName)
-            
             val newAccess = AccessedApp(
                 packageName = packageName,
                 appName = appName,
                 accessTime = currentTime,
-                duration = 0L,
                 isAllowed = isAllowed
             )
             
             val updatedApps = accessedApps + newAccess
             saveAccessedApps(updatedApps)
             
-            Log.d(TAG, "✅ App acessado registrado: $appName ($packageName)")
+            Log.d(TAG, "✅ App acessado registrado: $appName ($packageName) - Permitido: $isAllowed")
             Log.d(TAG, "📊 Total de apps acessados: ${updatedApps.size}")
             
             // Enviar dados atualizados para o servidor IMEDIATAMENTE
             Log.d(TAG, "📤 Enviando dados de uso para o servidor...")
             sendUsageDataToServer()
         } else {
-            Log.d(TAG, "⚠️ Acesso recente já registrado para $appName (últimos 5min)")
+            // Atualizar o isAllowed do acesso recente também
+            val updatedRecentAccess = recentAccess.copy(isAllowed = isAllowed)
+            val updatedApps = accessedApps.map { if (it == recentAccess) updatedRecentAccess else it }
+            saveAccessedApps(updatedApps)
+            
+            Log.d(TAG, "⚠️ Acesso recente já registrado para $appName (últimos 5min), atualizando isAllowed: $isAllowed")
             // Mesmo assim, enviar dados atualizados
             Log.d(TAG, "📤 Enviando dados atualizados mesmo com acesso recente...")
             sendUsageDataToServer()
@@ -157,6 +160,7 @@ class AppUsageTracker(private val context: Context) {
         
         Log.d(TAG, "📱 === FIM REGISTRO ACESSO ===")
     }
+    
     
     /**
      * Obtém lista de apps acessados
@@ -193,7 +197,6 @@ class AppUsageTracker(private val context: Context) {
             jsonBuilder.append("\"packageName\":\"${app.packageName}\",")
             jsonBuilder.append("\"appName\":\"${app.appName}\",")
             jsonBuilder.append("\"accessTime\":${app.accessTime},")
-            jsonBuilder.append("\"duration\":${app.duration},")
             jsonBuilder.append("\"isAllowed\":${app.isAllowed}")
             jsonBuilder.append("}")
         }
@@ -219,7 +222,7 @@ class AppUsageTracker(private val context: Context) {
                 var packageName = ""
                 var appName = ""
                 var accessTime = 0L
-                var duration = 0L
+                var isAllowed = true
                 
                 parts.forEach { part ->
                     val keyValue = part.split(":")
@@ -231,13 +234,13 @@ class AppUsageTracker(private val context: Context) {
                             "packageName" -> packageName = value
                             "appName" -> appName = value
                             "accessTime" -> accessTime = value.toLongOrNull() ?: 0L
-                            "duration" -> duration = value.toLongOrNull() ?: 0L
+                            "isAllowed" -> isAllowed = value.toBoolean()
                         }
                     }
                 }
                 
                 if (packageName.isNotEmpty() && appName.isNotEmpty()) {
-                    apps.add(AccessedApp(packageName, appName, accessTime, duration))
+                    apps.add(AccessedApp(packageName, appName, accessTime, isAllowed))
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Erro ao parsear entrada de app acessado: $entry", e)
@@ -263,13 +266,29 @@ class AppUsageTracker(private val context: Context) {
     }
     
     /**
-     * Atualiza estatísticas de uso (simplificado)
+     * Atualiza estatísticas de uso usando UsageStatsManager
      */
     private suspend fun updateUsageStats() {
         try {
-            Log.d(TAG, "📊 Atualizando estatísticas de uso")
-            // Implementação simplificada sem UsageStatsManager
-            // que requer permissões especiais e pode causar problemas
+            Log.d(TAG, "📊 Atualizando estatísticas de uso com UsageStatsManager")
+            
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.LOLLIPOP) {
+                val usageStatsManager = context.getSystemService(Context.USAGE_STATS_SERVICE) as android.app.usage.UsageStatsManager
+                val currentTime = System.currentTimeMillis()
+                
+                // Obter estatísticas dos últimos 24 horas
+                val stats = usageStatsManager.queryUsageStats(
+                    android.app.usage.UsageStatsManager.INTERVAL_DAILY,
+                    currentTime - (24 * 60 * 60 * 1000),
+                    currentTime
+                )
+                
+                if (stats != null && stats.isNotEmpty()) {
+                    Log.d(TAG, "📊 Estatísticas obtidas: ${stats.size} apps")
+                    
+                    // Função removida - duração não é mais rastreada
+                }
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao atualizar estatísticas", e)
         }
@@ -333,8 +352,8 @@ class AppUsageTracker(private val context: Context) {
         return mapOf(
             "last_access" to if (lastAccess > 0) dateFormat.format(Date(lastAccess)) else "Nunca",
             "access_count" to accessCount,
-            "total_time_ms" to totalTime,
-            "total_time_formatted" to formatTime(totalTime),
+            "total_time_ms" to 0L,
+            "total_time_formatted" to "N/D",
             "session_count" to sessionCount,
             "is_tracking" to isTracking,
             "current_session_start" to if (sessionStartTime > 0) dateFormat.format(Date(sessionStartTime)) else null,
@@ -344,7 +363,7 @@ class AppUsageTracker(private val context: Context) {
                     "appName" to app.appName,
                     "accessTime" to app.accessTime,
                     "accessTimeFormatted" to dateFormat.format(Date(app.accessTime)),
-                    "duration" to app.duration
+                    "isAllowed" to app.isAllowed
                 )
             }
         )
@@ -396,12 +415,16 @@ class AppUsageTracker(private val context: Context) {
      */
     fun updateAllowedApps(allowedApps: List<String>) {
         try {
-            val allowedAppsJson = allowedApps.joinToString(",") { "\"$it\"" }
+            // Usar Gson para serializar corretamente
+            val gson = com.google.gson.Gson()
+            val allowedAppsJson = gson.toJson(allowedApps)
+            
             sharedPreferences.edit()
                 .putString("allowed_apps", allowedAppsJson)
                 .apply()
             
             Log.d(TAG, "✅ Lista de apps permitidos atualizada: ${allowedApps.size} apps")
+            Log.d(TAG, "✅ JSON salvo: $allowedAppsJson")
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao atualizar lista de apps permitidos", e)
         }

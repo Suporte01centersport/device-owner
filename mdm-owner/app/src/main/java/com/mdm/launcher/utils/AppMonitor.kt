@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -27,8 +28,8 @@ object AppMonitor {
     private val handler = Handler(Looper.getMainLooper())
     private var context: Context? = null
     private val allowedApps = mutableListOf<String>()
-    private const val MONITOR_INTERVAL = 5000L // ✅ CORREÇÃO: Aumentado para 5 segundos (era 2s)
-    private const val FAST_MONITOR_INTERVAL = 2000L // Intervalo rápido quando app não permitido detectado
+    private const val MONITOR_INTERVAL = 1000L // ✅ CORREÇÃO: Reduzido para 1 segundo para detectar apps rápido
+    private const val FAST_MONITOR_INTERVAL = 500L // Intervalo rápido quando app não permitido detectado
     private var currentInterval = MONITOR_INTERVAL
     
     // ✅ CORREÇÃO: Lock para evitar race conditions
@@ -41,7 +42,7 @@ object AppMonitor {
     // ✅ NOVO: Controle para evitar contagem duplicada
     private var lastTrackedApp = ""
     private var lastTrackedTime = 0L
-    private const val TRACKING_COOLDOWN = 5000L // ✅ CORREÇÃO: Reduzido para 5 segundos
+    private const val TRACKING_COOLDOWN = 1000L // ✅ CORREÇÃO: Reduzido para 1 segundo
     
     // ✅ NOVO: Mapeamento de apps relacionados (para evitar contagem dupla)
     private val relatedApps = mapOf(
@@ -52,11 +53,12 @@ object AppMonitor {
     // ✅ NOVO: Controle de mudanças de tela dentro do mesmo app
     private var lastForegroundPackage = ""
     private var lastForegroundTime = 0L
-    private const val SCREEN_CHANGE_COOLDOWN = 2000L // ✅ CORREÇÃO: Reduzido para 2 segundos
+    private const val SCREEN_CHANGE_COOLDOWN = 500L // ✅ CORREÇÃO: Reduzido para 500ms para detectar mudanças mais rápido
     
     // ✅ NOVO: Controle de estado do app para detectar entrada/saída
     private var appStates = mutableMapOf<String, Long>() // package -> timestamp da última entrada
     private const val APP_EXIT_TIMEOUT = 10000L // 10 segundos para considerar que saiu do app
+    
     
     private val monitorRunnable = object : Runnable {
         override fun run() {
@@ -64,7 +66,6 @@ object AppMonitor {
             
             val ctx = context ?: return
             val activityManager = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             
             try {
                 // ✅ CORREÇÃO: Usar API moderna para detectar app em foreground
@@ -104,10 +105,10 @@ object AppMonitor {
                             Log.d(TAG, "🔍 App $foregroundPackage permitido: $isAllowed")
                             
                             if (!isAllowed) {
-                                Log.d(TAG, "🚫 App não permitido detectado: $foregroundPackage")
-                                forceReturnToLauncher(ctx, foregroundPackage, activityManager)
-                                // ✅ CORREÇÃO: Usar intervalo rápido após detectar app não permitido
-                                currentInterval = FAST_MONITOR_INTERVAL
+                                Log.d(TAG, "⚠️ App não permitido detectado: $foregroundPackage (monitoramento desabilitado)")
+                                // ❌ REMOVIDO: forceReturnToLauncher() - permite uso normal dos apps
+                                // ✅ CORREÇÃO: Voltar ao intervalo normal (não forçar launcher)
+                                currentInterval = MONITOR_INTERVAL
                             } else {
                                 Log.d(TAG, "✅ App permitido: $foregroundPackage")
                                 
@@ -124,13 +125,13 @@ object AppMonitor {
                                 Log.d(TAG, "🔍 É nova entrada: $isNewEntry")
                                 
                                 if (isNewEntry) {
-                                    // ✅ NOVO: Registrar acesso no AppUsageTracker
+                                    // ✅ NOVO: Nova entrada no app - armazenar timestamp
                                     try {
                                         val appName = getAppName(ctx, foregroundPackage)
-                                        Log.d(TAG, "📱 === REGISTRANDO NOVA ENTRADA ===")
+                                        
+                                        Log.d(TAG, "📱 === NOVA ENTRADA NO APP ===")
                                         Log.d(TAG, "📱 App: $appName ($foregroundPackage)")
-                                        Log.d(TAG, "📱 Timestamp: $currentTime")
-                                        Log.d(TAG, "📱 Tempo desde última entrada: ${timeSinceLastEntry}ms")
+                                        Log.d(TAG, "📱 Timestamp entrada: $currentTime")
                                         
                                         // Chamar AppUsageTracker diretamente
                                         appUsageTracker?.recordAppAccess(foregroundPackage, appName)
@@ -141,13 +142,14 @@ object AppMonitor {
                                         lastTrackedTime = currentTime
                                         
                                         Log.d(TAG, "✅ Nova entrada registrada com sucesso")
-                                        Log.d(TAG, "📱 === FIM REGISTRO NOVA ENTRADA ===")
                                     } catch (e: Exception) {
                                         Log.e(TAG, "❌ Erro ao registrar nova entrada: ${e.message}")
                                     }
                                 } else {
-                                    Log.d(TAG, "⏳ App $foregroundPackage ainda em uso (${timeSinceLastEntry}ms) - não contando novamente")
-                                    // Atualizar timestamp mesmo sem contar
+                                    // ✅ App ainda em uso - apenas atualizar timestamp
+                                    Log.d(TAG, "⏳ App $foregroundPackage ainda em uso")
+                                    
+                                    // Atualizar timestamp
                                     appStates[foregroundPackage] = currentTime
                                 }
                                 
