@@ -3268,7 +3268,7 @@ class MainActivity : AppCompatActivity() {
                     
                     // Definir como launcher padrão após ativar Device Admin
                     handler.postDelayed({
-                        setAsDefaultLauncher()
+                    setAsDefaultLauncher()
                         
                         // Após definir launcher, verificar próxima permissão
                         handler.postDelayed({
@@ -3431,10 +3431,10 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "⚠️ allowedApps está vazio mas temos apps instalados")
             Log.w(TAG, "Tentando recarregar do servidor via WebSocket...")
         }
-        
-        // Forçar atualização da UI
-        if (installedApps.isNotEmpty()) {
-            updateAppsList()
+                    
+                    // Forçar atualização da UI
+                    if (installedApps.isNotEmpty()) {
+                        updateAppsList()
         }
         
         // Evitar processamento muito frequente (menos de 1 segundo)
