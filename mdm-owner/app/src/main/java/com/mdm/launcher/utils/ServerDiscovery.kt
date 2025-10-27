@@ -77,7 +77,18 @@ object ServerDiscovery {
             val fixedUrl = BuildConfig.SERVER_URL
             Log.d(TAG, "🎯 Usando URL FIXA do BuildConfig (${if (BuildConfig.DEBUG) "DEBUG" else "RELEASE"}): $fixedUrl")
             
-            // Validar se o servidor está respondendo
+            // ✅ CORREÇÃO: No DEBUG, usar sempre a URL fixa, SEM fallbacks
+            if (BuildConfig.DEBUG) {
+                Log.d(TAG, "✅ DEBUG: Usando URL FIXA SEM validação: $fixedUrl")
+                cachedServerUrl = fixedUrl
+                lastDiscoveryTime = now
+                lastHealthCheck = now
+                saveDiscoveredServerUrl(context, fixedUrl)
+                registerConnectionSuccess()
+                return@withContext fixedUrl
+            }
+            
+            // No RELEASE, validar se o servidor está respondendo
             val serverIp = fixedUrl.substringAfter("ws://").substringBefore(":")
             if (isServerResponding(serverIp, 3002)) {
                 Log.d(TAG, "✅ Servidor FIXO respondendo: $fixedUrl")

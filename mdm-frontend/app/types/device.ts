@@ -49,6 +49,9 @@ export interface Device {
   lastKnownLocation?: string
   locationProvider?: string
   locationHistoryCount?: number
+  // Campos de uso do app
+  appUsageData?: AppUsageData
+  lastUsageUpdate?: number
 }
 
 export interface AppInfo {
@@ -109,4 +112,35 @@ export interface DeviceGroupMembership {
   groupId: string
   assignedAt: string
   assignedBy: string
+}
+
+export interface AppUsageData {
+  last_access: string
+  access_count: number
+  total_time_ms: number
+  total_time_formatted: string
+  session_count: number
+  is_tracking: boolean
+  current_session_start: string | null
+  accessed_apps?: AccessedAppData[]
+}
+
+export interface AccessedAppData {
+  packageName: string
+  appName: string
+  accessTime: number
+  accessTimeFormatted: string
+  duration: number
+  isAllowed: boolean // Se o app está na lista de permitidos
+}
+
+export interface AccessedApp {
+  packageName: string;
+  appName: string;
+  accessTime: string;
+  accessDate: string;
+  duration: number;
+  accessCount?: number; // Quantidade de acessos no dia
+  iconBase64?: string;
+  isAllowed: boolean; // Se o app está na lista de permitidos
 }

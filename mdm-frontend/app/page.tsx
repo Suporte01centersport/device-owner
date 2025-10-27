@@ -290,6 +290,36 @@ export default function Home() {
           })
         )
         break
+      case 'app_usage_update':
+      case 'app_usage_updated':
+        console.log('📊 === DADOS DE USO DO APP ATUALIZADOS ===')
+        console.log('📊 Mensagem recebida:', message)
+        console.log('📊 DeviceId:', message.deviceId)
+        console.log('📊 UsageData:', message.usageData)
+        console.log('📊 Accessed Apps:', message.usageData?.accessed_apps)
+        console.log('📊 === FIM PROCESSAMENTO FRONTEND ===')
+        
+        updateDevices(prevDevices => {
+          const existingIndex = prevDevices.findIndex(d => d.deviceId === message.deviceId)
+          if (existingIndex >= 0) {
+            const updated = [...prevDevices]
+            updated[existingIndex] = { 
+              ...updated[existingIndex], 
+              appUsageData: message.usageData,
+              lastUsageUpdate: message.timestamp
+            }
+            console.log('✅ Dispositivo atualizado com dados de uso:', {
+              deviceId: updated[existingIndex].deviceId,
+              name: updated[existingIndex].name,
+              appUsageData: updated[existingIndex].appUsageData,
+              accessedAppsCount: updated[existingIndex].appUsageData?.accessed_apps?.length || 0
+            })
+            return updated
+          }
+          console.log('⚠️ Dispositivo não encontrado para atualização de uso:', message.deviceId)
+          return prevDevices
+        })
+        break
       case 'device_name_changed':
         console.log('📝 === MENSAGEM DEVICE_NAME_CHANGED RECEBIDA ===')
         console.log('   DeviceId:', message.deviceId)

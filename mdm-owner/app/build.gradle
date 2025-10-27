@@ -47,7 +47,7 @@ android {
             signingConfig signingConfigs.debug
             
             // URL do servidor LOCAL (Windows PC) para DEBUG
-            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.74:3002"'
+            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.52:3002"'
             buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
         }
     }

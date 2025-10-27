@@ -26,25 +26,56 @@ object RealmeHelper {
 
     /**
      * Abre as configurações de bateria da Realme para o app
+     * Tenta abrir a tela específica de "Uso da Bateria" do app
      */
     fun openBatterySettings(context: Context) {
         try {
-            val intent = Intent().apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                
-                when {
-                    // Realme/ColorOS
-                    isRealmeDevice() -> {
-                        action = "android.settings.APPLICATION_DETAILS_SETTINGS"
-                        data = android.net.Uri.fromParts("package", context.packageName, null)
+            Log.d(TAG, "Tentando abrir configurações de bateria para Realme")
+            
+            val packageName = context.packageName
+            
+            if (isRealmeDevice()) {
+                // ✅ NOVO: Para Realme/ColorOS, tentar múltiplas abordagens específicas
+                val intents = listOf(
+                    // Opção 1: Configurações do app (depois o usuário navega para "Uso de bateria")
+                    Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = android.net.Uri.fromParts("package", packageName, null)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                    },
+                    // Opção 2: Pedir ignorar otimização (abre tela específica)
+                    Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                        data = android.net.Uri.parse("package:$packageName")
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    },
+                    // Opção 3: Configurações gerais de bateria
+                    Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     }
-                    else -> {
-                        action = android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS
+                )
+                
+                for ((index, intent) in intents.withIndex()) {
+                    try {
+                        context.startActivity(intent)
+                        Log.d(TAG, "✅ Configurações de bateria aberta com sucesso (opção ${index + 1})")
+                        return
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Opção ${index + 1} falhou: ${e.message}")
+                        if (index == intents.lastIndex) {
+                            // Última tentativa, usar fallback
+                            throw e
+                        }
+                        continue
                     }
                 }
+            } else {
+                // Dispositivos não-Realme
+                val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                    data = android.net.Uri.fromParts("package", packageName, null)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(intent)
+                Log.d(TAG, "Abrindo configurações de bateria (dispositivo padrão)")
             }
-            context.startActivity(intent)
-            Log.d(TAG, "Abrindo configurações de bateria para Realme")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao abrir configurações de bateria", e)
             // Fallback: tentar abrir configurações gerais do app
@@ -54,6 +85,7 @@ object RealmeHelper {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
                 context.startActivity(intent)
+                Log.d(TAG, "Abrindo configurações gerais do app (fallback)")
             } catch (e2: Exception) {
                 Log.e(TAG, "Erro no fallback", e2)
             }

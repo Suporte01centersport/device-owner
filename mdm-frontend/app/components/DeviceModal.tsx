@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Device, AppInfo } from '../types/device'
 import LocationView from './LocationView'
+import ReportsTab from './ReportsTab'
 
 // Interfaces Device e AppInfo importadas de '../types/device'
 
@@ -291,7 +292,8 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
     { id: 'network', label: 'Rede', icon: '🌐' },
     { id: 'security', label: 'Segurança', icon: '🔒' },
     { id: 'apps', label: 'Aplicações', icon: '📱' },
-    { id: 'map', label: 'Localização', icon: '🗺️' }
+    { id: 'map', label: 'Localização', icon: '🗺️' },
+    { id: 'reports', label: 'Relatórios', icon: '📈' }
   ]
 
   return (
@@ -839,6 +841,10 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
 
           {activeTab === 'map' && (
             <LocationView device={device} sendMessage={sendMessage} />
+          )}
+
+          {activeTab === 'reports' && (
+            <ReportsTab device={device} isActive={true} />
           )}
         </div>
 

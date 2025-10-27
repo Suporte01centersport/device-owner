@@ -94,5 +94,17 @@
     "receivedAt": 1760465172554,
     "status": "read",
     "updatedAt": 1760465183592
+  },
+  {
+    "id": "support_1761572306512_t6jpm4gf9",
+    "deviceId": "e875df7bca9807e2",
+    "deviceName": "realme RMX3933",
+    "message": "Ghk",
+    "timestamp": 1761572307012,
+    "androidVersion": "15",
+    "model": "RMX3933",
+    "receivedAt": 1761572306512,
+    "status": "resolved",
+    "updatedAt": 1761572312618
   }
 ]

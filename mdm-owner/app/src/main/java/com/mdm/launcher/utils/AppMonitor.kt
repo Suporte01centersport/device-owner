@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -27,13 +28,37 @@ object AppMonitor {
     private val handler = Handler(Looper.getMainLooper())
     private var context: Context? = null
     private val allowedApps = mutableListOf<String>()
-    private const val MONITOR_INTERVAL = 5000L // ✅ CORREÇÃO: Aumentado para 5 segundos (era 2s)
-    private const val FAST_MONITOR_INTERVAL = 2000L // Intervalo rápido quando app não permitido detectado
+    private const val MONITOR_INTERVAL = 1000L // ✅ CORREÇÃO: Reduzido para 1 segundo para detectar apps rápido
+    private const val FAST_MONITOR_INTERVAL = 500L // Intervalo rápido quando app não permitido detectado
     private var currentInterval = MONITOR_INTERVAL
     
     // ✅ CORREÇÃO: Lock para evitar race conditions
     private val monitorLock = Any()
     private val appsLock = Any()
+    
+    // ✅ NOVO: Instância do AppUsageTracker para registrar acessos
+    private var appUsageTracker: AppUsageTracker? = null
+    
+    // ✅ NOVO: Controle para evitar contagem duplicada
+    private var lastTrackedApp = ""
+    private var lastTrackedTime = 0L
+    private const val TRACKING_COOLDOWN = 1000L // ✅ CORREÇÃO: Reduzido para 1 segundo
+    
+    // ✅ NOVO: Mapeamento de apps relacionados (para evitar contagem dupla)
+    private val relatedApps = mapOf(
+        "com.google.android.apps.youtube.music" to "com.google.android.youtube",
+        "com.google.android.youtube" to "com.google.android.apps.youtube.music"
+    )
+    
+    // ✅ NOVO: Controle de mudanças de tela dentro do mesmo app
+    private var lastForegroundPackage = ""
+    private var lastForegroundTime = 0L
+    private const val SCREEN_CHANGE_COOLDOWN = 500L // ✅ CORREÇÃO: Reduzido para 500ms para detectar mudanças mais rápido
+    
+    // ✅ NOVO: Controle de estado do app para detectar entrada/saída
+    private var appStates = mutableMapOf<String, Long>() // package -> timestamp da última entrada
+    private const val APP_EXIT_TIMEOUT = 10000L // 10 segundos para considerar que saiu do app
+    
     
     private val monitorRunnable = object : Runnable {
         override fun run() {
@@ -41,37 +66,105 @@ object AppMonitor {
             
             val ctx = context ?: return
             val activityManager = ctx.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-            val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             
             try {
                 // ✅ CORREÇÃO: Usar API moderna para detectar app em foreground
                 val foregroundPackage = getForegroundAppPackage(ctx)
                 
-                if (foregroundPackage != null) {
-                    Log.d(TAG, "🔍 Verificando app em foreground: $foregroundPackage")
-                    Log.d(TAG, "📊 Modo de bloqueio: ${if (allowedApps.size <= 1) "TOTAL" else "NORMAL"}")
-                    Log.d(TAG, "📊 Apps permitidos: ${allowedApps.size}")
-                    
-                    if (foregroundPackage != ctx.packageName) {
-                        val isAllowed = isAppAllowed(foregroundPackage)
-                        Log.d(TAG, "🔍 App $foregroundPackage permitido: $isAllowed")
+                    if (foregroundPackage != null) {
+                        val currentTime = System.currentTimeMillis()
                         
-                        if (!isAllowed) {
-                            Log.d(TAG, "🚫 App não permitido detectado: $foregroundPackage")
-                            forceReturnToLauncher(ctx, foregroundPackage, activityManager)
-                            // ✅ CORREÇÃO: Usar intervalo rápido após detectar app não permitido
-                            currentInterval = FAST_MONITOR_INTERVAL
-                        } else {
-                            Log.d(TAG, "✅ App permitido: $foregroundPackage")
-                            // ✅ CORREÇÃO: Voltar ao intervalo normal quando tudo OK
-                            currentInterval = MONITOR_INTERVAL
+                        Log.d(TAG, "🔍 === DETECÇÃO DE APP EM FOREGROUND ===")
+                        Log.d(TAG, "🔍 App detectado: $foregroundPackage")
+                        Log.d(TAG, "🔍 Último app contado: $lastTrackedApp")
+                        Log.d(TAG, "🔍 Última contagem: ${currentTime - lastTrackedTime}ms atrás")
+                        Log.d(TAG, "🔍 Último foreground: $lastForegroundPackage")
+                        Log.d(TAG, "🔍 Tempo desde último foreground: ${currentTime - lastForegroundTime}ms")
+                        Log.d(TAG, "🔍 Modo de bloqueio: ${if (allowedApps.size <= 1) "TOTAL" else "NORMAL"}")
+                        Log.d(TAG, "🔍 Apps permitidos: ${allowedApps.size}")
+                        Log.d(TAG, "🔍 Lista de permitidos: $allowedApps")
+                        
+                        // ✅ NOVO: Verificar se é apenas mudança de tela dentro do mesmo app
+                        val isSameAppAsLastForeground = foregroundPackage == lastForegroundPackage
+                        val isRecentForegroundChange = (currentTime - lastForegroundTime) < SCREEN_CHANGE_COOLDOWN
+                        
+                        if (isSameAppAsLastForeground && isRecentForegroundChange) {
+                            Log.d(TAG, "🔄 Mudança de tela dentro do mesmo app ($foregroundPackage) - ignorando")
+                            lastForegroundPackage = foregroundPackage
+                            lastForegroundTime = currentTime
+                            handler.postDelayed(this, currentInterval)
+                            return
                         }
+                        
+                        // Atualizar controle de foreground
+                        lastForegroundPackage = foregroundPackage
+                        lastForegroundTime = currentTime
+                        
+                        if (foregroundPackage != ctx.packageName) {
+                            val isAllowed = isAppAllowed(foregroundPackage)
+                            Log.d(TAG, "🔍 App $foregroundPackage permitido: $isAllowed")
+                            
+                            if (!isAllowed) {
+                                Log.d(TAG, "⚠️ App não permitido detectado: $foregroundPackage (monitoramento desabilitado)")
+                                // ❌ REMOVIDO: forceReturnToLauncher() - permite uso normal dos apps
+                                // ✅ CORREÇÃO: Voltar ao intervalo normal (não forçar launcher)
+                                currentInterval = MONITOR_INTERVAL
+                            } else {
+                                Log.d(TAG, "✅ App permitido: $foregroundPackage")
+                                
+                                // ✅ NOVO: Lógica inteligente para detectar entrada/saída de apps
+                                val lastEntryTime = appStates[foregroundPackage] ?: 0L
+                                val timeSinceLastEntry = currentTime - lastEntryTime
+                                val isNewEntry = timeSinceLastEntry > APP_EXIT_TIMEOUT
+                                
+                                Log.d(TAG, "🔍 === VERIFICAÇÃO INTELIGENTE ===")
+                                Log.d(TAG, "🔍 App: $foregroundPackage")
+                                Log.d(TAG, "🔍 Última entrada: $lastEntryTime")
+                                Log.d(TAG, "🔍 Tempo desde última entrada: ${timeSinceLastEntry}ms")
+                                Log.d(TAG, "🔍 Timeout para saída: ${APP_EXIT_TIMEOUT}ms")
+                                Log.d(TAG, "🔍 É nova entrada: $isNewEntry")
+                                
+                                if (isNewEntry) {
+                                    // ✅ NOVO: Nova entrada no app - armazenar timestamp
+                                    try {
+                                        val appName = getAppName(ctx, foregroundPackage)
+                                        
+                                        Log.d(TAG, "📱 === NOVA ENTRADA NO APP ===")
+                                        Log.d(TAG, "📱 App: $appName ($foregroundPackage)")
+                                        Log.d(TAG, "📱 Timestamp entrada: $currentTime")
+                                        
+                                        // Chamar AppUsageTracker diretamente
+                                        appUsageTracker?.recordAppAccess(foregroundPackage, appName)
+                                        
+                                        // Atualizar estado do app
+                                        appStates[foregroundPackage] = currentTime
+                                        lastTrackedApp = foregroundPackage
+                                        lastTrackedTime = currentTime
+                                        
+                                        Log.d(TAG, "✅ Nova entrada registrada com sucesso")
+                                    } catch (e: Exception) {
+                                        Log.e(TAG, "❌ Erro ao registrar nova entrada: ${e.message}")
+                                    }
+                                } else {
+                                    // ✅ App ainda em uso - apenas atualizar timestamp
+                                    Log.d(TAG, "⏳ App $foregroundPackage ainda em uso")
+                                    
+                                    // Atualizar timestamp
+                                    appStates[foregroundPackage] = currentTime
+                                }
+                                
+                                // ✅ CORREÇÃO: Voltar ao intervalo normal quando tudo OK
+                                currentInterval = MONITOR_INTERVAL
+                            }
+                        } else {
+                            Log.d(TAG, "🔍 MDM Launcher em foreground - ignorando")
+                        }
+                        Log.d(TAG, "🔍 === FIM DETECÇÃO APP ===")
+                    } else {
+                        Log.d(TAG, "🔍 Não foi possível detectar app em foreground")
+                        // ✅ CORREÇÃO: Manter intervalo normal quando não consegue detectar
+                        currentInterval = MONITOR_INTERVAL
                     }
-                } else {
-                    Log.d(TAG, "🔍 Não foi possível detectar app em foreground")
-                    // ✅ CORREÇÃO: Manter intervalo normal quando não consegue detectar
-                    currentInterval = MONITOR_INTERVAL
-                }
             } catch (e: SecurityException) {
                 Log.e(TAG, "❌ SecurityException no monitoramento de apps: ${e.message}")
                 Log.e(TAG, "ℹ️ App pode não ter permissões para monitorar apps em foreground")
@@ -89,9 +182,9 @@ object AppMonitor {
 
     private fun forceReturnToLauncher(ctx: Context, blockedPackageName: String, activityManager: ActivityManager) {
         try {
-            // Forçar retorno ao launcher MDM
+            // Forçar retorno ao launcher MDM (sem limpar a pilha de tarefas)
             val intent = Intent(ctx, MainActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             }
             ctx.startActivity(intent)
             Log.d(TAG, "🔄 FORÇANDO RETORNO AO LAUNCHER MDM")
@@ -167,6 +260,10 @@ object AppMonitor {
                 return
             }
             context = appContext.applicationContext
+            
+            // ✅ NOVO: Inicializar AppUsageTracker
+            appUsageTracker = AppUsageTracker(appContext)
+            
             Log.d(TAG, "🚀 INICIANDO APPMONITOR - Context: ${appContext.packageName}")
             loadAllowedApps(appContext) // Carregar apps permitidos ao iniciar
             isMonitoring = true
@@ -178,6 +275,9 @@ object AppMonitor {
                 allowedApps.forEach { Log.d(TAG, "  ✅ $it") }
             }
             Log.d(TAG, "✅ Monitoramento iniciado com sucesso")
+            
+            // ✅ NOVO: Iniciar limpeza periódica de estados antigos
+            startStateCleanup()
         }
     }
     
@@ -189,6 +289,10 @@ object AppMonitor {
             try {
                 // Remover callbacks pendentes
                 handler.removeCallbacks(monitorRunnable)
+                
+                // ✅ NOVO: Parar AppUsageTracker
+                appUsageTracker?.stopTracking()
+                appUsageTracker = null
                 
                 // Limpar lista de apps permitidos
                 synchronized(appsLock) {
@@ -205,6 +309,7 @@ object AppMonitor {
                 // Forçar limpeza mesmo com erro
                 isMonitoring = false
                 context = null
+                appUsageTracker = null
             }
         }
     }
@@ -272,20 +377,16 @@ object AppMonitor {
     }
 
     private fun isSystemCriticalApp(packageName: String): Boolean {
-        val systemProcesses = listOf(
+        // ✅ CORREÇÃO: Lista mais restritiva de apps críticos do sistema
+        val criticalSystemProcesses = listOf(
             "android", // O próprio sistema Android
             "com.android.systemui", // Barra de status, navegação
-            "com.android.launcher", // Launcher padrão (se não for o MDM)
             "com.android.settings", // Configurações
-            "com.google.android.gms", // Google Play Services
-            "com.google.android.gsf", // Google Services Framework
-            "com.android.vending", // Google Play Store
-            "com.android.packageinstaller", // Instalador de pacotes
             "com.android.permissioncontroller" // Controlador de permissões
         )
-        return systemProcesses.contains(packageName) ||
-               packageName.startsWith("com.android.") ||
-               packageName.startsWith("android.")
+        
+        // ✅ CORREÇÃO: Apenas apps realmente críticos, não todos os com.android.*
+        return criticalSystemProcesses.contains(packageName)
     }
 
     /**
@@ -362,8 +463,42 @@ object AppMonitor {
     }
 
     /**
-     * Carregar lista de apps permitidos
+     * Obtém o nome amigável do app pelo package name
      */
+    private fun getAppName(context: Context, packageName: String): String {
+        return try {
+            val packageManager = context.packageManager
+            val applicationInfo = packageManager.getApplicationInfo(packageName, 0)
+            packageManager.getApplicationLabel(applicationInfo).toString()
+        } catch (e: Exception) {
+            Log.w(TAG, "⚠️ Não foi possível obter nome do app: $packageName")
+            packageName
+        }
+    }
+    
+    /**
+     * Obtém instância da MainActivity para acessar AppUsageTracker
+     */
+    private fun getMainActivityInstance(context: Context): MainActivity? {
+        return try {
+            // Tentar obter a instância ativa da MainActivity
+            val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+            val runningTasks = activityManager.getRunningTasks(1)
+            
+            if (runningTasks.isNotEmpty()) {
+                val topActivity = runningTasks[0].topActivity
+                if (topActivity?.className == MainActivity::class.java.name) {
+                    // Se a MainActivity está no topo, tentar obter referência
+                    // Nota: Esta é uma abordagem limitada, mas funciona para casos simples
+                    return null // Por enquanto, retornar null e usar método alternativo
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao obter instância da MainActivity: ${e.message}")
+            null
+        }
+    }
     private fun loadAllowedApps(context: Context) {
         Log.d(TAG, "🔍 ===== CARREGANDO APPS PERMITIDOS =====")
         Log.d(TAG, "🔍 Context packageName: ${context.packageName}")
@@ -423,5 +558,37 @@ object AppMonitor {
             Log.d(TAG, "🚫 Lista de emergência: MDM Launcher + Settings")
             Log.d(TAG, "📋 Lista de emergência: $allowedApps")
         }
+    }
+    
+    // ✅ NOVO: Função para limpeza periódica de estados antigos
+    private fun startStateCleanup() {
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                if (!isMonitoring) return
+                
+                val currentTime = System.currentTimeMillis()
+                val appsToRemove = mutableListOf<String>()
+                
+                // Encontrar apps que não foram usados há mais de 1 hora
+                for ((packageName, lastTime) in appStates) {
+                    if (currentTime - lastTime > 3600000L) { // 1 hora
+                        appsToRemove.add(packageName)
+                    }
+                }
+                
+                // Remover apps antigos
+                for (packageName in appsToRemove) {
+                    appStates.remove(packageName)
+                    Log.d(TAG, "🧹 Removido estado antigo do app: $packageName")
+                }
+                
+                if (appsToRemove.isNotEmpty()) {
+                    Log.d(TAG, "🧹 Limpeza de estados: ${appsToRemove.size} apps removidos")
+                }
+                
+                // Agendar próxima limpeza em 5 minutos
+                handler.postDelayed(this, 300000L) // 5 minutos
+            }
+        }, 300000L) // Primeira limpeza em 5 minutos
     }
 }
