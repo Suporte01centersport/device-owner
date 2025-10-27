@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
-const pool = require('../config');
+const poolModule = require('../config');
+const { query } = poolModule;
 
 class AppAccessHistory {
     /**
@@ -22,7 +23,7 @@ class AppAccessHistory {
                 WHERE device_id = $1 AND package_name = $2 AND access_date = $3
             `;
             
-            const existingResult = await pool.query(existingQuery, [deviceId, packageName, accessDate]);
+            const existingResult = await query(existingQuery, [deviceId, packageName, accessDate]);
             
             if (existingResult.rows.length > 0) {
                 // Atualizar registro existente
@@ -42,7 +43,7 @@ class AppAccessHistory {
                 const newCount = existing.access_count + 1;
                 const newTotalDuration = existing.total_duration_ms + duration;
                 
-                const updateResult = await pool.query(updateQuery, [
+                const updateResult = await query(updateQuery, [
                     newCount,
                     accessTime,
                     newTotalDuration,
@@ -62,7 +63,7 @@ class AppAccessHistory {
                     RETURNING *
                 `;
                 
-                const insertResult = await pool.query(insertQuery, [
+                const insertResult = await query(insertQuery, [
                     deviceId,
                     packageName,
                     appName,
