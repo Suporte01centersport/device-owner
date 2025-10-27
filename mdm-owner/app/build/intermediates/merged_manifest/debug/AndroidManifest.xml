@@ -110,16 +110,11 @@
         <!-- Activity principal do launcher (versão menos invasiva) -->
         <activity
             android:name="com.mdm.launcher.MainActivity"
-            android:alwaysRetainTaskState="true"
-            android:clearTaskOnLaunch="false"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
             android:excludeFromRecents="false"
             android:exported="true"
-            android:finishOnTaskLaunch="false"
             android:launchMode="singleTask"
-            android:noHistory="false"
             android:screenOrientation="portrait"
-            android:stateNotNeeded="false"
             android:theme="@style/Theme.MDMLauncher.Launcher"
             android:windowSoftInputMode="adjustResize" >
             <intent-filter android:priority="100" >

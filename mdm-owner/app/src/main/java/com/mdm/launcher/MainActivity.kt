@@ -59,6 +59,7 @@ import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.service.WebSocketService
 import com.mdm.launcher.service.LocationService
 import com.mdm.launcher.ui.AppAdapter
+import com.mdm.launcher.utils.AppUsageTracker
 import com.mdm.launcher.utils.DeviceInfoCollector
 import com.mdm.launcher.utils.LocationHistoryManager
 import com.mdm.launcher.utils.GeofenceManager
@@ -165,6 +166,7 @@ class MainActivity : AppCompatActivity() {
     private var lastNotificationMessage: String = ""
     private var lastNotificationTimestamp: Long = 0L
     private var hasShownPendingMessage = false
+    private var appUsageTracker: AppUsageTracker? = null
     
     // BroadcastReceiver para mensagens do Service
     private val serviceMessageReceiver = object : android.content.BroadcastReceiver() {
@@ -326,7 +328,7 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
         
-        // Garantir que esta é a única instância da MainActivity
+        // Garantir que esta é a única instância da MainActivity (previne boot loop)
         if (!isTaskRoot) {
             Log.d(TAG, "Activity não é root - finalizando instâncias extras")
             finish()
@@ -336,29 +338,14 @@ class MainActivity : AppCompatActivity() {
         // Inicializar PermissionManager
         permissionManager = PermissionManager(this)
         
+        // Inicializar AppUsageTracker
+        appUsageTracker = AppUsageTracker(this)
+        // Limpar dados antigos para começar contagem do zero
+        appUsageTracker?.clearAllData()
+        appUsageTracker?.startTracking()
+        
         // Configurar otimizações de bateria para garantir conexão persistente
         configureBatteryOptimizations()
-        
-        // Garantir que a barra de navegação seja visível usando API moderna
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            window.insetsController?.let { controller ->
-                controller.show(android.view.WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = 0
-        }
-        
-        // Forçar exibição da barra de navegação após um delay
-        window.decorView.post {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                window.insetsController?.show(android.view.WindowInsets.Type.navigationBars())
-            } else {
-                @Suppress("DEPRECATION")
-                window.decorView.systemUiVisibility = 0
-            }
-        }
         
         // Inicializar SharedPreferences para persistência
         sharedPreferences = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
@@ -2039,6 +2026,9 @@ class MainActivity : AppCompatActivity() {
                     Log.d(TAG, "Apps instalados ATUAIS: ${installedApps.size}")
                     Log.d(TAG, "───────────────────────────────────────────")
                     
+                    // Atualizar lista de apps permitidos no AppUsageTracker
+                    appUsageTracker?.updateAllowedApps(allowedApps)
+                    
                     saveData() // Salvar dados recebidos da web
                     Log.d(TAG, "✅ Dados salvos em SharedPreferences")
                     
@@ -2908,19 +2898,27 @@ class MainActivity : AppCompatActivity() {
     
     private fun launchApp(app: AppInfo) {
         try {
+            Log.d(TAG, "🚀 === LAUNCH APP CHAMADO ===")
+            Log.d(TAG, "🚀 App: ${app.appName} (${app.packageName})")
+            Log.d(TAG, "🚀 Timestamp: ${System.currentTimeMillis()}")
+            
+            // ❌ REMOVIDO: Não registrar acesso aqui - deixar AppMonitor fazer isso
+            // appUsageTracker?.recordAppAccess(app.packageName, app.appName)
+
             val intent = packageManager.getLaunchIntentForPackage(app.packageName)
             if (intent != null) {
                 // Adicionar flags para evitar que o launcher seja destruído
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                 intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                
+
                 // Manter o launcher vivo em background
                 intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
-                
+
                 startActivity(intent)
                 Log.d(TAG, "App ${app.appName} lançado com sucesso")
                 Log.d(TAG, "Launcher mantido ativo em background")
+                Log.d(TAG, "📱 AppMonitor irá detectar e contar o acesso automaticamente")
             } else {
                 Log.w(TAG, "Não foi possível abrir o app: ${app.packageName}")
             }
@@ -3398,17 +3396,6 @@ class MainActivity : AppCompatActivity() {
             markUserInteraction()
         }
         
-        // Garantir que a barra de navegação permaneça visível
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            window.insetsController?.let { controller ->
-                controller.show(android.view.WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = 0
-        }
-        
         // Verificar saúde da conexão WebSocket após inatividade
         checkWebSocketHealth()
         
@@ -3421,6 +3408,9 @@ class MainActivity : AppCompatActivity() {
         lastPauseTime = System.currentTimeMillis()
         pauseResumeCount++
         Log.d(TAG, "onPause() chamado - Activity pausada (ciclo #$pauseResumeCount)")
+        
+        // Pausar rastreamento de uso
+        appUsageTracker?.pauseTracking()
         
         // Tela pode estar sendo bloqueada - verificar estado
         checkScreenState()
@@ -3684,6 +3674,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         Log.d(TAG, "onDestroy() chamado - Activity destruída")
         
+        // Parar rastreamento de uso
+        appUsageTracker?.stopTracking()
+        
         // Verificar se a destruição é necessária
         if (!isFinishing && !isChangingConfigurations) {
             Log.e(TAG, "ERRO: Activity sendo destruída desnecessariamente! Isso pode causar travamento ao voltar para o launcher")
@@ -3814,12 +3807,10 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "Iniciando app: $packageName")
                         startActivity(intent)
                         
-                        // ATIVAR LOCK TASK MODE - igual Scalefusion
-                        Log.d(TAG, "Ativando Lock Task Mode...")
-                        startLockTask()
-                        Log.d(TAG, "Lock Task Mode ativado - app travado!")
-                        
-                        Log.d(TAG, "App $packageName travado na tela!")
+                        // REMOVIDO: Lock Task Mode desabilitado para permitir uso normal
+                        // O Lock Task Mode bloqueia o botão recente e navegação
+                        // startLockTask()
+                        Log.d(TAG, "App $packageName aberto (sem Lock Task Mode)")
                         return
                     }
                 } else {
@@ -3832,18 +3823,12 @@ class MainActivity : AppCompatActivity() {
                         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
                         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
                         
-                        Log.d(TAG, "Tentando Lock Task Mode sem Device Owner")
+                        Log.d(TAG, "Abrindo app sem Device Owner")
                         startActivity(intent)
                         
-                        try {
-                            startLockTask()
-                            Log.d(TAG, "Lock Task Mode ativado (sem Device Owner)")
-                            
-                            Log.d(TAG, "App $packageName travado na tela!")
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Erro ao ativar Lock Task Mode", e)
-                            Log.w(TAG, "Erro: Precisa ser Device Owner para travar app")
-                        }
+                        // REMOVIDO: Lock Task Mode desabilitado
+                        // startLockTask()
+                        Log.d(TAG, "App $packageName aberto normalmente")
                     }
                 }
             } else {

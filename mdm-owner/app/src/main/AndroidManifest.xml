@@ -85,12 +85,7 @@
             android:theme="@style/Theme.MDMLauncher.Launcher"
             android:windowSoftInputMode="adjustResize"
             android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
-            android:alwaysRetainTaskState="true"
-            android:clearTaskOnLaunch="false"
-            android:finishOnTaskLaunch="false"
-            android:excludeFromRecents="false"
-            android:stateNotNeeded="false"
-            android:noHistory="false">
+            android:excludeFromRecents="false">
             <intent-filter android:priority="100">
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

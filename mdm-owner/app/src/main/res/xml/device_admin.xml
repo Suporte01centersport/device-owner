@@ -18,6 +18,6 @@
         
         <!-- Políticas de restrição de hardware -->
         <disable-camera />
-        <disable-keyguard-features />
+        <!-- REMOVIDO: disable-keyguard-features - causava problemas com navegação e botão recentes -->
     </uses-policies>
 </device-admin>

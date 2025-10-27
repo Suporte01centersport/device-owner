@@ -44,9 +44,19 @@ class WebSocketService : Service() {
                     Log.d(TAG, "🔄 Broadcast de reconexão forçada recebido")
                     forceReconnect()
                 }
-                "com.mdm.launcher.HEALTH_CHECK" -> {
-                    Log.d(TAG, "🏥 Broadcast de health check recebido")
-                    performHealthCheck()
+                "com.mdm.launcher.SEND_USAGE_DATA" -> {
+                    Log.d(TAG, "📊 === BROADCAST SEND_USAGE_DATA RECEBIDO ===")
+                    Log.d(TAG, "📊 Intent action: ${intent.action}")
+                    Log.d(TAG, "📊 Intent extras: ${intent.extras}")
+                    val usageData = intent.getStringExtra("usage_data")
+                    Log.d(TAG, "📊 Usage data recebido: $usageData")
+                    if (usageData != null) {
+                        Log.d(TAG, "📊 Chamando sendUsageDataToServer...")
+                        sendUsageDataToServer(usageData)
+                    } else {
+                        Log.w(TAG, "⚠️ Usage data é null!")
+                    }
+                    Log.d(TAG, "📊 === FIM BROADCAST SEND_USAGE_DATA ===")
                 }
             }
         }
@@ -74,6 +84,7 @@ class WebSocketService : Service() {
             addAction("com.mdm.launcher.NETWORK_CHANGE")
             addAction("com.mdm.launcher.FORCE_RECONNECT")
             addAction("com.mdm.launcher.HEALTH_CHECK")
+            addAction("com.mdm.launcher.SEND_USAGE_DATA")
         }
         // Android 13+ requer especificar se o receiver é exportado ou não
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -97,6 +108,19 @@ class WebSocketService : Service() {
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "WebSocketService.onStartCommand() chamado")
+        
+        // Verificar se é um comando de envio de dados de uso
+        if (intent?.action == "com.mdm.launcher.SEND_USAGE_DATA") {
+            Log.d(TAG, "📊 === RECEBENDO DADOS VIA START_COMMAND ===")
+            val usageData = intent.getStringExtra("usage_data")
+            Log.d(TAG, "📊 Usage data recebido via startCommand: $usageData")
+            if (usageData != null) {
+                sendUsageDataToServer(usageData)
+            }
+            Log.d(TAG, "📊 === FIM START_COMMAND ===")
+            return START_STICKY
+        }
+        
         startForeground(NOTIFICATION_ID, createNotification())
         isServiceRunning = true
         
@@ -1459,6 +1483,29 @@ class WebSocketService : Service() {
         if (!isConnected) {
             Log.w(TAG, "⚠️ WebSocket desconectado durante health check - reconectando...")
             forceReconnect()
+        }
+    }
+    
+    private fun sendUsageDataToServer(usageData: String) {
+        try {
+            Log.d(TAG, "📊 === ENVIANDO DADOS DE USO VIA WEBSOCKET ===")
+            Log.d(TAG, "📊 Dados recebidos: $usageData")
+            Log.d(TAG, "📊 WebSocket conectado: ${webSocketClient?.isConnected()}")
+            
+            if (webSocketClient?.isConnected() == true) {
+                webSocketClient?.sendMessage(usageData)
+                Log.d(TAG, "✅ Dados de uso enviados com sucesso via WebSocket")
+            } else {
+                Log.w(TAG, "⚠️ WebSocket não conectado - dados de uso não enviados")
+                Log.w(TAG, "⚠️ Tentando reconectar...")
+                // Tentar reconectar se não estiver conectado
+                serviceScope.launch {
+                    initializeWebSocket()
+                }
+            }
+            Log.d(TAG, "📊 === FIM ENVIO DADOS WEBSOCKET ===")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao enviar dados de uso", e)
         }
     }
 }

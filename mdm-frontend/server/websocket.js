@@ -13,6 +13,7 @@ const DiscoveryServer = require('./discovery-server');
 // PostgreSQL imports
 const DeviceModel = require('./database/models/Device');
 const DeviceGroupModel = require('./database/models/DeviceGroup');
+const AppAccessHistory = require('./database/models/AppAccessHistory');
 const { query, transaction } = require('./database/config');
 
 // Classes de otimização integradas
@@ -746,6 +747,9 @@ async function handleMessage(ws, data) {
         case 'location_update':
             handleLocationUpdate(ws, data);
             break;
+        case 'app_usage':
+            handleAppUsage(ws, data);
+            break;
         case 'request_location':
             handleRequestLocation(ws, data);
             break;
@@ -1478,6 +1482,93 @@ function handleLocationUpdate(ws, data) {
         },
         timestamp: Date.now()
     });
+}
+
+async function handleAppUsage(ws, data) {
+    console.log('📊 === PROCESSANDO DADOS DE USO ===');
+    console.log('📊 DeviceId:', data.deviceId);
+    console.log('📊 Dados recebidos:', JSON.stringify(data.data, null, 2));
+    console.log('📊 Apps acessados:', data.data?.accessed_apps);
+
+    const deviceId = data.deviceId;
+
+    // Verificar se o dispositivo existe
+    if (!persistentDevices.has(deviceId)) {
+        log.warn(`Dispositivo não encontrado para dados de uso`, {
+            deviceId: deviceId,
+            connectionId: ws.connectionId
+        });
+        console.log('❌ Dispositivo não encontrado:', deviceId);
+        return;
+    }
+
+    // Atualizar dados de uso no dispositivo persistente
+    const device = persistentDevices.get(deviceId);
+    device.appUsageData = data.data;
+    device.lastUsageUpdate = data.timestamp;
+
+    persistentDevices.set(deviceId, device);
+
+    console.log('✅ Dados de uso atualizados no dispositivo persistente');
+    console.log('📊 Apps acessados salvos:', device.appUsageData?.accessed_apps?.length || 0);
+
+    try {
+        // Salvar apenas o ÚLTIMO app acessado (não toda a lista)
+        if (data.data?.accessed_apps && Array.isArray(data.data.accessed_apps) && data.data.accessed_apps.length > 0) {
+            console.log('📊 Salvando apenas o último app acessado...');
+            
+            // Pegar apenas o último app da lista (mais recente)
+            const lastApp = data.data.accessed_apps[data.data.accessed_apps.length - 1];
+            
+            try {
+                // Verificar se o app está na lista de permitidos do dispositivo
+                const isAllowed = device.allowedApps && device.allowedApps.includes(lastApp.packageName);
+                
+                const accessTime = new Date(lastApp.accessTime);
+                await AppAccessHistory.saveAppAccess(
+                    deviceId,
+                    lastApp.packageName,
+                    lastApp.appName,
+                    accessTime,
+                    lastApp.duration || 0,
+                    isAllowed
+                );
+                console.log(`✅ Último app salvo: ${lastApp.appName} (${lastApp.packageName}) - Permitido: ${isAllowed}`);
+            } catch (error) {
+                console.error(`❌ Erro ao salvar último app ${lastApp.appName}:`, error);
+            }
+        }
+
+        // Atualizar status do dispositivo
+        await DeviceModel.updateStatus(deviceId, 'online', null);
+        
+        log.info(`Dados de uso atualizados no banco de dados`, {
+            deviceId: deviceId,
+            usageData: data.data
+        });
+        console.log('✅ Dados salvos no PostgreSQL');
+        
+    } catch (error) {
+        log.error(`Erro ao atualizar dados de uso no banco`, {
+            deviceId: deviceId,
+            error: error.message
+        });
+        console.log('❌ Erro ao salvar no PostgreSQL:', error.message);
+    }
+
+    // Notificar clientes web sobre a atualização de uso
+    const notificationMessage = {
+        type: 'app_usage_updated',
+        deviceId: deviceId,
+        usageData: data.data,
+        timestamp: data.timestamp
+    };
+
+    console.log('📤 Notificando clientes web:', JSON.stringify(notificationMessage, null, 2));
+
+    notifyWebClients(notificationMessage);
+
+    console.log('📊 === FIM PROCESSAMENTO DADOS DE USO ===');
 }
 
 function handleRequestLocation(ws, data) {
