@@ -2,13 +2,20 @@
 
 Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher customizado e painel web de controle remoto em tempo real via WebSocket.
 
-> **✅ ATUALIZADO (21/10/2024):** Android 13+ compatível | Reconexão automática aprimorada | Descoberta otimizada (30s) | Sistema anti-travamento | Histórico de mensagens
+> **✅ ATUALIZADO (28/10/2025):** Android 13+ compatível | Reconexão automática aprimorada | Descoberta otimizada (30s) | Sistema anti-travamento | Histórico de mensagens | Documentação unificada
 
 > **🌍 AMBIENTES:** Este sistema funciona tanto em **servidor Linux de produção** quanto em **localhost para testes**. Os caminhos nos exemplos podem variar conforme sua instalação.
 
+## 📚 Documentação
+
+- **[DEPLOY-GUIDE.md](DEPLOY-GUIDE.md)** - Guia completo de deploy para produção e desenvolvimento
+- **[CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md)** - Configuração detalhada do servidor Linux
+- **[ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização remota de APK
+- **[QRCODE-README.md](mdm-owner/QRCODE-README.md)** - Gerador de QR Code para instalação
+
 ## 🚀 Início Rápido
 
-> **📌 Consulte:** `SETUP-AMBIENTES.md` para guia completo de configuração de produção e desenvolvimento.
+> **📌 Consulte:** [DEPLOY-GUIDE.md](DEPLOY-GUIDE.md) para guia completo de configuração de produção e desenvolvimento.
 
 ### 1. **Servidor Backend (Node.js + PostgreSQL)**
 ```bash
@@ -250,7 +257,7 @@ adb shell am start -a android.intent.action.MAIN -c android.intent.category.HOME
 
 ### **Descoberta do servidor muito lenta**
 
-✅ **OTIMIZADO** - Cache de 60 segundos para evitar descobertas repetidas
+✅ **OTIMIZADO** - Cache de 30 segundos para evitar descobertas repetidas e reconexão rápida
 
 Ver quantas descobertas estão acontecendo:
 ```bash
@@ -365,7 +372,7 @@ adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver
 8. **Mensagens**: Histórico limitado às 5 mensagens mais recentes
 9. **Reconexão**: Detecta e corrige travamentos automaticamente (timeout 15s)
 
-## 🎯 Melhorias Recentes (21/10/2024)
+## 🎯 Melhorias Recentes (28/10/2025)
 
 ### **Última Atualização - Reconexão Automática Aprimorada**
 ✅ **Reconexão inteligente** - Invalidação automática de cache após 3 falhas consecutivas  
@@ -416,14 +423,7 @@ adb logcat -s MDM:* WebSocketClient:* WebSocketService:* ServerDiscovery:* -v ti
 
 Dispositivos **Realme** (ColorOS) requerem configuração especial devido a otimizações agressivas:
 
-### **Método Automatizado**
-
-```bash
-cd mdm-owner
-.\install-realme.bat
-```
-
-### **Método Manual**
+### **Instalação em Realme**
 
 ```bash
 # 1. Após factory reset, ativar USB Debugging (sem conta Google!)
@@ -467,5 +467,16 @@ Após instalação, configure **manualmente** no dispositivo:
 4. **NUNCA adicione conta Google antes de instalar o MDM**
 
 ---
+
+## 📞 Suporte e Contribuição
+
+**Problemas?** Consulte a documentação completa:
+- [DEPLOY-GUIDE.md](DEPLOY-GUIDE.md) para configuração
+- [CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md) para servidor
+- [ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md) para atualizações
+
+---
+
+**Última atualização:** 28/10/2025
 
 **Desenvolvido com foco em:** ScaleFusion, Workspace ONE, ManageEngine MDM

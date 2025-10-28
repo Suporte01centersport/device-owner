@@ -1,9 +1,23 @@
-# 🚀 Guia de Deploy - Ambientes Produção e Desenvolvimento
+# 🚀 Guia de Deploy - MDM Owner
+
+Sistema completo de configuração para ambientes de **Produção** (Ubuntu/Linux) e **Desenvolvimento** (Windows).
 
 > **📌 IMPORTANTE:** 
 > - Caminhos como `/opt/mdm-owner` são **exemplos**. Use o caminho onde você clonou o projeto.
 > - Nome do banco de dados (`mdm_owner`) é padrão. Verifique seu `.env` se for diferente.
 > - Este guia serve tanto para **servidor Linux de produção** quanto **localhost para testes**.
+> 
+> **📦 Estrutura de Arquivos:**
+> ```
+> device-owner/
+> ├── deploy-production.sh          # Script deploy Ubuntu (produção)
+> ├── start-dev-windows.bat         # Script desenvolvimento Windows
+> ├── DEPLOY-GUIDE.md               # Este guia
+> └── mdm-frontend/
+>     ├── env.production.example    # Template produção
+>     ├── env.development.example   # Template desenvolvimento
+>     └── package.json              # Scripts npm
+> ```
 
 ## 📋 Sumário
 
@@ -381,6 +395,34 @@ Use o QR Code gerado para configurar os dispositivos Android automaticamente.
 
 ---
 
+## 🔄 Fluxo de Trabalho Recomendado
+
+### Desenvolvimento (Windows)
+
+1. Fazer alterações no código
+2. Testar localmente com `npm run dev:all`
+3. Commit e push para o repositório
+
+```powershell
+git add .
+git commit -m "Descrição das alterações"
+git push origin main
+```
+
+### Atualizar Produção (Ubuntu)
+
+```bash
+# No servidor Ubuntu
+cd /opt/mdm-owner
+git pull origin main
+cd mdm-frontend
+npm install
+npm run build
+pm2 restart all
+```
+
+---
+
 ## 🎯 Resumo Rápido
 
 ### **Servidor Ubuntu (Produção)**
@@ -429,6 +471,17 @@ pm2 restart mdm-websocket
 
 ---
 
-**Última atualização:** 21/10/2024
-**Versão:** 1.0.1
+## 📚 Documentação Relacionada
+
+- **[README.md](README.md)** - Documentação principal do projeto
+- **[CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md)** - Configuração detalhada do servidor Linux
+- **[ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização remota de APK
+- **[QRCODE-README.md](mdm-owner/QRCODE-README.md)** - Gerador de QR Code
+
+---
+
+**Última atualização:** 28/10/2025
+**Versão:** 1.1.0
+
+> **🎯 Desenvolvimento baseado em:** ScaleFusion - Plataforma líder de UEM (Unified Endpoint Management)
 

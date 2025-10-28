@@ -1522,34 +1522,44 @@ async function handleAppUsage(ws, data) {
     console.log('📊 Apps acessados salvos:', device.appUsageData?.accessed_apps?.length || 0);
 
     try {
-        // Salvar apenas o ÚLTIMO app acessado (não toda a lista)
+        // ✅ CORREÇÃO: Salvar TODOS os apps acessados (não apenas o último)
         if (data.data?.accessed_apps && Array.isArray(data.data.accessed_apps) && data.data.accessed_apps.length > 0) {
-            console.log('📊 Salvando apenas o último app acessado...');
+            console.log('📊 Salvando TODOS os apps acessados...');
             console.log('📊 Total de apps na lista:', data.data.accessed_apps.length);
             console.log('📊 Conteúdo da lista:', JSON.stringify(data.data.accessed_apps, null, 2));
             
-            // Pegar apenas o último app da lista (mais recente)
-            const lastApp = data.data.accessed_apps[data.data.accessed_apps.length - 1];
-            console.log('📊 Último app da lista:', JSON.stringify(lastApp, null, 2));
+            // Iterar sobre TODOS os apps e salvar cada um
+            let savedCount = 0;
+            let skippedCount = 0;
             
-            try {
-                // Verificar se o app está na lista de permitidos do dispositivo
-                const isAllowed = device.allowedApps && device.allowedApps.includes(lastApp.packageName);
-                
-                const accessTime = new Date(lastApp.accessTime);
-                console.log(`📊 Salvando app: ${lastApp.appName}, package: ${lastApp.packageName}, accessTime: ${accessTime}, duration: ${lastApp.duration || 0}`);
-                await AppAccessHistory.saveAppAccess(
-                    deviceId,
-                    lastApp.packageName,
-                    lastApp.appName,
-                    accessTime,
-                    lastApp.duration || 0,
-                    isAllowed
-                );
-                console.log(`✅ Último app salvo: ${lastApp.appName} (${lastApp.packageName}) - Permitido: ${isAllowed}`);
-            } catch (error) {
-                console.error(`❌ Erro ao salvar último app ${lastApp.appName}:`, error);
+            for (const app of data.data.accessed_apps) {
+                try {
+                    // Verificar se o app está na lista de permitidos do dispositivo
+                    const isAllowed = device.allowedApps && device.allowedApps.includes(app.packageName);
+                    
+                    const accessTime = new Date(app.accessTime);
+                    console.log(`📊 [${savedCount + 1}/${data.data.accessed_apps.length}] Salvando app: ${app.appName}, package: ${app.packageName}, accessTime: ${accessTime.toISOString()}`);
+                    
+                    await AppAccessHistory.saveAppAccess(
+                        deviceId,
+                        app.packageName,
+                        app.appName,
+                        accessTime,
+                        app.duration || 0,
+                        isAllowed
+                    );
+                    
+                    savedCount++;
+                    console.log(`✅ App salvo com sucesso: ${app.appName} (${app.packageName}) - Permitido: ${isAllowed}`);
+                } catch (error) {
+                    skippedCount++;
+                    console.error(`❌ Erro ao salvar app ${app.appName}:`, error.message);
+                }
             }
+            
+            console.log(`📊 Resumo: ${savedCount} apps salvos, ${skippedCount} erros`);
+        } else {
+            console.log('📊 Nenhum app acessado para salvar');
         }
 
         // Atualizar status do dispositivo

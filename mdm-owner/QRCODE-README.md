@@ -216,7 +216,15 @@ Problemas comuns:
 
 ---
 
-**Última atualização:** 21/10/2024
+## 📚 Documentação Relacionada
+
+- **[../README.md](../README.md)** - Documentação principal do projeto
+- **[../DEPLOY-GUIDE.md](../DEPLOY-GUIDE.md)** - Guia completo de deploy
+- **[../ATUALIZACAO-AUTOMATICA.md](../ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização de APK
+
+---
+
+**Última atualização:** 28/10/2025
 
 **Criado com ❤️ para facilitar o compartilhamento do MDM Launcher**
 

@@ -66,6 +66,7 @@ import com.mdm.launcher.utils.PermissionManager
 import com.mdm.launcher.utils.NetworkMonitor
 import com.mdm.launcher.utils.ServerDiscovery
 import com.mdm.launcher.utils.RealmeHelper
+import com.mdm.launcher.utils.AppUsageTracker
 import kotlinx.coroutines.*
 
 // Enum para tipos de permissão
@@ -145,6 +146,9 @@ class MainActivity : AppCompatActivity() {
     private var screenStateReceiver: BroadcastReceiver? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var isServiceBound = false
+    
+    // Rastreamento de uso de apps
+    private lateinit var appUsageTracker: AppUsageTracker
     
     // Localização
     private var locationManager: LocationManager? = null
@@ -345,6 +349,11 @@ class MainActivity : AppCompatActivity() {
         
         // Inicializar PermissionManager
         permissionManager = PermissionManager(this)
+        
+        // Inicializar AppUsageTracker
+        appUsageTracker = AppUsageTracker(this)
+        appUsageTracker.startTracking()
+        Log.d(TAG, "✅ AppUsageTracker inicializado e rastreamento iniciado")
         
         // Configurar otimizações de bateria para garantir conexão persistente
         configureBatteryOptimizations()
@@ -2955,6 +2964,10 @@ class MainActivity : AppCompatActivity() {
     
     private fun launchApp(app: AppInfo) {
         try {
+            // ✅ REGISTRAR ACESSO AO APP ANTES DE LANÇAR
+            Log.d(TAG, "📊 Registrando acesso ao app: ${app.appName} (${app.packageName})")
+            appUsageTracker.recordAppAccess(app.packageName, app.appName)
+            
             val intent = packageManager.getLaunchIntentForPackage(app.packageName)
             if (intent != null) {
                 // Adicionar flags para evitar que o launcher seja destruído

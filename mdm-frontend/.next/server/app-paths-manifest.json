@@ -1,5 +1,5 @@
 {
-  "/api/support-messages/route": "app/api/support-messages/route.js",
   "/page": "app/page.js",
-  "/api/devices/status-history/route": "app/api/devices/status-history/route.js"
+  "/api/devices/app-history/route": "app/api/devices/app-history/route.js",
+  "/api/support-messages/route": "app/api/support-messages/route.js"
 }

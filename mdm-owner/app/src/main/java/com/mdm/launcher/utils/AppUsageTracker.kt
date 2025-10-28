@@ -123,10 +123,11 @@ class AppUsageTracker(private val context: Context) {
         // Verificar se o app está na lista de permitidos
         val isAllowed = isAppAllowed(packageName)
         
-        // Verificar se já existe um acesso recente (últimos 5 minutos)
+        // ✅ CORREÇÃO: Verificar se já existe um acesso recente (últimos 30 segundos)
+        // Filtro reduzido de 5 minutos para 30 segundos para registros mais precisos
         val recentAccess = accessedApps.find { 
             it.packageName == packageName && 
-            (currentTime - it.accessTime) < (5 * 60 * 1000)
+            (currentTime - it.accessTime) < (30 * 1000) // 30 segundos
         }
         
         if (recentAccess == null) {
@@ -152,7 +153,7 @@ class AppUsageTracker(private val context: Context) {
             val updatedApps = accessedApps.map { if (it == recentAccess) updatedRecentAccess else it }
             saveAccessedApps(updatedApps)
             
-            Log.d(TAG, "⚠️ Acesso recente já registrado para $appName (últimos 5min), atualizando isAllowed: $isAllowed")
+            Log.d(TAG, "⚠️ Acesso recente já registrado para $appName (últimos 30s), atualizando isAllowed: $isAllowed")
             // Mesmo assim, enviar dados atualizados
             Log.d(TAG, "📤 Enviando dados atualizados mesmo com acesso recente...")
             sendUsageDataToServer()
