@@ -14,6 +14,7 @@ const DiscoveryServer = require('./discovery-server');
 const DeviceModel = require('./database/models/Device');
 const DeviceGroupModel = require('./database/models/DeviceGroup');
 const AppAccessHistory = require('./database/models/AppAccessHistory');
+const DeviceStatusHistory = require('./database/models/DeviceStatusHistory');
 const { query, transaction } = require('./database/config');
 
 // Classes de otimização integradas
@@ -809,7 +810,7 @@ function updateDeviceLastSeen(deviceId) {
     }
 }
 
-function handleDeviceStatus(ws, data) {
+async function handleDeviceStatus(ws, data) {
     const deviceId = data.data.deviceId;
     const now = Date.now();
     
@@ -926,6 +927,14 @@ function handleDeviceStatus(ws, data) {
     
     // Salvar no PostgreSQL
     saveDeviceToDatabase(deviceData);
+    
+    // ✅ NOVO: Registrar status online no histórico
+    try {
+        await DeviceStatusHistory.recordStatus(deviceId, 'online');
+        console.log('✅ Status online registrado no histórico');
+    } catch (error) {
+        console.error('❌ Erro ao registrar status no histórico:', error);
+    }
     
     // Se o nome mudou, notificar especificamente sobre a mudança
     if (nameChanged) {

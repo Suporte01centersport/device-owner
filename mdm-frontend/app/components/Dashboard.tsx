@@ -22,18 +22,8 @@ interface DashboardProps {
 
 export default function Dashboard({ devices, isConnected, onMessage }: DashboardProps) {
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  
-  // Debug: verificar dados dos dispositivos
-  console.log('Dashboard renderizando:', {
-    devicesCount: devices.length,
-    isConnected: isConnected,
-    devices: devices.map(d => ({
-      deviceId: d.deviceId,
-      name: d.name,
-      batteryLevel: d.batteryLevel,
-      status: d.status
-    }))
-  })
+  const [chartData, setChartData] = useState<Array<{ day: string; value: number }>>([])
+  const [isLoadingChart, setIsLoadingChart] = useState(false)
   const [isClient, setIsClient] = useState(false)
   const [notificationStatus, setNotificationStatus] = useState<{
     [deviceId: string]: {
@@ -53,6 +43,100 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  // ✅ NOVO: Carregar dados reais do histórico de status (apenas 7d)
+  useEffect(() => {
+    const loadChartData = async () => {
+      setIsLoadingChart(true)
+      try {
+        const response = await fetch(`/api/devices/status-history?period=7d`)
+        const result = await response.json()
+        
+        if (result.success && result.data) {
+          // Processar dados da semana (segunda a domingo)
+          const processedData = processHistoryData(result.data)
+          setChartData(processedData)
+        } else {
+          // Se não houver dados, usar valores zerados
+          setChartData(generateEmptyChartData())
+        }
+      } catch (error) {
+        console.error('❌ Erro ao carregar histórico:', error)
+        setChartData(generateEmptyChartData())
+      } finally {
+        setIsLoadingChart(false)
+      }
+    }
+    
+    loadChartData()
+    
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const processHistoryData = (data: any[]) => {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const endDate = new Date()
+    
+    // Começar da segunda-feira da semana atual
+    const currentDay = endDate.getDay() // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1 // Se domingo, voltar 6 dias
+    const startDate = new Date(endDate)
+    startDate.setDate(endDate.getDate() - daysFromMonday)
+    
+    // Criar mapa de datas para contagem
+    const dateMap = new Map<string, number>()
+    
+    data.forEach((item: any) => {
+      // Converter data do banco para string no formato YYYY-MM-DD
+      const dateObj = new Date(item.status_date)
+      const date = dateObj.toISOString().split('T')[0]
+      const count = parseInt(item.devices_online || 0)
+      
+      if (!dateMap.has(date)) {
+        dateMap.set(date, 0)
+      }
+      dateMap.set(date, dateMap.get(date)! + count)
+    })
+    
+    // Gerar array de dados da semana (Segunda a Domingo)
+    const chartData: Array<{ day: string; value: number }> = []
+    const currentDate = new Date(startDate)
+    
+    for (let i = 0; i < 7; i++) {
+      const dateStr = currentDate.toISOString().split('T')[0]
+      const dayName = days[currentDate.getDay()]
+      const value = dateMap.get(dateStr) || 0
+      
+      chartData.push({
+        day: dayName,
+        value: value
+      })
+      
+      currentDate.setDate(currentDate.getDate() + 1)
+    }
+    
+    return chartData
+  }
+
+  const generateEmptyChartData = () => {
+    const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+    const endDate = new Date()
+    
+    // ✅ Começar da segunda-feira da semana atual
+    const currentDay = endDate.getDay()
+    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1
+    const startDate = new Date(endDate)
+    startDate.setDate(endDate.getDate() - daysFromMonday)
+    
+    return Array.from({ length: 7 }, (_, i) => {
+      const date = new Date(startDate)
+      date.setDate(startDate.getDate() + i)
+      return {
+        day: days[date.getDay()],
+        value: 0
+      }
+    })
+  }
 
   // Processar mensagens de notificação
   useEffect(() => {
@@ -236,27 +320,6 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       }
     })
 
-  // Gerar dados do gráfico baseados nos dispositivos (sem Math.random para evitar hidratação)
-  const generateChartData = () => {
-    const days = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
-    const baseValue = Math.max(1, onlineDevices) // Garantir pelo menos 1 dispositivo
-    
-    return days.map((day, index) => {
-      // Usar índice para gerar altura consistente entre servidor e cliente
-      const heightVariation = (index * 7) % 40 // Variação baseada no índice
-      const height = Math.max(40, Math.min(100, 50 + heightVariation))
-      const value = baseValue + (index % 3) // Variação pequena baseada no índice
-      
-      return {
-        day,
-        height: Math.round(height),
-        value: Math.max(1, value)
-      }
-    })
-  }
-
-  const chartData = generateChartData()
-  const [selectedPeriod, setSelectedPeriod] = useState('30d')
 
   return (
     <div className="p-6 space-y-6">
@@ -325,45 +388,41 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
         <div className="lg:col-span-2 card p-6">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-lg font-semibold text-primary">Status dos Dispositivos</h3>
-            <div className="flex gap-2">
-              <button 
-                className={`btn btn-sm ${selectedPeriod === '7d' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setSelectedPeriod('7d')}
-              >
-                7d
-              </button>
-              <button 
-                className={`btn btn-sm ${selectedPeriod === '30d' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setSelectedPeriod('30d')}
-              >
-                30d
-              </button>
-              <button 
-                className={`btn btn-sm ${selectedPeriod === '90d' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setSelectedPeriod('90d')}
-              >
-                90d
-              </button>
-            </div>
+            <span className="text-sm text-secondary">Semana Atual (Seg - Dom)</span>
           </div>
           
           {/* Bar Chart */}
-          <div className="h-64 flex items-end justify-between gap-2">
-            {chartData.map((data, index) => (
-              <div key={index} className="flex-1 flex flex-col items-center group cursor-pointer">
-                <div 
-                  className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all duration-200 relative min-h-[20px]"
-                  style={{ height: `${data.height}%` }}
-                >
-                  <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap">
-                    {data.value} dispositivo{data.value > 1 ? 's' : ''}
+          <div className="h-64 flex items-end justify-between gap-2 relative">
+            {chartData.map((data, index) => {
+              // ✅ Limite de 50 para o gráfico do dashboard
+              const maxValue = 50;
+              const currentValue = data.value || 0;
+              
+              // Calcular altura baseada em 50 como máximo
+              const heightPx = currentValue >= maxValue
+                ? 256 // Máximo: barra cheia (h-64 = 256px)
+                : Math.max((currentValue / maxValue) * 256, 4); // Proporcional a 50, mínimo 4px
+              
+              // Formatar valor para exibição
+              const displayValue = currentValue > maxValue ? '50+' : currentValue;
+              
+              return (
+                <div key={index} className="flex-1 flex flex-col items-center group cursor-pointer">
+                  <div 
+                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all duration-500 relative shadow-sm"
+                    style={{ height: `${heightPx}px` }}
+                    title={`${data.day}: ${data.value} dispositivo${data.value > 1 ? 's' : ''}`}
+                  >
+                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
+                      {displayValue} dispositivo{data.value > 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div className="text-xs text-secondary mt-2 font-medium">
+                    {data.day}
                   </div>
                 </div>
-                <div className="text-xs text-secondary mt-2 font-medium">
-                  {data.day}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
           
           {/* Chart legend */}
@@ -374,7 +433,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-gray-300 rounded"></div>
-              <span className="text-xs text-secondary">Período: {selectedPeriod}</span>
+              <span className="text-xs text-secondary">Reseta toda Segunda-feira</span>
             </div>
           </div>
         </div>

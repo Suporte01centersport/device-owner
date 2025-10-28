@@ -217,10 +217,25 @@ CREATE TABLE app_access_history (
     last_access_time TIMESTAMP WITH TIME ZONE NOT NULL,
     access_count INTEGER DEFAULT 1,
     total_duration_ms BIGINT DEFAULT 0,
+    is_allowed BOOLEAN DEFAULT true,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     
     UNIQUE(device_id, package_name, access_date)
+);
+
+-- Tabela para histórico de status dos dispositivos
+CREATE TABLE device_status_history (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    device_id VARCHAR(255) NOT NULL,
+    status_date DATE NOT NULL,
+    status VARCHAR(20) NOT NULL, -- online, offline
+    online_count INTEGER DEFAULT 0,
+    last_online_time TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    
+    UNIQUE(device_id, status_date)
 );
 
 -- Índices para performance
@@ -257,6 +272,11 @@ CREATE INDEX idx_app_access_history_package_name ON app_access_history(package_n
 CREATE INDEX idx_app_access_history_access_date ON app_access_history(access_date);
 CREATE INDEX idx_app_access_history_last_access_time ON app_access_history(last_access_time);
 
+-- Índices para histórico de status
+CREATE INDEX idx_device_status_history_device_id ON device_status_history(device_id);
+CREATE INDEX idx_device_status_history_status_date ON device_status_history(status_date);
+CREATE INDEX idx_device_status_history_status ON device_status_history(status);
+
 -- Triggers para updated_at
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -275,3 +295,4 @@ CREATE TRIGGER update_app_policies_updated_at BEFORE UPDATE ON app_policies FOR 
 CREATE TRIGGER update_device_restrictions_updated_at BEFORE UPDATE ON device_restrictions FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_system_configs_updated_at BEFORE UPDATE ON system_configs FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_app_access_history_updated_at BEFORE UPDATE ON app_access_history FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_device_status_history_updated_at BEFORE UPDATE ON device_status_history FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
