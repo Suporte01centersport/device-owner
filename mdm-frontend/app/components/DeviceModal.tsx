@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Device, AppInfo } from '../types/device'
 import LocationView from './LocationView'
 import ReportsTab from './ReportsTab'
+import TermsModal from './TermsModal'
 
 // Interfaces Device e AppInfo importadas de '../types/device'
 
@@ -77,6 +78,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   const [messageText, setMessageText] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   const [messageHistory, setMessageHistory] = useState<Array<{
     id: string
     message: string
@@ -947,6 +949,13 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
               <span>📋</span>
               Histórico
             </button>
+            <button 
+              className="btn btn-success flex-1"
+              onClick={() => setShowTermsModal(true)}
+            >
+              <span>📄</span>
+              Termos
+            </button>
             {device.assignedUserId && onUnlinkUser && (
               <button 
                 className="btn btn-danger flex-1"
@@ -1096,6 +1105,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Termos */}
+      {showTermsModal && (
+        <TermsModal
+          isOpen={showTermsModal}
+          onClose={() => setShowTermsModal(false)}
+          device={device}
+          assignedUser={assignedUser ? {
+            name: assignedUser.name || '',
+            cpf: assignedUser.cpf || ''
+          } : null}
+        />
       )}
     </div>
   )
