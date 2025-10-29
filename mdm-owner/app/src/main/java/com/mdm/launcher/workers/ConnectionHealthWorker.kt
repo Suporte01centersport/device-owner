@@ -25,57 +25,34 @@ class ConnectionHealthWorker(
     }
     
     override suspend fun doWork(): Result {
-        Log.d(TAG, "═════════════════════════════════════════════════")
-        Log.d(TAG, "🏥 VERIFICAÇÃO DE SAÚDE DA CONEXÃO INICIADA")
-        Log.d(TAG, "═════════════════════════════════════════════════")
-        
         return try {
-            // Verificar estado da conexão
             val prefs = applicationContext.getSharedPreferences("mdm_connection_state", Context.MODE_PRIVATE)
             val lastConnectedTime = prefs.getLong("last_connected_time", 0)
             val isConnected = prefs.getBoolean("is_connected", false)
             val currentTime = System.currentTimeMillis()
             val timeSinceLastConnection = currentTime - lastConnectedTime
             
-            Log.d(TAG, "Estado atual:")
-            Log.d(TAG, "  - Conectado: $isConnected")
-            Log.d(TAG, "  - Última conexão: ${timeSinceLastConnection / 1000}s atrás")
-            
-            // Se desconectado há mais de 2 minutos, forçar reconexão
             if (!isConnected || timeSinceLastConnection > 120000) {
-                Log.w(TAG, "⚠️ Conexão perdida ou inativa - forçando reconexão...")
-                
-                // Verificar se WebSocketService está rodando
                 val isServiceRunning = isServiceRunning(WebSocketService::class.java)
                 
                 if (!isServiceRunning) {
-                    Log.d(TAG, "WebSocketService não está rodando - iniciando...")
                     startWebSocketService()
                 } else {
-                    Log.d(TAG, "WebSocketService está rodando - enviando comando de reconexão")
                     sendReconnectBroadcast()
                 }
-            } else {
-                Log.d(TAG, "✅ Conexão saudável")
             }
             
-            // Verificar conectividade de rede
             val connectivityManager = applicationContext.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
             val hasNetwork = connectivityManager.activeNetwork != null
             
             if (!hasNetwork) {
-                Log.w(TAG, "❌ Sem conectividade de rede - aguardando rede voltar")
-                return Result.retry() // Tentar novamente mais tarde
+                return Result.retry()
             }
-            
-            Log.d(TAG, "═════════════════════════════════════════════════")
-            Log.d(TAG, "✅ Verificação de saúde concluída com sucesso")
-            Log.d(TAG, "═════════════════════════════════════════════════")
             
             Result.success()
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao verificar saúde da conexão", e)
+            Log.e(TAG, "Erro na verificação de saúde", e)
             Result.retry()
         }
     }

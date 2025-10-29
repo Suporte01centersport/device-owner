@@ -6,9 +6,11 @@ data class DeviceInfo(
     val model: String,
     val manufacturer: String,
     val androidVersion: String,
+    val osType: String = "Android", // Tipo do sistema operacional (sempre Android)
     val apiLevel: Int,
     val serialNumber: String?,
     val imei: String?,
+    val meid: String?, // Mobile Equipment Identifier para dispositivos CDMA
     val macAddress: String?,
     val ipAddress: String?,
     val batteryLevel: Int,
@@ -36,6 +38,7 @@ data class DeviceInfo(
     val timezone: String,
     val language: String,
     val country: String,
+    val complianceStatus: String = "unknown", // Status de conformidade: compliant, non_compliant, unknown
     val installedApps: List<AppInfo> = emptyList(),
     val allowedApps: List<String> = emptyList(),
     val lastKnownLocation: String? = null,

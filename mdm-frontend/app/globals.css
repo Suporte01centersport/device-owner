@@ -289,6 +289,19 @@ body {
   box-shadow: var(--shadow-md);
 }
 
+.btn-danger {
+  background: #dc2626;
+  color: white;
+  border: 2px solid #dc2626;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--text-secondary);

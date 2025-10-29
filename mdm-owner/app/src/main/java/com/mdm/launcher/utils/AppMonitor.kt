@@ -74,22 +74,11 @@ object AppMonitor {
                     if (foregroundPackage != null) {
                         val currentTime = System.currentTimeMillis()
                         
-                        Log.d(TAG, "🔍 === DETECÇÃO DE APP EM FOREGROUND ===")
-                        Log.d(TAG, "🔍 App detectado: $foregroundPackage")
-                        Log.d(TAG, "🔍 Último app contado: $lastTrackedApp")
-                        Log.d(TAG, "🔍 Última contagem: ${currentTime - lastTrackedTime}ms atrás")
-                        Log.d(TAG, "🔍 Último foreground: $lastForegroundPackage")
-                        Log.d(TAG, "🔍 Tempo desde último foreground: ${currentTime - lastForegroundTime}ms")
-                        Log.d(TAG, "🔍 Modo de bloqueio: ${if (allowedApps.size <= 1) "TOTAL" else "NORMAL"}")
-                        Log.d(TAG, "🔍 Apps permitidos: ${allowedApps.size}")
-                        Log.d(TAG, "🔍 Lista de permitidos: $allowedApps")
-                        
-                        // ✅ NOVO: Verificar se é apenas mudança de tela dentro do mesmo app
+                        // Verificar se é apenas mudança de tela dentro do mesmo app
                         val isSameAppAsLastForeground = foregroundPackage == lastForegroundPackage
                         val isRecentForegroundChange = (currentTime - lastForegroundTime) < SCREEN_CHANGE_COOLDOWN
                         
                         if (isSameAppAsLastForeground && isRecentForegroundChange) {
-                            Log.d(TAG, "🔄 Mudança de tela dentro do mesmo app ($foregroundPackage) - ignorando")
                             lastForegroundPackage = foregroundPackage
                             lastForegroundTime = currentTime
                             handler.postDelayed(this, currentInterval)
@@ -102,67 +91,36 @@ object AppMonitor {
                         
                         if (foregroundPackage != ctx.packageName) {
                             val isAllowed = isAppAllowed(foregroundPackage)
-                            Log.d(TAG, "🔍 App $foregroundPackage permitido: $isAllowed")
                             
+                            // ✅ CORREÇÃO: Registrar TODOS os apps acessados (permitidos ou não)
+                            // Lógica inteligente para detectar entrada/saída de apps
+                            val lastEntryTime = appStates[foregroundPackage] ?: 0L
+                            val timeSinceLastEntry = currentTime - lastEntryTime
+                            val isNewEntry = timeSinceLastEntry > APP_EXIT_TIMEOUT
+                            
+                            if (isNewEntry) {
+                                try {
+                                    val appName = getAppName(ctx, foregroundPackage)
+                                    appUsageTracker?.recordAppAccess(foregroundPackage, appName)
+                                    appStates[foregroundPackage] = currentTime
+                                    lastTrackedApp = foregroundPackage
+                                    lastTrackedTime = currentTime
+                                    Log.d(TAG, "📊 App registrado: $appName ($foregroundPackage) - Permitido: $isAllowed")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Erro ao registrar app: ${e.message}")
+                                }
+                            } else {
+                                appStates[foregroundPackage] = currentTime
+                            }
+                            
+                            // ✅ Verificar se app não é permitido e forçar retorno
                             if (!isAllowed) {
-                                Log.d(TAG, "⚠️ App não permitido detectado: $foregroundPackage (monitoramento desabilitado)")
-                                // ❌ REMOVIDO: forceReturnToLauncher() - permite uso normal dos apps
-                                // ✅ CORREÇÃO: Voltar ao intervalo normal (não forçar launcher)
                                 currentInterval = MONITOR_INTERVAL
                             } else {
-                                Log.d(TAG, "✅ App permitido: $foregroundPackage")
-                                
-                                // ✅ NOVO: Lógica inteligente para detectar entrada/saída de apps
-                                val lastEntryTime = appStates[foregroundPackage] ?: 0L
-                                val timeSinceLastEntry = currentTime - lastEntryTime
-                                val isNewEntry = timeSinceLastEntry > APP_EXIT_TIMEOUT
-                                
-                                Log.d(TAG, "🔍 === VERIFICAÇÃO INTELIGENTE ===")
-                                Log.d(TAG, "🔍 App: $foregroundPackage")
-                                Log.d(TAG, "🔍 Última entrada: $lastEntryTime")
-                                Log.d(TAG, "🔍 Tempo desde última entrada: ${timeSinceLastEntry}ms")
-                                Log.d(TAG, "🔍 Timeout para saída: ${APP_EXIT_TIMEOUT}ms")
-                                Log.d(TAG, "🔍 É nova entrada: $isNewEntry")
-                                
-                                if (isNewEntry) {
-                                    // ✅ NOVO: Nova entrada no app - armazenar timestamp
-                                    try {
-                                        val appName = getAppName(ctx, foregroundPackage)
-                                        
-                                        Log.d(TAG, "📱 === NOVA ENTRADA NO APP ===")
-                                        Log.d(TAG, "📱 App: $appName ($foregroundPackage)")
-                                        Log.d(TAG, "📱 Timestamp entrada: $currentTime")
-                                        
-                                        // Chamar AppUsageTracker diretamente
-                                        appUsageTracker?.recordAppAccess(foregroundPackage, appName)
-                                        
-                                        // Atualizar estado do app
-                                        appStates[foregroundPackage] = currentTime
-                                        lastTrackedApp = foregroundPackage
-                                        lastTrackedTime = currentTime
-                                        
-                                        Log.d(TAG, "✅ Nova entrada registrada com sucesso")
-                                    } catch (e: Exception) {
-                                        Log.e(TAG, "❌ Erro ao registrar nova entrada: ${e.message}")
-                                    }
-                                } else {
-                                    // ✅ App ainda em uso - apenas atualizar timestamp
-                                    Log.d(TAG, "⏳ App $foregroundPackage ainda em uso")
-                                    
-                                    // Atualizar timestamp
-                                    appStates[foregroundPackage] = currentTime
-                                }
-                                
-                                // ✅ CORREÇÃO: Voltar ao intervalo normal quando tudo OK
                                 currentInterval = MONITOR_INTERVAL
                             }
-                        } else {
-                            Log.d(TAG, "🔍 MDM Launcher em foreground - ignorando")
                         }
-                        Log.d(TAG, "🔍 === FIM DETECÇÃO APP ===")
                     } else {
-                        Log.d(TAG, "🔍 Não foi possível detectar app em foreground")
-                        // ✅ CORREÇÃO: Manter intervalo normal quando não consegue detectar
                         currentInterval = MONITOR_INTERVAL
                     }
             } catch (e: SecurityException) {
@@ -255,28 +213,16 @@ object AppMonitor {
 
     fun startMonitoring(appContext: Context) {
         synchronized(monitorLock) {
-            if (isMonitoring) {
-                Log.d(TAG, "Monitoramento já está ativo.")
-                return
-            }
-            context = appContext.applicationContext
+            if (isMonitoring) return
             
-            // ✅ NOVO: Inicializar AppUsageTracker
+            context = appContext.applicationContext
             appUsageTracker = AppUsageTracker(appContext)
             
-            Log.d(TAG, "🚀 INICIANDO APPMONITOR - Context: ${appContext.packageName}")
-            loadAllowedApps(appContext) // Carregar apps permitidos ao iniciar
+            loadAllowedApps(appContext)
             isMonitoring = true
             handler.post(monitorRunnable)
-            Log.d(TAG, "🎯 INICIANDO MONITORAMENTO DE APPS")
             
-            synchronized(appsLock) {
-                Log.d(TAG, "Apps permitidos: ${allowedApps.size}")
-                allowedApps.forEach { Log.d(TAG, "  ✅ $it") }
-            }
-            Log.d(TAG, "✅ Monitoramento iniciado com sucesso")
-            
-            // ✅ NOVO: Iniciar limpeza periódica de estados antigos
+            Log.d(TAG, "Monitoramento iniciado (${allowedApps.size} apps)")
             startStateCleanup()
         }
     }
@@ -318,37 +264,22 @@ object AppMonitor {
         synchronized(monitorLock) {
             context = appContext.applicationContext
             
-            Log.d(TAG, "🔄 ===== ATUALIZANDO APPS PERMITIDOS =====")
-            Log.d(TAG, "🔄 Apps recebidos: $newAllowedApps")
-            Log.d(TAG, "🔄 Quantidade: ${newAllowedApps.size}")
-            
             synchronized(appsLock) {
-                // Limpar lista atual
                 allowedApps.clear()
                 
-                // Se há apps configurados via WebSocket, usar eles
                 if (newAllowedApps.isNotEmpty() && !(newAllowedApps.size == 1 && newAllowedApps[0] == "[]")) {
-                    Log.d(TAG, "✅ Lista válida detectada - usando apps configurados")
                     allowedApps.addAll(newAllowedApps)
                     
-                    // Garantir que o próprio launcher MDM esteja sempre na lista de permitidos
                     if (!allowedApps.contains(appContext.packageName)) {
                         allowedApps.add(appContext.packageName)
-                        Log.d(TAG, "➕ Adicionado MDM Launcher à lista: ${appContext.packageName}")
                     }
                     
-                    Log.d(TAG, "✅ Apps permitidos atualizados: ${allowedApps.size}")
-                    Log.d(TAG, "📋 Lista final: $allowedApps")
+                    Log.d(TAG, "Apps permitidos atualizados: ${allowedApps.size}")
                 } else {
-                    Log.d(TAG, "🚫 Lista vazia ou inválida - usando configuração padrão")
-                    // Configuração padrão: MDM Launcher + Settings
                     allowedApps.add(appContext.packageName)
                     allowedApps.add("com.android.settings")
-                    Log.d(TAG, "📋 Lista padrão: $allowedApps")
                 }
             }
-            
-            Log.d(TAG, "🔄 ===== FIM ATUALIZAÇÃO APPS =====")
         }
     }
 
@@ -402,11 +333,8 @@ object AppMonitor {
             if (runningProcesses != null) {
                 for (processInfo in runningProcesses) {
                     if (processInfo.importance == ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND) {
-                        // Verificar se tem activities em foreground
                         if (processInfo.pkgList.isNotEmpty()) {
-                            val packageName = processInfo.pkgList[0]
-                            Log.d(TAG, "🔍 App em foreground detectado via runningAppProcesses: $packageName")
-                            return packageName
+                            return processInfo.pkgList[0]
                         }
                     }
                 }
@@ -418,9 +346,7 @@ object AppMonitor {
                     @Suppress("DEPRECATION")
                     val tasks = activityManager.getRunningTasks(1)
                     if (tasks.isNotEmpty()) {
-                        val packageName = tasks[0].topActivity?.packageName
-                        Log.d(TAG, "🔍 App em foreground detectado via getRunningTasks (fallback): $packageName")
-                        return packageName
+                        return tasks[0].topActivity?.packageName
                     }
                 } catch (e: SecurityException) {
                     Log.w(TAG, "⚠️ getRunningTasks() bloqueado por segurança")
@@ -439,10 +365,8 @@ object AppMonitor {
                     )
                     
                     if (usageStats != null && usageStats.isNotEmpty()) {
-                        // Encontrar o app mais recente
                         val mostRecent = usageStats.maxByOrNull { it.lastTimeUsed }
                         if (mostRecent != null) {
-                            Log.d(TAG, "🔍 App em foreground detectado via UsageStats: ${mostRecent.packageName}")
                             return mostRecent.packageName
                         }
                     }
@@ -500,63 +424,39 @@ object AppMonitor {
         }
     }
     private fun loadAllowedApps(context: Context) {
-        Log.d(TAG, "🔍 ===== CARREGANDO APPS PERMITIDOS =====")
-        Log.d(TAG, "🔍 Context packageName: ${context.packageName}")
         try {
             val sharedPreferences = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
             val gson = Gson()
             val savedAllowedApps = sharedPreferences.getString("allowed_apps", null)
             
-            Log.d(TAG, "🔍 Carregando apps permitidos do SharedPreferences...")
-            Log.d(TAG, "📋 Valor raw do SharedPreferences: $savedAllowedApps")
-            
-            // Limpar lista atual
             allowedApps.clear()
             
             if (savedAllowedApps != null && savedAllowedApps.isNotEmpty()) {
                 val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
                 val apps = gson.fromJson<List<String>>(savedAllowedApps, type)
                 
-                Log.d(TAG, "📋 Apps carregados do JSON: $apps")
-                Log.d(TAG, "📊 Quantidade de apps carregados: ${apps.size}")
-                
-                // Verificar se a lista não está vazia e não contém apenas "[]"
                 if (apps.isNotEmpty() && !(apps.size == 1 && apps[0] == "[]")) {
-                    Log.d(TAG, "✅ Lista válida detectada - usando apps salvos")
                     allowedApps.addAll(apps)
                     
-                    // Garantir que o próprio launcher MDM esteja sempre na lista de permitidos
                     if (!allowedApps.contains(context.packageName)) {
                         allowedApps.add(context.packageName)
-                        Log.d(TAG, "➕ Adicionado MDM Launcher à lista: ${context.packageName}")
                     }
                     
-                    Log.d(TAG, "✅ Apps permitidos carregados: ${allowedApps.size}")
-                    Log.d(TAG, "📋 Lista final: $allowedApps")
+                    Log.d(TAG, "Apps carregados: ${allowedApps.size}")
                 } else {
-                    Log.d(TAG, "🚫 Lista vazia ou inválida - usando configuração padrão")
-                    // Configuração padrão: MDM Launcher + Settings
                     allowedApps.add(context.packageName)
                     allowedApps.add("com.android.settings")
-                    Log.d(TAG, "📋 Lista padrão: $allowedApps")
                 }
             } else {
-                Log.d(TAG, "🚫 Nenhum app salvo - usando configuração padrão")
-                // Configuração padrão: MDM Launcher + Settings
                 allowedApps.add(context.packageName)
                 allowedApps.add("com.android.settings")
-                Log.d(TAG, "📋 Lista padrão: $allowedApps")
-                Log.d(TAG, "⚠️ Configure apps permitidos via WebSocket para controle personalizado")
             }
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao carregar apps permitidos", e)
-            // Lista de emergência - MDM + Settings
+            Log.e(TAG, "Erro ao carregar apps", e)
             allowedApps.clear()
             allowedApps.add(context.packageName)
             allowedApps.add("com.android.settings")
-            Log.d(TAG, "🚫 Lista de emergência: MDM Launcher + Settings")
-            Log.d(TAG, "📋 Lista de emergência: $allowedApps")
         }
     }
     

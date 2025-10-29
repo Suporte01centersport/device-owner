@@ -16,7 +16,7 @@ CREATE TABLE organizations (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Tabela de usuários
+-- Tabela de usuários do sistema (administradores, operadores)
 CREATE TABLE users (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
@@ -31,6 +31,23 @@ CREATE TABLE users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Tabela de usuários finais (vinculados aos dispositivos)
+CREATE TABLE device_users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+    user_id VARCHAR(255) UNIQUE NOT NULL, -- ID customizado do usuário
+    name VARCHAR(255) NOT NULL, -- Nome completo
+    cpf VARCHAR(14) UNIQUE NOT NULL, -- CPF do usuário
+    email VARCHAR(255),
+    phone VARCHAR(20),
+    department VARCHAR(100),
+    position VARCHAR(100),
+    notes TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Tabela de dispositivos
 CREATE TABLE devices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -40,9 +57,11 @@ CREATE TABLE devices (
     model VARCHAR(255),
     manufacturer VARCHAR(255),
     android_version VARCHAR(50),
+    os_type VARCHAR(50) DEFAULT 'Android', -- Tipo do sistema operacional
     api_level INTEGER,
     serial_number VARCHAR(255),
     imei VARCHAR(20),
+    meid VARCHAR(20), -- Mobile Equipment Identifier para dispositivos CDMA
     mac_address VARCHAR(17),
     ip_address INET,
     battery_level INTEGER DEFAULT 0,
@@ -70,7 +89,9 @@ CREATE TABLE devices (
     timezone VARCHAR(100),
     language VARCHAR(10),
     country VARCHAR(10),
+    compliance_status VARCHAR(20) DEFAULT 'unknown', -- Status de conformidade: compliant, non_compliant, unknown
     status VARCHAR(20) DEFAULT 'offline', -- online, offline
+    assigned_device_user_id UUID REFERENCES device_users(id) ON DELETE SET NULL, -- Vínculo com usuário final
     last_seen TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -239,10 +260,17 @@ CREATE TABLE device_status_history (
 );
 
 -- Índices para performance
+CREATE INDEX idx_device_users_organization_id ON device_users(organization_id);
+CREATE INDEX idx_device_users_user_id ON device_users(user_id);
+CREATE INDEX idx_device_users_cpf ON device_users(cpf);
+CREATE INDEX idx_device_users_is_active ON device_users(is_active);
+
 CREATE INDEX idx_devices_organization_id ON devices(organization_id);
 CREATE INDEX idx_devices_status ON devices(status);
 CREATE INDEX idx_devices_last_seen ON devices(last_seen);
 CREATE INDEX idx_devices_device_id ON devices(device_id);
+CREATE INDEX idx_devices_compliance_status ON devices(compliance_status);
+CREATE INDEX idx_devices_assigned_device_user_id ON devices(assigned_device_user_id);
 
 CREATE INDEX idx_device_locations_device_id ON device_locations(device_id);
 CREATE INDEX idx_device_locations_created_at ON device_locations(created_at);
@@ -288,6 +316,7 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_organizations_updated_at BEFORE UPDATE ON organizations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_device_users_updated_at BEFORE UPDATE ON device_users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_devices_updated_at BEFORE UPDATE ON devices FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_installed_apps_updated_at BEFORE UPDATE ON installed_apps FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_device_groups_updated_at BEFORE UPDATE ON device_groups FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();

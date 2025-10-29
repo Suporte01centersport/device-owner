@@ -38,15 +38,56 @@ object DeviceInfoCollector {
         val installedApps = getInstalledApps(packageManager)
         val locationInfo = getLocationInfo(context)
         
-        DeviceInfo(
+        val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
+        val isProfileOwner = devicePolicyManager.isProfileOwnerApp(context.packageName)
+        val serialNumber = getSerialNumber(context)
+        val imei = getImei(context)
+        val meid = getMeid(context)
+        val complianceStatus = calculateComplianceStatus(
+            context = context,
+            isDeviceOwner = isDeviceOwner,
+            isDeveloperOptionsEnabled = isDeveloperOptionsEnabled(context),
+            isAdbEnabled = isAdbEnabled(context),
+            isUnknownSourcesEnabled = isUnknownSourcesEnabled(context)
+        )
+        
+        // ========== LOG DE DEBUG: DADOS COLETADOS ==========
+        Log.i("DeviceInfoCollector", "╔═══════════════════════════════════════════════════════════════")
+        Log.i("DeviceInfoCollector", "║ DADOS DO DISPOSITIVO COLETADOS")
+        Log.i("DeviceInfoCollector", "╠═══════════════════════════════════════════════════════════════")
+        Log.i("DeviceInfoCollector", "║ DeviceId: ${deviceId.takeLast(12)}")
+        Log.i("DeviceInfoCollector", "║ Manufacturer: ${Build.MANUFACTURER}")
+        Log.i("DeviceInfoCollector", "║ Model: ${Build.MODEL}")
+        Log.i("DeviceInfoCollector", "║ Android Version: ${Build.VERSION.RELEASE}")
+        Log.i("DeviceInfoCollector", "║ OS Type: Android")
+        Log.i("DeviceInfoCollector", "║ API Level: ${Build.VERSION.SDK_INT}")
+        Log.i("DeviceInfoCollector", "║ Serial Number: ${serialNumber ?: "N/A"}")
+        Log.i("DeviceInfoCollector", "║ IMEI: ${imei ?: "N/A"}")
+        Log.i("DeviceInfoCollector", "║ MEID: ${meid ?: "N/A"}")
+        Log.i("DeviceInfoCollector", "║ Compliance Status: $complianceStatus")
+        Log.i("DeviceInfoCollector", "║ Is Device Owner: $isDeviceOwner")
+        Log.i("DeviceInfoCollector", "║ Is Profile Owner: $isProfileOwner")
+        Log.i("DeviceInfoCollector", "║ Battery Level: ${batteryInfo.first}%")
+        Log.i("DeviceInfoCollector", "║ Battery Status: ${batteryInfo.second}")
+        Log.i("DeviceInfoCollector", "║ Storage Total: ${storageInfo.first / (1024 * 1024 * 1024)}GB")
+        Log.i("DeviceInfoCollector", "║ Storage Used: ${storageInfo.second / (1024 * 1024 * 1024)}GB")
+        Log.i("DeviceInfoCollector", "║ Network Type: ${networkInfo.first}")
+        Log.i("DeviceInfoCollector", "║ WiFi SSID: ${networkInfo.second ?: "N/A"}")
+        Log.i("DeviceInfoCollector", "║ Installed Apps: ${installedApps.size}")
+        Log.i("DeviceInfoCollector", "║ Location: ${if (locationInfo.second != null && locationInfo.third != null) "${locationInfo.second}, ${locationInfo.third}" else "N/A"}")
+        Log.i("DeviceInfoCollector", "╚═══════════════════════════════════════════════════════════════")
+        
+        val deviceInfo = DeviceInfo(
             deviceId = deviceId,
             name = customName ?: Build.MODEL,
             model = Build.MODEL,
             manufacturer = Build.MANUFACTURER,
             androidVersion = Build.VERSION.RELEASE,
+            osType = "Android",
             apiLevel = Build.VERSION.SDK_INT,
-            serialNumber = getSerialNumber(context),
-            imei = getImei(context),
+            serialNumber = serialNumber,
+            imei = imei,
+            meid = meid,
             macAddress = getMacAddress(context),
             ipAddress = getIpAddress(context),
             batteryLevel = batteryInfo.first,
@@ -68,12 +109,13 @@ object DeviceInfoCollector {
             isAdbEnabled = isAdbEnabled(context),
             isUnknownSourcesEnabled = isUnknownSourcesEnabled(context),
             installedAppsCount = installedApps.size,
-            isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName),
-            isProfileOwner = devicePolicyManager.isProfileOwnerApp(context.packageName),
+            isDeviceOwner = isDeviceOwner,
+            isProfileOwner = isProfileOwner,
             appVersion = getAppVersion(context),
             timezone = TimeZone.getDefault().id,
             language = Locale.getDefault().language,
             country = Locale.getDefault().country,
+            complianceStatus = complianceStatus,
             installedApps = installedApps,
             allowedApps = getAllowedApps(context),
             lastKnownLocation = locationInfo.first,
@@ -85,6 +127,10 @@ object DeviceInfoCollector {
             address = locationInfo.seventh,
             locationHistoryCount = locationInfo.eighth
         )
+        
+        Log.i("DeviceInfoCollector", "✅ DeviceInfo criado e pronto para envio ao servidor")
+        
+        deviceInfo
     }
     
     private fun getDeviceId(context: Context): String {
@@ -544,134 +590,98 @@ object DeviceInfoCollector {
     
     private fun getSerialNumber(context: Context): String? {
         return try {
-            Log.d("DeviceInfoCollector", "")
-            Log.d("DeviceInfoCollector", "╔════════════════════════════════════════════════════════════╗")
-            Log.d("DeviceInfoCollector", "║  COLETANDO SERIAL NUMBER REAL DO HARDWARE                 ║")
-            Log.d("DeviceInfoCollector", "╚════════════════════════════════════════════════════════════╝")
-            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
-            Log.d("DeviceInfoCollector", "Device is Device Owner: ${(context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager).isDeviceOwnerApp(context.packageName)}")
-            
-            // ✅ CORREÇÃO: Simplificar a lógica de obtenção do serial
             var serial: String? = null
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
-                    // MÉTODO 1: Tentar Build.getSerial() (requer READ_PHONE_STATE)
                     val buildSerial = Build.getSerial()
                     if (buildSerial != "unknown" && buildSerial.isNotEmpty()) {
-                        Log.d("DeviceInfoCollector", "✓ Serial real obtido via Build.getSerial(): ${buildSerial}")
                         serial = buildSerial
                     }
                 } catch (e: SecurityException) {
-                    Log.w("DeviceInfoCollector", "SecurityException ao obter Serial via Build.getSerial(): ${e.message}")
+                    // Ignorar
                 }
             }
             
-            // MÉTODO 2: Fallback para Build.SERIAL
             if (serial == null) {
                 try {
                     @Suppress("DEPRECATION")
                     val buildSerialFallback = Build.SERIAL
                     if (buildSerialFallback != "unknown" && buildSerialFallback.isNotEmpty()) {
-                        Log.d("DeviceInfoCollector", "✓ Serial via Build.SERIAL: ${buildSerialFallback}")
                         serial = buildSerialFallback
                     }
                 } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Build.SERIAL também falhou: ${e.message}")
+                    // Ignorar
                 }
             }
             
-            // MÉTODO 3: Fallback para Android ID
             if (serial == null) {
                 try {
                     val androidId = android.provider.Settings.Secure.getString(context.contentResolver, android.provider.Settings.Secure.ANDROID_ID)
                     if (androidId.isNotEmpty() && androidId != "9774d56d682e549c") {
-                        Log.d("DeviceInfoCollector", "✓ Usando Android ID como fallback: ${androidId}")
                         serial = androidId
                     }
                 } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Android ID também falhou: ${e.message}")
+                    // Ignorar
                 }
             }
             
-            // MÉTODO 4: Fallback final - gerar ID único
             if (serial == null) {
                 serial = "unknown_device_${System.currentTimeMillis() % 10000}"
-                Log.w("DeviceInfoCollector", "Usando fallback genérico: ${serial}")
             }
             
-            Log.d("DeviceInfoCollector", "Serial final: ${serial}")
             serial
             
         } catch (e: Exception) {
-            Log.e("DeviceInfoCollector", "Erro geral ao obter Serial: ${e.message}")
+            Log.e("DeviceInfoCollector", "Erro ao obter Serial: ${e.message}")
             "error_device_${System.currentTimeMillis() % 10000}"
         }
     }
     
     private fun getImei(context: Context): String? {
         return try {
-            Log.d("DeviceInfoCollector", "=== COLETANDO IMEI (Device Owner) ===")
-            
-            val devicePolicyManager = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
-            Log.d("DeviceInfoCollector", "É Device Owner: $isDeviceOwner")
-            Log.d("DeviceInfoCollector", "Package Name: ${context.packageName}")
-            Log.d("DeviceInfoCollector", "Android Version: ${Build.VERSION.SDK_INT}")
-            
-            // IMPORTANTE: No Android 10+, mesmo Device Owners precisam de READ_PRIVILEGED_PHONE_STATE
-            // para acessar IMEI, que é uma permissão privilegiada apenas para apps de sistema.
-            // Como alternativa, usaremos Android ID ou Enrollment ID que são únicos e acessíveis.
-            
             val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
             
             val imei = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                // Android 10+ - IMEI requer permissões privilegiadas que Device Owner não tem
-                // Usar identificador alternativo
-                try {
-                    Log.d("DeviceInfoCollector", "Android 10+: IMEI requer permissões privilegiadas")
-                    Log.d("DeviceInfoCollector", "Usando Android ID como identificador alternativo")
-                    null // Retornar null e usar deviceId (Android ID) como identificador principal
-                } catch (e: Exception) {
-                    Log.w("DeviceInfoCollector", "Erro: ${e.message}")
-                    null
-                }
+                null // Android 10+ requer permissões privilegiadas
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 try {
-                    Log.d("DeviceInfoCollector", "Tentando telephonyManager.imei...")
                     val imeiValue = telephonyManager.imei
-                    
-                    if (imeiValue != null && imeiValue.isNotEmpty() && imeiValue != "unknown") {
-                        Log.d("DeviceInfoCollector", "✓ IMEI válido obtido: ${imeiValue.takeLast(4)}")
-                        imeiValue
-                    } else {
-                        null
-                    }
+                    if (imeiValue != null && imeiValue.isNotEmpty() && imeiValue != "unknown") imeiValue else null
                 } catch (e: SecurityException) {
-                    Log.d("DeviceInfoCollector", "SecurityException esperada no Android 10+: IMEI indisponível para Device Owner")
                     null
                 }
             } else {
                 @Suppress("DEPRECATION")
                 try {
                     val deviceId = telephonyManager.deviceId
-                    if (deviceId != null && deviceId.isNotEmpty() && deviceId != "unknown") {
-                        Log.d("DeviceInfoCollector", "✓ DeviceId válido: ${deviceId.takeLast(4)}")
-                        deviceId
-                    } else {
-                        null
-                    }
+                    if (deviceId != null && deviceId.isNotEmpty() && deviceId != "unknown") deviceId else null
                 } catch (e: SecurityException) {
-                    Log.d("DeviceInfoCollector", "SecurityException ao obter DeviceId")
                     null
                 }
             }
             
-            Log.d("DeviceInfoCollector", "IMEI final: ${imei?.let { "***${it.takeLast(4)}" } ?: "N/A (usando Android ID)"}")
-            Log.d("DeviceInfoCollector", "===============================================")
             imei
         } catch (e: Exception) {
-            Log.e("DeviceInfoCollector", "Erro geral ao obter IMEI", e)
+            null
+        }
+    }
+    
+    private fun getMeid(context: Context): String? {
+        return try {
+            val telephonyManager = context.getSystemService(Context.TELEPHONY_SERVICE) as android.telephony.TelephonyManager
+            
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                try {
+                    val meidValue = telephonyManager.meid
+                    if (meidValue != null && meidValue.isNotEmpty() && meidValue != "unknown") meidValue else null
+                } catch (e: Exception) {
+                    null
+                }
+            } else {
+                null
+            }
+        } catch (e: Exception) {
             null
         }
     }
@@ -907,6 +917,78 @@ object DeviceInfoCollector {
         val seventh: G,
         val eighth: H
     )
+    
+    /**
+     * Calcula o status de conformidade do dispositivo baseado em políticas de segurança
+     * 
+     * Critérios de conformidade:
+     * - Dispositivo deve ser Device Owner
+     * - Opções de desenvolvedor devem estar desabilitadas (em produção)
+     * - ADB não deve estar habilitado (em produção)
+     * - Instalação de fontes desconhecidas deve estar desabilitada
+     * 
+     * @return "compliant", "non_compliant" ou "unknown"
+     */
+    private fun calculateComplianceStatus(
+        context: Context,
+        isDeviceOwner: Boolean,
+        isDeveloperOptionsEnabled: Boolean,
+        isAdbEnabled: Boolean,
+        isUnknownSourcesEnabled: Boolean
+    ): String {
+        return try {
+            val complianceIssues = mutableListOf<String>()
+            
+            Log.i("DeviceInfoCollector", "╔═══════════════════════════════════════════════════════════════")
+            Log.i("DeviceInfoCollector", "║ CALCULANDO COMPLIANCE STATUS")
+            Log.i("DeviceInfoCollector", "╠═══════════════════════════════════════════════════════════════")
+            Log.i("DeviceInfoCollector", "║ Device Owner: $isDeviceOwner")
+            Log.i("DeviceInfoCollector", "║ Developer Options: $isDeveloperOptionsEnabled")
+            Log.i("DeviceInfoCollector", "║ ADB Enabled: $isAdbEnabled")
+            Log.i("DeviceInfoCollector", "║ Unknown Sources: $isUnknownSourcesEnabled")
+            Log.i("DeviceInfoCollector", "║ Build Type: ${Build.TYPE}")
+            
+            if (!isDeviceOwner) {
+                complianceIssues.add("Não é Device Owner")
+            }
+            
+            if (isDeveloperOptionsEnabled && !Build.TYPE.equals("eng", ignoreCase = true)) {
+                complianceIssues.add("Opções de desenvolvedor habilitadas")
+            }
+            
+            if (isAdbEnabled && !Build.TYPE.equals("eng", ignoreCase = true)) {
+                complianceIssues.add("ADB habilitado")
+            }
+            
+            if (isUnknownSourcesEnabled) {
+                complianceIssues.add("Fontes desconhecidas habilitadas")
+            }
+            
+            val status = when {
+                complianceIssues.isEmpty() -> "compliant"
+                !isDeviceOwner -> "non_compliant"
+                else -> "non_compliant"
+            }
+            
+            if (complianceIssues.isNotEmpty()) {
+                Log.w("DeviceInfoCollector", "║ ⚠️  PROBLEMAS DE CONFORMIDADE:")
+                complianceIssues.forEach { issue ->
+                    Log.w("DeviceInfoCollector", "║    - $issue")
+                }
+            } else {
+                Log.i("DeviceInfoCollector", "║ ✅ Nenhum problema de conformidade detectado")
+            }
+            
+            Log.i("DeviceInfoCollector", "║ Status Final: $status")
+            Log.i("DeviceInfoCollector", "╚═══════════════════════════════════════════════════════════════")
+            
+            status
+            
+        } catch (e: Exception) {
+            Log.e("DeviceInfoCollector", "Erro ao calcular conformidade", e)
+            "unknown"
+        }
+    }
 }
 
 // Classe auxiliar para retornar 4 valores

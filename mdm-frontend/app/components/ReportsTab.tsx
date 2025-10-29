@@ -288,6 +288,41 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
     loadDashboardData(); // ✅ NOVO: Recarregar dados do dashboard também
   };
 
+  const clearReportData = async () => {
+    if (!device?.deviceId) {
+      alert('Dispositivo não identificado');
+      return;
+    }
+
+    if (!confirm('Tem certeza que deseja limpar TODOS os dados de relatório deste dispositivo? Esta ação não pode ser desfeita.')) {
+      return;
+    }
+
+    setIsLoadingDashboard(true);
+    
+    try {
+      const response = await fetch(`/api/devices/app-history?deviceId=${device.deviceId}`, {
+        method: 'DELETE'
+      });
+      
+      const result = await response.json();
+      
+      if (result.success) {
+        alert(`✅ Histórico limpo com sucesso! ${result.deletedCount} registros removidos.`);
+        // Recarregar dados
+        loadUsageData();
+        loadDashboardData();
+      } else {
+        alert('❌ Erro ao limpar histórico: ' + (result.error || 'Erro desconhecido'));
+      }
+    } catch (error) {
+      console.error('❌ Erro ao limpar histórico:', error);
+      alert('❌ Erro ao limpar histórico. Verifique o console.');
+    } finally {
+      setIsLoadingDashboard(false);
+    }
+  };
+
   const loadAccessedApps = async () => {
     console.log('📱 === LOAD ACCESSED APPS ===');
     console.log('📱 device?.deviceId:', device?.deviceId);
@@ -393,7 +428,7 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
   if (!isActive) return null;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">📊 Relatórios de Uso</h3>
         <div className="flex gap-2">
@@ -406,6 +441,16 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
               <line x1="10" y1="18" x2="14" y2="18" strokeWidth="2"/>
             </svg>
             Acessados
+          </button>
+          <button
+            onClick={clearReportData}
+            disabled={isLoadingDashboard}
+            className="px-3 py-2 text-sm bg-red-500 text-white rounded-md hover:bg-red-600 disabled:opacity-50 flex items-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Limpar
           </button>
           <button
             onClick={refreshData}
@@ -458,7 +503,7 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
           {/* Resumo Geral com Dados Reais */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h4 className="text-lg font-medium text-gray-900 mb-4">📈 Resumo Geral</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               <div className="bg-blue-50 rounded-lg p-4">
                 <div className="flex items-center">
                   <div className="flex-shrink-0">
@@ -513,18 +558,18 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
               <h4 className="text-lg font-medium text-gray-900 mb-4">🏆 Top Apps Mais Acessados</h4>
               <div className="space-y-3">
                 {dashboardData.topApps.map((app: any, index: number) => (
-                  <div key={app.package_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex items-center gap-3">
+                  <div key={app.package_name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg gap-3">
+                    <div className="flex items-center gap-3 flex-1 min-w-0">
                       <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
                         {index + 1}
                       </div>
-                      <div>
-                        <h5 className="font-medium text-gray-900">{app.app_name}</h5>
-                        <p className="text-sm text-gray-600 font-mono">{app.package_name}</p>
+                      <div className="flex-1 min-w-0">
+                        <h5 className="font-medium text-gray-900 truncate">{app.app_name}</h5>
+                        <p className="text-sm text-gray-600 font-mono truncate">{app.package_name}</p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium text-gray-900">{app.total_accesses} acessos</p>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-sm font-medium text-gray-900 whitespace-nowrap">{app.total_accesses} acessos</p>
                     </div>
                   </div>
                 ))}
@@ -535,7 +580,7 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
           {/* Gráfico de Apps Abertos por Dia */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <h4 className="text-lg font-medium text-gray-900 mb-4">📈 Apps Abertos por Dia</h4>
-            <div className="h-48 flex items-end justify-between space-x-2 relative">
+            <div className="h-48 flex items-end justify-around gap-1 relative">
               {dashboardData.dailyUsage.map((day: any, index: number) => {
                 // ✅ NOVO: Limite de 100 para o gráfico
                 const maxValue = 100;
@@ -557,9 +602,9 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                 const displayValue = (day.total_accesses || 0) > 100 ? '100+' : (day.total_accesses || 0);
                 
                 return (
-                  <div key={index} className="flex flex-col items-center space-y-2">
+                  <div key={index} className="flex flex-col items-center space-y-2 flex-1">
                     <div 
-                      className={`rounded-t w-8 transition-all duration-500 shadow-sm ${
+                      className={`rounded-t w-full max-w-[32px] transition-all duration-500 shadow-sm ${
                         day.total_accesses > 0 
                           ? 'bg-gradient-to-t from-blue-500 to-blue-400' 
                           : isToday 
@@ -569,7 +614,7 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                       style={{ height: `${heightPx}px` }}
                       title={`${day.dayName}: ${day.total_accesses || 0} acessos total`}
                     ></div>
-                    <div className="text-center absolute -bottom-12 w-full">
+                    <div className="text-center absolute -bottom-12">
                       <div className={`text-xs font-medium ${
                         day.total_accesses > 0 ? 'text-gray-900' : 'text-gray-500'
                       }`}>
@@ -585,8 +630,8 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                 );
               })}
             </div>
-            <div className="mt-16"></div> {/* Espaço para os números */}
-            <p className="text-sm text-gray-600 text-center">
+            <div className="h-16"></div> {/* Espaço para os números */}
+            <p className="text-sm text-gray-600 text-center mt-4">
               Total de acessos a apps por dia da semana atual
             </p>
           </div>
@@ -680,16 +725,16 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
                               </span>
                             </div>
                           </div>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2">
-                              <h4 className="font-semibold text-gray-900 text-lg">{app.appName}</h4>
+                              <h4 className="font-semibold text-gray-900 text-lg truncate">{app.appName}</h4>
                               {!app.isAllowed && (
                                 <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded-full">
                                   Não Permitido
                                 </span>
                               )}
                             </div>
-                            <p className="text-sm text-gray-600 font-mono">{app.packageName}</p>
+                            <p className="text-sm text-gray-600 font-mono truncate">{app.packageName}</p>
                             <div className="flex items-center gap-4 mt-2">
                               <span className="text-sm text-gray-500">
                                 📅 {app.accessDate}

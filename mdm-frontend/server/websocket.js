@@ -436,10 +436,20 @@ async function loadDevicesFromDatabase() {
 
 async function saveDeviceToDatabase(deviceData) {
     try {
-        await DeviceModel.upsert(deviceData);
+        console.log(`💾 Tentando salvar dispositivo ${deviceData.deviceId} no banco...`);
+        const result = await DeviceModel.upsert(deviceData);
+        console.log(`✅ Dispositivo ${deviceData.deviceId} salvo no PostgreSQL com sucesso`);
         log.debug(`Dispositivo salvo no PostgreSQL`, { deviceId: deviceData.deviceId });
+        return result;
     } catch (error) {
-        log.error('Erro ao salvar dispositivo no PostgreSQL', error);
+        console.error(`❌ ERRO ao salvar dispositivo ${deviceData.deviceId} no PostgreSQL:`, error.message);
+        console.error(`   Stack:`, error.stack);
+        log.error('Erro ao salvar dispositivo no PostgreSQL', { 
+            deviceId: deviceData.deviceId, 
+            error: error.message,
+            stack: error.stack
+        });
+        throw error; // Relançar para que o erro seja tratado pelo chamador
     }
 }
 
@@ -850,7 +860,82 @@ async function handleDeviceStatus(ws, data) {
     // Armazenar informações detalhadas do dispositivo
     ws.deviceInfo = data.data;
     
-    // Verificar se dispositivo já existe
+    // ✅ VERIFICAR SE DISPOSITIVO EXISTE NO BANCO (mesmo que deletado da memória)
+    let dbDevice = null;
+    let dbUserBinding = null;
+    let userConflict = null; // Conflito: usuário vinculado em outro device_id
+    
+    try {
+        const dbResult = await query(`
+            SELECT 
+                d.*,
+                du.id as user_uuid,
+                du.user_id,
+                du.name as user_name,
+                du.cpf as user_cpf
+            FROM devices d
+            LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+            WHERE d.device_id = $1
+        `, [deviceId]);
+        
+        if (dbResult.rows.length > 0) {
+            dbDevice = dbResult.rows[0];
+            
+            console.log(`📊 Dados do banco para ${deviceId}:`, {
+                name: dbDevice.name,
+                assigned_device_user_id: dbDevice.assigned_device_user_id,
+                user_id: dbDevice.user_id,
+                user_name: dbDevice.user_name
+            });
+            
+            if (dbDevice.assigned_device_user_id) {
+                dbUserBinding = {
+                    assignedDeviceUserId: dbDevice.assigned_device_user_id,
+                    assignedUserId: dbDevice.user_id,
+                    assignedUserName: dbDevice.user_name ? dbDevice.user_name.split(' ')[0] : null,
+                    assignedUserCpf: dbDevice.user_cpf
+                };
+                
+                console.log(`✅✅✅ Dispositivo encontrado no banco com vínculo: ${dbUserBinding.assignedUserName} (${dbUserBinding.assignedUserId})`);
+                console.log(`   UUID do vínculo: ${dbUserBinding.assignedDeviceUserId}`);
+            } else {
+                console.log(`⚪ Dispositivo existe no banco mas SEM vínculo de usuário`);
+            }
+            
+            // ✅ VERIFICAR SE USUÁRIO ESTÁ VINCULADO EM OUTRO DISPOSITIVO (CONFLITO)
+            if (dbDevice.assigned_device_user_id) {
+                const conflictResult = await query(`
+                    SELECT device_id, name 
+                    FROM devices 
+                    WHERE assigned_device_user_id = $1 
+                    AND device_id != $2
+                `, [dbDevice.assigned_device_user_id, deviceId]);
+                
+                if (conflictResult.rows.length > 0) {
+                    userConflict = {
+                        userId: dbUserBinding.assignedUserId,
+                        userName: dbUserBinding.assignedUserName,
+                        currentDeviceId: deviceId,
+                        otherDevices: conflictResult.rows.map(r => ({
+                            deviceId: r.device_id,
+                            name: r.name
+                        }))
+                    };
+                    
+                    console.log(`⚠️ CONFLITO DETECTADO: Usuário ${dbUserBinding.assignedUserName} vinculado em outros dispositivos:`, 
+                        userConflict.otherDevices.map(d => d.deviceId).join(', '));
+                }
+            }
+            
+            console.log(`✅ Dispositivo ${deviceId} encontrado no banco - carregando dados salvos`);
+        } else {
+            console.log(`⚪ Dispositivo ${deviceId} NÃO encontrado no banco - será criado novo registro`);
+        }
+    } catch (error) {
+        log.error('Erro ao verificar dispositivo no banco', { deviceId, error: error.message });
+    }
+    
+    // Verificar se dispositivo já existe na memória
     const existingDevice = persistentDevices.get(deviceId);
     const isReconnection = existingDevice !== undefined;
     
@@ -882,34 +967,52 @@ async function handleDeviceStatus(ws, data) {
     // Armazenar dispositivo conectado
     connectedDevices.set(deviceId, ws);
     
-    // PRESERVAR NOME DO BANCO: Verificar se há nome salvo no banco antes de sobrescrever
+    // ✅ PRESERVAR DADOS DO BANCO: Nome e vínculo de usuário
     let finalName = data.data.name;
-    if (existingDevice && existingDevice.name) {
-        // Se já existe dispositivo com nome, verificar se mudou intencionalmente
+    
+    // Se existe no banco, usar nome do banco (pode ter sido alterado manualmente)
+    if (dbDevice && dbDevice.name) {
+        const isDefaultName = data.data.name === data.data.model || 
+                             data.data.name === `${data.data.manufacturer} ${data.data.model}`;
+        
+        const isCustomNameInDb = dbDevice.name !== dbDevice.model && 
+                                  dbDevice.name !== `${data.data.manufacturer} ${dbDevice.model}`;
+        
+        // Se banco tem nome personalizado e dispositivo envia nome padrão, preservar do banco
+        if (isCustomNameInDb && isDefaultName) {
+            console.log(`🛡️ PRESERVANDO NOME DO BANCO: "${dbDevice.name}"`);
+            finalName = dbDevice.name;
+        } else if (!isDefaultName) {
+            // Dispositivo mudou nome → usar novo nome do dispositivo
+            finalName = data.data.name;
+        }
+    } else if (existingDevice && existingDevice.name) {
+        // Fallback: preservar da memória se não tem no banco
         const isCustomName = existingDevice.name !== existingDevice.model && 
                             existingDevice.name !== `${existingDevice.manufacturer} ${existingDevice.model}`;
         
-        // Se tinha nome personalizado e agora veio nome padrão (modelo), PRESERVAR o personalizado
         const receivedDefaultName = data.data.name === data.data.model || 
                                     data.data.name === `${data.data.manufacturer} ${data.data.model}`;
         
         if (isCustomName && receivedDefaultName) {
-            console.log('🛡️ PRESERVANDO NOME PERSONALIZADO DO BANCO');
-            console.log(`   Nome no banco: "${existingDevice.name}" (personalizado)`);
-            console.log(`   Nome recebido: "${data.data.name}" (padrão/modelo)`);
-            console.log(`   ✅ Mantendo: "${existingDevice.name}"`);
-            finalName = existingDevice.name; // PRESERVAR nome do banco
+            console.log('🛡️ PRESERVANDO NOME PERSONALIZADO DA MEMÓRIA');
+            finalName = existingDevice.name;
         }
     }
     
-    // Armazenar dispositivo persistente com informações completas
+    // ✅ Armazenar dispositivo persistente COM DADOS DO BANCO (vínculo de usuário)
     const deviceData = {
         ...data.data,
         name: finalName, // Usar nome preservado
         status: 'online',
-        lastSeen: now, // Sempre atualizar com timestamp atual
+        lastSeen: now,
         connectionId: ws.connectionId,
-        connectedAt: ws.connectedAt
+        connectedAt: ws.connectedAt,
+        // ✅ INCLUIR VÍNCULO DE USUÁRIO DO BANCO (se existir)
+        assignedDeviceUserId: dbUserBinding?.assignedDeviceUserId || null,
+        assignedUserId: dbUserBinding?.assignedUserId || null,
+        assignedUserName: dbUserBinding?.assignedUserName || null,
+        assignedUserCpf: dbUserBinding?.assignedUserCpf || null
     };
     
     console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
@@ -923,10 +1026,16 @@ async function handleDeviceStatus(ws, data) {
         console.log(`   Nome novo: "${finalName}"`);
     }
     
-    persistentDevices.set(deviceId, deviceData);
+persistentDevices.set(deviceId, deviceData);
     
-    // Salvar no PostgreSQL
-    saveDeviceToDatabase(deviceData);
+    // ✅ SALVAR NO POSTGRESQL (SEMPRE que o dispositivo conectar/atualizar)
+    try {
+        await saveDeviceToDatabase(deviceData);
+        console.log(`✅ Dispositivo ${deviceId} salvo/atualizado no banco de dados`);
+    } catch (error) {
+        console.error(`❌ Erro ao salvar dispositivo ${deviceId} no banco:`, error);
+        log.error('Erro ao salvar dispositivo no banco', { deviceId, error: error.message });
+    }
     
     // ✅ NOVO: Registrar status online no histórico
     try {
@@ -934,6 +1043,24 @@ async function handleDeviceStatus(ws, data) {
         console.log('✅ Status online registrado no histórico');
     } catch (error) {
         console.error('❌ Erro ao registrar status no histórico:', error);
+    }
+    
+    // ✅ NOTIFICAR SOBRE CONFLITO DE USUÁRIO (se houver)
+    if (userConflict) {
+        console.log('⚠️ ENVIANDO NOTIFICAÇÃO DE CONFLITO DE USUÁRIO PARA WEB CLIENTS');
+        notifyWebClients({
+            type: 'user_conflict_warning',
+            deviceId: deviceId,
+            deviceName: finalName,
+            conflict: {
+                userId: userConflict.userId,
+                userName: userConflict.userName,
+                currentDeviceId: userConflict.currentDeviceId,
+                otherDevices: userConflict.otherDevices
+            },
+            message: `Usuário ${userConflict.userName} (${userConflict.userId}) está vinculado a outros dispositivos. O vínculo será mantido no dispositivo atual e removido dos outros.`,
+            timestamp: now
+        });
     }
     
     // Se o nome mudou, notificar especificamente sobre a mudança
@@ -946,20 +1073,52 @@ async function handleDeviceStatus(ws, data) {
         console.log(`   Nome novo: "${data.data.name}"`);
         console.log('📝 ═══════════════════════════════════════════════');
         
+        // Buscar dados de usuário vinculado para incluir na notificação
+        let userBinding = {};
+        try {
+            const userResult = await query(`
+                SELECT 
+                    d.assigned_device_user_id,
+                    du.user_id,
+                    du.name as user_name
+                FROM devices d
+                LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+                WHERE d.device_id = $1 AND d.assigned_device_user_id IS NOT NULL
+            `, [deviceId]);
+            
+            if (userResult.rows.length > 0) {
+                const row = userResult.rows[0];
+                userBinding = {
+                    assignedDeviceUserId: row.assigned_device_user_id,
+                    assignedUserId: row.user_id,
+                    assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                };
+            }
+        } catch (error) {
+            log.error('Erro ao buscar usuário para notificação de nome', { error: error.message });
+        }
+        
+        const deviceWithUser = {
+            ...deviceData,
+            assignedDeviceUserId: userBinding.assignedDeviceUserId || null,
+            assignedUserId: userBinding.assignedUserId || null,
+            assignedUserName: userBinding.assignedUserName || null
+        };
+        
         // Notificar clientes web sobre mudança de nome COM OS DADOS COMPLETOS DO DISPOSITIVO
         notifyWebClients({
             type: 'device_name_changed',
             deviceId: deviceId,
             oldName: existingDevice.name,
             newName: data.data.name,
-            device: deviceData,
+            device: deviceWithUser,
             timestamp: now
         });
         
         // TAMBÉM enviar device_connected para garantir atualização imediata na UI
         notifyWebClients({
             type: 'device_connected',
-            device: deviceData,
+            device: deviceWithUser,
             timestamp: now
         });
         
@@ -1004,12 +1163,75 @@ async function handleDeviceStatus(ws, data) {
             installedAppsCount: connectedDeviceData.installedAppsCount
         });
         
+        // ✅ RESTAURAR VÍNCULO DE USUÁRIO DO BANCO
+        let userBinding = dbUserBinding || {};
+        
+        console.log(`🔍 === VERIFICANDO VÍNCULO PARA ${deviceId} ===`);
+        console.log(`   dbUserBinding existe? ${!!dbUserBinding}`);
+        console.log(`   dbUserBinding tem userId? ${!!dbUserBinding?.assignedUserId}`);
+        console.log(`   dbUserBinding:`, dbUserBinding);
+        
+        // Se não temos do banco inicial, buscar agora
+        if (!userBinding.assignedUserId) {
+            console.log(`   Buscando vínculo no banco para ${deviceId}...`);
+            try {
+                const userResult = await query(`
+                    SELECT 
+                        d.assigned_device_user_id,
+                        du.user_id,
+                        du.name as user_name,
+                        du.cpf
+                    FROM devices d
+                    LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+                    WHERE d.device_id = $1 AND d.assigned_device_user_id IS NOT NULL
+                `, [deviceId]);
+                
+                console.log(`   Query retornou ${userResult.rows.length} registros`);
+                
+                if (userResult.rows.length > 0) {
+                    const row = userResult.rows[0];
+                    userBinding = {
+                        assignedDeviceUserId: row.assigned_device_user_id,
+                        assignedUserId: row.user_id,
+                        assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                    };
+                    console.log(`✅ Usuário vinculado encontrado: ${row.user_name} (${row.user_id})`);
+                } else {
+                    console.log(`⚪ Nenhum vínculo encontrado no banco para ${deviceId}`);
+                }
+            } catch (error) {
+                console.error(`❌ Erro ao buscar vínculo:`, error);
+                log.error('Erro ao buscar usuário vinculado', { error: error.message });
+            }
+        } else {
+            console.log(`✅ Usando vínculo já carregado: ${userBinding.assignedUserName} (${userBinding.assignedUserId})`);
+        }
+        
+        // Adicionar dados de usuário ao dispositivo (garantindo que o vínculo do banco seja usado)
+        const deviceWithUser = {
+            ...connectedDeviceData,
+            // ✅ PRIORIDADE: Dados do banco > dados da memória
+            assignedDeviceUserId: userBinding.assignedDeviceUserId || null,
+            assignedUserId: userBinding.assignedUserId || null,
+            assignedUserName: userBinding.assignedUserName || null
+        };
+        
+        console.log(`📤 ENVIANDO device_connected para ${deviceId}:`);
+        console.log(`   assignedDeviceUserId: ${deviceWithUser.assignedDeviceUserId}`);
+        console.log(`   assignedUserId: ${deviceWithUser.assignedUserId}`);
+        console.log(`   assignedUserName: ${deviceWithUser.assignedUserName}`);
+        console.log(`   ==========================================`);
+        
+        if (userBinding.assignedUserId) {
+            console.log(`✅✅✅ VÍNCULO RESTAURADO: ${deviceId} → ${userBinding.assignedUserName} (${userBinding.assignedUserId})`);
+        }
+        
         let sentCount = 0;
         webClients.forEach(client => {
             if (client.readyState === WebSocket.OPEN) {
                 client.send(JSON.stringify({
                     type: 'device_connected',
-                    device: connectedDeviceData
+                    device: deviceWithUser
                 }));
                 sentCount++;
             }
@@ -1074,7 +1296,7 @@ async function handleDeviceStatus(ws, data) {
         data.data.installedAppsCount = 0;
     }
     
-    // Notificar clientes web
+    // Notificar clientes web COM DADOS DE USUÁRIO DO BANCO
     const statusDeviceData = persistentDevices.get(deviceId);
     if (statusDeviceData) {
         console.log('Device ID:', deviceId);
@@ -1083,19 +1305,63 @@ async function handleDeviceStatus(ws, data) {
         console.log('Apps permitidos:', statusDeviceData.allowedApps?.length || 0);
         console.log('Armazenamento total:', statusDeviceData.storageTotal);
         console.log('Armazenamento usado:', statusDeviceData.storageUsed);
+        
+        // ✅ Usar dados de usuário já carregados do banco (dbUserBinding) ou buscar se necessário
+        let userBinding = dbUserBinding || {};
+        
+        // Se não temos, buscar agora
+        if (!userBinding.assignedUserId) {
+            try {
+                const userResult = await query(`
+                    SELECT 
+                        d.assigned_device_user_id,
+                        du.user_id,
+                        du.name as user_name
+                    FROM devices d
+                    LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+                    WHERE d.device_id = $1 AND d.assigned_device_user_id IS NOT NULL
+                `, [deviceId]);
+                
+                if (userResult.rows.length > 0) {
+                    const row = userResult.rows[0];
+                    userBinding = {
+                        assignedDeviceUserId: row.assigned_device_user_id,
+                        assignedUserId: row.user_id,
+                        assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                    };
+                    console.log(`✅ Usuário vinculado no status: ${row.user_name} (ID: ${row.user_id})`);
+                } else {
+                    console.log('⚪ Sem usuário vinculado para este dispositivo');
+                }
+            } catch (error) {
+                log.error('Erro ao buscar usuário vinculado no status', { error: error.message });
+            }
+        } else {
+            console.log(`✅ Usando vínculo já carregado no status: ${userBinding.assignedUserName} (${userBinding.assignedUserId})`);
+        }
+        
+        // Adicionar dados de usuário ao dispositivo (prioridade: banco > memória)
+        const deviceWithUser = {
+            ...statusDeviceData,
+            // ✅ PRIORIDADE: Dados do banco > dados da memória
+            assignedDeviceUserId: userBinding.assignedDeviceUserId || statusDeviceData.assignedDeviceUserId || null,
+            assignedUserId: userBinding.assignedUserId || statusDeviceData.assignedUserId || null,
+            assignedUserName: userBinding.assignedUserName || statusDeviceData.assignedUserName || null
+        };
+        
         console.log('=======================================================');
         
-        // Enviar dados completos do dispositivo
+        // Enviar dados completos do dispositivo COM USUÁRIO
         notifyWebClients({
             type: 'device_connected',
-            device: statusDeviceData,
+            device: deviceWithUser,
             timestamp: Date.now()
         });
         
-        // Também enviar atualização de status
+        // Também enviar atualização de status COM USUÁRIO
         notifyWebClients({
             type: 'device_status',
-            device: statusDeviceData,
+            device: deviceWithUser,
             timestamp: Date.now()
         });
     }
@@ -1173,7 +1439,7 @@ function handlePing(ws, data) {
     }
 }
 
-function handleWebClient(ws, data) {
+async function handleWebClient(ws, data) {
     // Marcar como cliente web
     ws.isWebClient = true;
     webClients.add(ws);
@@ -1183,47 +1449,156 @@ function handleWebClient(ws, data) {
         totalWebClients: webClients.size
     });
     
-    // Enviar lista de dispositivos (conectados e desconectados)
-    const devices = Array.from(persistentDevices.values()).map(device => ({
-        ...device,
-        // Manter informações detalhadas
-        name: device.name,
-        model: device.model,
-        androidVersion: device.androidVersion,
-        manufacturer: device.manufacturer,
-        batteryLevel: device.batteryLevel,
-        isDeviceOwner: device.isDeviceOwner,
-        isProfileOwner: device.isProfileOwner,
-        isKioskMode: device.isKioskMode,
-        appVersion: device.appVersion,
-        timezone: device.timezone,
-        language: device.language,
-        country: device.country,
-        networkType: device.networkType,
-        wifiSSID: device.wifiSSID,
-        isWifiEnabled: device.isWifiEnabled,
-        isBluetoothEnabled: device.isBluetoothEnabled,
-        isLocationEnabled: device.isLocationEnabled,
-        isDeveloperOptionsEnabled: device.isDeveloperOptionsEnabled,
-        isAdbEnabled: device.isAdbEnabled,
-        isUnknownSourcesEnabled: device.isUnknownSourcesEnabled,
-        installedAppsCount: device.installedAppsCount,
-        installedApps: device.installedApps || [],
-        storageTotal: device.storageTotal,
-        storageUsed: device.storageUsed,
-        memoryTotal: device.memoryTotal,
-        memoryUsed: device.memoryUsed,
-        cpuArchitecture: device.cpuArchitecture,
-        screenResolution: device.screenResolution,
-        screenDensity: device.screenDensity,
-        batteryStatus: device.batteryStatus,
-        isCharging: device.isCharging,
-        serialNumber: device.serialNumber,
-        imei: device.imei,
-        macAddress: device.macAddress,
-        ipAddress: device.ipAddress,
-        apiLevel: device.apiLevel
-    }));
+    console.log('📊 === CARREGANDO DISPOSITIVOS DO BANCO DE DADOS ===');
+    
+    // ✅ BUSCAR TODOS OS DISPOSITIVOS DO BANCO DE DADOS (FONTE DE VERDADE)
+    let dbDevices = [];
+    try {
+        const dbResult = await query(`
+            SELECT 
+                d.*,
+                du.user_id,
+                du.name as user_name,
+                du.cpf as user_cpf,
+                d.assigned_device_user_id
+            FROM devices d
+            LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+            ORDER BY d.last_seen DESC
+        `);
+        
+        console.log(`📊 Query retornou ${dbResult.rows.length} dispositivos do banco`);
+        if (dbResult.rows.length > 0) {
+            const firstRow = dbResult.rows[0];
+            console.log('🔍 DEBUG - Primeira linha do banco (RAW):', {
+                device_id: firstRow.device_id,
+                name: firstRow.name,
+                assigned_device_user_id: firstRow.assigned_device_user_id,
+                user_id: firstRow.user_id,
+                user_name: firstRow.user_name,
+                user_cpf: firstRow.user_cpf
+            });
+        }
+        
+        dbDevices = dbResult.rows.map(row => ({
+            deviceId: row.device_id,
+            id: row.id, // UUID interno
+            name: row.name || row.model || 'Dispositivo Desconhecido',
+            model: row.model,
+            manufacturer: row.manufacturer,
+            androidVersion: row.android_version,
+            osType: row.os_type || 'Android',
+            apiLevel: row.api_level,
+            serialNumber: row.serial_number,
+            imei: row.imei,
+            meid: row.meid,
+            macAddress: row.mac_address,
+            ipAddress: row.ip_address,
+            batteryLevel: row.battery_level || 0,
+            batteryStatus: row.battery_status,
+            isCharging: row.is_charging || false,
+            storageTotal: parseInt(row.storage_total) || 0,
+            storageUsed: parseInt(row.storage_used) || 0,
+            memoryTotal: parseInt(row.memory_total) || 0,
+            memoryUsed: parseInt(row.memory_used) || 0,
+            cpuArchitecture: row.cpu_architecture,
+            screenResolution: row.screen_resolution,
+            screenDensity: row.screen_density,
+            networkType: row.network_type,
+            wifiSSID: row.wifi_ssid,
+            isWifiEnabled: row.is_wifi_enabled || false,
+            isBluetoothEnabled: row.is_bluetooth_enabled || false,
+            isLocationEnabled: row.is_location_enabled || false,
+            isDeveloperOptionsEnabled: row.is_developer_options_enabled || false,
+            isAdbEnabled: row.is_adb_enabled || false,
+            isUnknownSourcesEnabled: row.is_unknown_sources_enabled || false,
+            isDeviceOwner: row.is_device_owner || false,
+            isProfileOwner: row.is_profile_owner || false,
+            isKioskMode: row.is_kiosk_mode || false,
+            appVersion: row.app_version,
+            timezone: row.timezone,
+            language: row.language,
+            country: row.country,
+            complianceStatus: row.compliance_status || 'unknown',
+            status: row.status || 'offline',
+            lastSeen: row.last_seen ? new Date(row.last_seen).getTime() : null,
+            installedAppsCount: 0,
+            installedApps: [],
+            allowedApps: [],
+            // ✅ DADOS DE USUÁRIO VINCULADO DO BANCO
+            assignedDeviceUserId: row.assigned_device_user_id || null,
+            assignedUserId: row.user_id || null,
+            assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null,
+            assignedUserCpf: row.user_cpf || null
+        }));
+        
+        console.log(`✅ Carregados ${dbDevices.length} dispositivos do banco de dados`);
+        
+        // 🔍 DEBUG: Verificar dados de usuário vinculado
+        if (dbDevices.length > 0) {
+            const firstDevice = dbDevices[0];
+            console.log('🔍 DEBUG - Primeiro dispositivo do banco:', {
+                deviceId: firstDevice.deviceId,
+                name: firstDevice.name,
+                assignedDeviceUserId: firstDevice.assignedDeviceUserId,
+                assignedUserId: firstDevice.assignedUserId,
+                assignedUserName: firstDevice.assignedUserName,
+                hasUser: !!(firstDevice.assignedUserId || firstDevice.assignedUserName)
+            });
+        }
+    } catch (error) {
+        log.error('Erro ao carregar dispositivos do banco', { error: error.message });
+        console.error('❌ Erro ao buscar dispositivos do banco:', error);
+    }
+    
+    // ✅ MESCLAR COM DADOS EM TEMPO REAL (para dispositivos conectados)
+    // Se um dispositivo está na memória (conectado), usar dados mais recentes mas preservar vínculo de usuário
+    const devicesMap = new Map();
+    
+    // Primeiro, adicionar todos os dispositivos do banco
+    dbDevices.forEach(device => {
+        devicesMap.set(device.deviceId, device);
+    });
+    
+    // Depois, mesclar com dados em tempo real (se conectado)
+    Array.from(persistentDevices.values()).forEach(liveDevice => {
+        const existing = devicesMap.get(liveDevice.deviceId);
+        
+        if (existing) {
+            // Dispositivo existe no banco → Mesclar dados em tempo real mas PRESERVAR vínculo de usuário
+            const mergedDevice = {
+                ...liveDevice, // Dados em tempo real (bateria, apps, etc)
+                // PRESERVAR vínculo de usuário do banco
+                assignedDeviceUserId: existing.assignedDeviceUserId || null,
+                assignedUserId: existing.assignedUserId || null,
+                assignedUserName: existing.assignedUserName || null,
+                assignedUserCpf: existing.assignedUserCpf || null,
+                // Usar status em tempo real se conectado
+                status: connectedDevices.has(liveDevice.deviceId) ? 'online' : existing.status
+            };
+            
+            // 🔍 DEBUG: Log da mesclagem
+            if (existing.assignedUserId || existing.assignedUserName) {
+                console.log(`✅ Mesclando dispositivo ${liveDevice.deviceId}: preservando vínculo de usuário:`, {
+                    assignedUserId: existing.assignedUserId,
+                    assignedUserName: existing.assignedUserName
+                });
+            }
+            
+            devicesMap.set(liveDevice.deviceId, mergedDevice);
+        } else {
+            // Dispositivo não está no banco ainda → Adicionar (será salvo na próxima atualização)
+            devicesMap.set(liveDevice.deviceId, {
+                ...liveDevice,
+                assignedDeviceUserId: null,
+                assignedUserId: null,
+                assignedUserName: null,
+                assignedUserCpf: null
+            });
+        }
+    });
+    
+    // Converter Map para Array (dados já incluem tudo do banco + tempo real)
+    const devices = Array.from(devicesMap.values());
     
     const response = {
         type: 'devices_list',
@@ -1241,7 +1616,7 @@ function handleWebClient(ws, data) {
     console.log('=== ENVIANDO LISTA DE DISPOSITIVOS PARA CLIENTE WEB ===');
     console.log('Número de dispositivos:', devices.length);
     if (devices.length > 0) {
-        console.log('Primeiro dispositivo:', {
+        console.log('🔍 DEBUG - Primeiro dispositivo ENVIANDO:', {
             deviceId: devices[0].deviceId,
             name: devices[0].name,
             model: devices[0].model,
@@ -1249,7 +1624,13 @@ function handleWebClient(ws, data) {
             batteryLevel: devices[0].batteryLevel,
             installedAppsCount: devices[0].installedAppsCount,
             hasInstalledApps: !!devices[0].installedApps,
-            installedAppsLength: devices[0].installedApps?.length
+            installedAppsLength: devices[0].installedApps?.length,
+            // ✅ DADOS DE USUÁRIO VINCULADO
+            assignedDeviceUserId: devices[0].assignedDeviceUserId,
+            assignedUserId: devices[0].assignedUserId,
+            assignedUserName: devices[0].assignedUserName,
+            assignedUserCpf: devices[0].assignedUserCpf,
+            hasUserData: !!(devices[0].assignedUserId || devices[0].assignedUserName)
         });
     }
     console.log('=======================================================');
@@ -1309,18 +1690,39 @@ async function handleDeleteDevice(ws, data) {
         // Obter dados do dispositivo antes de deletar (para logs)
         const deviceData = persistentDevices.get(deviceId);
         
-        // Deletar do banco PostgreSQL PRIMEIRO
-        await DeviceModel.delete(deviceId);
-        log.info(`Dispositivo deletado do PostgreSQL`, { deviceId });
+        // ✅ DESVINCULAR USUÁRIO NO BANCO DE DADOS ao deletar
+        try {
+            await query(
+                `UPDATE devices 
+                 SET assigned_device_user_id = NULL, updated_at = NOW()
+                 WHERE device_id = $1`,
+                [deviceId]
+            );
+            console.log(`✅ Vínculo de usuário removido do banco para dispositivo ${deviceId}`);
+            log.info(`Vínculo de usuário removido ao deletar dispositivo`, {
+                deviceId: deviceId,
+                deviceName: deviceData?.name || 'desconhecido'
+            });
+        } catch (dbError) {
+            console.error(`❌ Erro ao remover vínculo de usuário do banco:`, dbError);
+            log.error(`Erro ao remover vínculo de usuário`, {
+                deviceId: deviceId,
+                error: dbError.message
+            });
+            // Continuar mesmo se falhar (não bloquear a deleção)
+        }
         
-        // Remover das listas em memória
+        // Remover apenas das listas em memória (mantém registro no banco para reconexão)
         persistentDevices.delete(deviceId);
         connectedDevices.delete(deviceId);
         
-        log.info(`Dispositivo deletado permanentemente`, {
+        console.log(`🗑️ Dispositivo ${deviceId} removido da memória e vínculo de usuário zerado no banco`);
+        
+        log.info(`Dispositivo removido da memória e vínculo zerado`, {
             deviceId: deviceId,
             deviceName: deviceData?.name || 'desconhecido',
-            connectionId: ws.connectionId
+            connectionId: ws.connectionId,
+            note: 'Vínculo de usuário removido; registro mantido no banco para reconexão'
         });
         
         // Enviar confirmação para o cliente que solicitou a deleção
@@ -1923,7 +2325,7 @@ function notifyWebClients(message) {
 }
 
 // Sistema de monitoramento e heartbeat
-setInterval(() => {
+setInterval(async () => {
     serverStats.lastHeartbeat = Date.now();
     const now = Date.now();
     
@@ -2125,47 +2527,85 @@ setInterval(() => {
         });
     }
 
-    // Enviar status dos dispositivos (persistentes)
-    const devices = Array.from(persistentDevices.values()).map(device => ({
-        ...device,
-        // Manter informações detalhadas
-        name: device.name,
-        model: device.model,
-        androidVersion: device.androidVersion,
-        manufacturer: device.manufacturer,
-        batteryLevel: device.batteryLevel,
-        isDeviceOwner: device.isDeviceOwner,
-        isProfileOwner: device.isProfileOwner,
-        isKioskMode: device.isKioskMode,
-        appVersion: device.appVersion,
-        timezone: device.timezone,
-        language: device.language,
-        country: device.country,
-        networkType: device.networkType,
-        wifiSSID: device.wifiSSID,
-        isWifiEnabled: device.isWifiEnabled,
-        isBluetoothEnabled: device.isBluetoothEnabled,
-        isLocationEnabled: device.isLocationEnabled,
-        isDeveloperOptionsEnabled: device.isDeveloperOptionsEnabled,
-        isAdbEnabled: device.isAdbEnabled,
-        isUnknownSourcesEnabled: device.isUnknownSourcesEnabled,
-        installedAppsCount: device.installedAppsCount,
-        installedApps: device.installedApps || [],
-        storageTotal: device.storageTotal,
-        storageUsed: device.storageUsed,
-        memoryTotal: device.memoryTotal,
-        memoryUsed: device.memoryUsed,
-        cpuArchitecture: device.cpuArchitecture,
-        screenResolution: device.screenResolution,
-        screenDensity: device.screenDensity,
-        batteryStatus: device.batteryStatus,
-        isCharging: device.isCharging,
-        serialNumber: device.serialNumber,
-        imei: device.imei,
-        macAddress: device.macAddress,
-        ipAddress: device.ipAddress,
-        apiLevel: device.apiLevel
-    }));
+    // ✅ BUSCAR VÍNCULOS DE USUÁRIO DO BANCO ANTES DE ENVIAR STATUS PERIÓDICO
+    let userBindingsMap = new Map();
+    try {
+        const userBindingsResult = await query(`
+            SELECT 
+                d.device_id,
+                d.assigned_device_user_id,
+                du.user_id,
+                du.name as user_name,
+                du.cpf as user_cpf
+            FROM devices d
+            LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+            WHERE d.assigned_device_user_id IS NOT NULL
+        `);
+        
+        userBindingsResult.rows.forEach(row => {
+            userBindingsMap.set(row.device_id, {
+                assignedDeviceUserId: row.assigned_device_user_id,
+                assignedUserId: row.user_id,
+                assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null,
+                assignedUserCpf: row.user_cpf
+            });
+        });
+        
+        console.log(`✅ ${userBindingsMap.size} vínculos de usuário carregados para devices_status`);
+    } catch (error) {
+        log.error('Erro ao buscar vínculos de usuário para devices_status', { error: error.message });
+    }
+    
+    // Enviar status dos dispositivos (persistentes) COM DADOS DE USUÁRIO DO BANCO
+    const devices = Array.from(persistentDevices.values()).map(device => {
+        const userBinding = userBindingsMap.get(device.deviceId) || {};
+        
+        return {
+            ...device,
+            // Manter informações detalhadas
+            name: device.name,
+            model: device.model,
+            androidVersion: device.androidVersion,
+            manufacturer: device.manufacturer,
+            batteryLevel: device.batteryLevel,
+            isDeviceOwner: device.isDeviceOwner,
+            isProfileOwner: device.isProfileOwner,
+            isKioskMode: device.isKioskMode,
+            appVersion: device.appVersion,
+            timezone: device.timezone,
+            language: device.language,
+            country: device.country,
+            networkType: device.networkType,
+            wifiSSID: device.wifiSSID,
+            isWifiEnabled: device.isWifiEnabled,
+            isBluetoothEnabled: device.isBluetoothEnabled,
+            isLocationEnabled: device.isLocationEnabled,
+            isDeveloperOptionsEnabled: device.isDeveloperOptionsEnabled,
+            isAdbEnabled: device.isAdbEnabled,
+            isUnknownSourcesEnabled: device.isUnknownSourcesEnabled,
+            installedAppsCount: device.installedAppsCount,
+            installedApps: device.installedApps || [],
+            storageTotal: device.storageTotal,
+            storageUsed: device.storageUsed,
+            memoryTotal: device.memoryTotal,
+            memoryUsed: device.memoryUsed,
+            cpuArchitecture: device.cpuArchitecture,
+            screenResolution: device.screenResolution,
+            screenDensity: device.screenDensity,
+            batteryStatus: device.batteryStatus,
+            isCharging: device.isCharging,
+            serialNumber: device.serialNumber,
+            imei: device.imei,
+            macAddress: device.macAddress,
+            ipAddress: device.ipAddress,
+            apiLevel: device.apiLevel,
+            // ✅ ADICIONAR DADOS DE USUÁRIO VINCULADO DO BANCO
+            assignedDeviceUserId: userBinding.assignedDeviceUserId || null,
+            assignedUserId: userBinding.assignedUserId || null,
+            assignedUserName: userBinding.assignedUserName || null,
+            assignedUserCpf: userBinding.assignedUserCpf || null
+        };
+    });
     
     notifyWebClients({
         type: 'devices_status',

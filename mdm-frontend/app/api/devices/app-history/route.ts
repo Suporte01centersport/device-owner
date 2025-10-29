@@ -126,15 +126,44 @@ export async function GET(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
-        const daysToKeep = parseInt(searchParams.get('daysToKeep') || '90');
+        const deviceId = searchParams.get('deviceId');
 
-        console.log(`🧹 API cleanup chamada: daysToKeep=${daysToKeep}`);
+        if (!deviceId) {
+            return NextResponse.json(
+                { error: 'deviceId é obrigatório' },
+                { status: 400 }
+            );
+        }
+
+        console.log(`🧹 Limpando histórico de apps do dispositivo: ${deviceId}`);
         
-        return NextResponse.json({
-            success: true,
-            deletedCount: 0,
-            message: 'API em desenvolvimento - limpeza será implementada após migração do banco'
+        const { Pool } = require('pg');
+        
+        const pool = new Pool({
+            user: process.env.DB_USER || 'postgres',
+            host: process.env.DB_HOST || 'localhost',
+            database: process.env.DB_NAME || 'mdmweb',
+            password: process.env.DB_PASSWORD || '2486',
+            port: parseInt(process.env.DB_PORT) || 5432,
+            ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
         });
+
+        try {
+            const query = 'DELETE FROM app_access_history WHERE device_id = $1';
+            const result = await pool.query(query, [deviceId]);
+            await pool.end();
+            
+            console.log(`✅ Histórico limpo: ${result.rowCount} registros removidos`);
+            
+            return NextResponse.json({
+                success: true,
+                deletedCount: result.rowCount,
+                message: `${result.rowCount} registros removidos com sucesso`
+            });
+        } catch (error) {
+            await pool.end();
+            throw error;
+        }
 
     } catch (error) {
         console.error('❌ Erro na limpeza de histórico:', error);

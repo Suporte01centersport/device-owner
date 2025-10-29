@@ -143,14 +143,56 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
         installedAppsCount: firstDevice.installedAppsCount,
         allowedAppsCount: firstDevice.allowedApps?.length || 0,
         storageTotal: firstDevice.storageTotal,
-        storageUsed: firstDevice.storageUsed
+        storageUsed: firstDevice.storageUsed,
+        // ✅ VERIFICAR DADOS DE USUÁRIO
+        assignedDeviceUserId: firstDevice.assignedDeviceUserId,
+        assignedUserId: firstDevice.assignedUserId,
+        assignedUserName: firstDevice.assignedUserName,
+        hasUserData: !!(firstDevice.assignedUserId || firstDevice.assignedUserName)
       })
     }
 
-    // Sempre atualizar dispositivos com dados do servidor (mais robusto)
-    setDevices(serverDevices)
-    saveDevices(serverDevices)
-    console.log('Dispositivos atualizados com dados do servidor')
+    // ✅ ESTRATÉGIA INTELIGENTE DE MESCLAGEM
+    // PRIORIDADE: Servidor (banco de dados) > Local (fallback temporário)
+    const mergedDevices = serverDevices.map(serverDevice => {
+      const localDevice = devices.find(d => d.deviceId === serverDevice.deviceId)
+      
+      const hasServerUser = !!(serverDevice.assignedUserId || serverDevice.assignedUserName)
+      const hasLocalUser = !!(localDevice?.assignedUserId || localDevice?.assignedUserName)
+      
+      console.log(`🔍 Mesclando ${serverDevice.deviceId}:`, {
+        server: hasServerUser ? `${serverDevice.assignedUserId} (${serverDevice.assignedUserName})` : 'sem usuário',
+        local: hasLocalUser ? `${localDevice?.assignedUserId} (${localDevice?.assignedUserName})` : 'sem usuário',
+        decisao: hasServerUser ? 'USAR SERVIDOR (fonte de verdade)' : 
+                 hasLocalUser ? 'PRESERVAR LOCAL (fallback)' : 
+                 'SEM USUÁRIO'
+      })
+      
+      // ✅ CASO 1: Servidor TEM usuário → SEMPRE usar servidor (banco é fonte de verdade)
+      if (hasServerUser) {
+        console.log(`✅ Usando dados do SERVIDOR para ${serverDevice.name}`)
+        return serverDevice
+      }
+      
+      // ✅ CASO 2: Servidor SEM usuário, mas local TEM → Preservar local (evitar perda temporária)
+      if (hasLocalUser) {
+        console.log(`🔄 Preservando dados LOCAIS para ${serverDevice.name} (servidor temporariamente sem dados)`)
+        return {
+          ...serverDevice,
+          assignedDeviceUserId: localDevice.assignedDeviceUserId,
+          assignedUserId: localDevice.assignedUserId,
+          assignedUserName: localDevice.assignedUserName
+        }
+      }
+      
+      // ✅ CASO 3: Ninguém tem usuário → sem vínculo
+      console.log(`⚪ Sem vínculo de usuário para ${serverDevice.name}`)
+      return serverDevice
+    })
+    
+    setDevices(mergedDevices)
+    saveDevices(mergedDevices)
+    console.log('✅ Dispositivos mesclados: dados técnicos do servidor + vínculos de usuário da web')
 
     // Atualizar senha se fornecida pelo servidor
     if (serverPassword !== undefined && serverPassword !== adminPassword) {

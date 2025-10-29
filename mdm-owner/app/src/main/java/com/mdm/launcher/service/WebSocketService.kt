@@ -849,6 +849,7 @@ class WebSocketService : Service() {
                     model = android.os.Build.MODEL,
                     manufacturer = android.os.Build.MANUFACTURER,
                     androidVersion = android.os.Build.VERSION.RELEASE,
+                    osType = "Android",
                     appVersion = "1.0.0",
                     batteryLevel = 0, // Implementar coleta de bateria em background
                     isCharging = false,
@@ -874,13 +875,15 @@ class WebSocketService : Service() {
                     macAddress = "Unknown",
                     serialNumber = com.mdm.launcher.utils.DeviceInfoCollector.getPublicSerialNumber(this@WebSocketService),
                     imei = "Unknown",
+                    meid = null,
                     installedAppsCount = 0,
                     installedApps = emptyList(),
                     allowedApps = emptyList(),
                     apiLevel = android.os.Build.VERSION.SDK_INT,
                     timezone = java.util.TimeZone.getDefault().id,
                     language = java.util.Locale.getDefault().language,
-                    country = java.util.Locale.getDefault().country
+                    country = java.util.Locale.getDefault().country,
+                    complianceStatus = "unknown"
                 )
                 
                 webSocketClient?.sendDeviceStatus(deviceInfo)

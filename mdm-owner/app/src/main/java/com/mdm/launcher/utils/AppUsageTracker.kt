@@ -114,20 +114,12 @@ class AppUsageTracker(private val context: Context) {
     fun recordAppAccess(packageName: String, appName: String) {
         val currentTime = System.currentTimeMillis()
         val accessedApps = getAccessedApps()
-        
-        Log.d(TAG, "📱 === REGISTRANDO ACESSO AO APP ===")
-        Log.d(TAG, "📱 App: $appName ($packageName)")
-        Log.d(TAG, "📱 Timestamp: $currentTime")
-        Log.d(TAG, "📱 Apps já acessados: ${accessedApps.size}")
-        
-        // Verificar se o app está na lista de permitidos
         val isAllowed = isAppAllowed(packageName)
         
-        // ✅ CORREÇÃO: Verificar se já existe um acesso recente (últimos 30 segundos)
-        // Filtro reduzido de 5 minutos para 30 segundos para registros mais precisos
+        // Verificar se já existe um acesso recente (últimos 30 segundos)
         val recentAccess = accessedApps.find { 
             it.packageName == packageName && 
-            (currentTime - it.accessTime) < (30 * 1000) // 30 segundos
+            (currentTime - it.accessTime) < (30 * 1000)
         }
         
         if (recentAccess == null) {
@@ -140,26 +132,13 @@ class AppUsageTracker(private val context: Context) {
             
             val updatedApps = accessedApps + newAccess
             saveAccessedApps(updatedApps)
-            
-            Log.d(TAG, "✅ App acessado registrado: $appName ($packageName) - Permitido: $isAllowed")
-            Log.d(TAG, "📊 Total de apps acessados: ${updatedApps.size}")
-            
-            // Enviar dados atualizados para o servidor IMEDIATAMENTE
-            Log.d(TAG, "📤 Enviando dados de uso para o servidor...")
             sendUsageDataToServer()
         } else {
-            // Atualizar o isAllowed do acesso recente também
             val updatedRecentAccess = recentAccess.copy(isAllowed = isAllowed)
             val updatedApps = accessedApps.map { if (it == recentAccess) updatedRecentAccess else it }
             saveAccessedApps(updatedApps)
-            
-            Log.d(TAG, "⚠️ Acesso recente já registrado para $appName (últimos 30s), atualizando isAllowed: $isAllowed")
-            // Mesmo assim, enviar dados atualizados
-            Log.d(TAG, "📤 Enviando dados atualizados mesmo com acesso recente...")
             sendUsageDataToServer()
         }
-        
-        Log.d(TAG, "📱 === FIM REGISTRO ACESSO ===")
     }
     
     
@@ -302,11 +281,6 @@ class AppUsageTracker(private val context: Context) {
         scope.launch {
             try {
                 val usageData = getUsageData()
-                
-                Log.d(TAG, "📤 === ENVIANDO DADOS DE USO ===")
-                Log.d(TAG, "📤 Apps acessados: ${usageData["accessed_apps"]}")
-                Log.d(TAG, "📤 Total de dados: ${usageData.size}")
-                
                 val message = mapOf(
                     "type" to "app_usage",
                     "deviceId" to DeviceIdManager.getDeviceId(context),
@@ -314,24 +288,17 @@ class AppUsageTracker(private val context: Context) {
                     "timestamp" to System.currentTimeMillis()
                 )
                 
-                // Enviar via WebSocket diretamente
                 val gson = com.google.gson.Gson()
                 val jsonMessage = gson.toJson(message)
                 
-                Log.d(TAG, "📤 JSON enviado: $jsonMessage")
-                
-                // Enviar apenas via startService (método mais confiável)
                 val serviceIntent = Intent(context, com.mdm.launcher.service.WebSocketService::class.java).apply {
                     putExtra("usage_data", jsonMessage)
                     action = "com.mdm.launcher.SEND_USAGE_DATA"
                 }
                 context.startService(serviceIntent)
-
-                Log.d(TAG, "✅ Dados de uso enviados para o servidor (1 método)")
-                Log.d(TAG, "📤 === FIM ENVIO DADOS ===")
                 
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Erro ao enviar dados de uso", e)
+                Log.e(TAG, "Erro ao enviar dados de uso", e)
             }
         }
     }
@@ -392,22 +359,14 @@ class AppUsageTracker(private val context: Context) {
      */
     private fun isAppAllowed(packageName: String): Boolean {
         return try {
-            // Buscar lista de apps permitidos do SharedPreferences (formato JSON)
             val allowedAppsJson = sharedPreferences.getString("allowed_apps", "[]") ?: "[]"
-            
-            // Parse do JSON para lista de strings
             val gson = com.google.gson.Gson()
             val type = object : com.google.gson.reflect.TypeToken<List<String>>() {}.type
             val allowedApps: List<String> = gson.fromJson(allowedAppsJson, type)
-            
-            // Verificar se o packageName está na lista
-            val isAllowed = allowedApps.contains(packageName)
-            
-            Log.d(TAG, "🔍 App $packageName é permitido: $isAllowed (lista: ${allowedApps.size} apps)")
-            isAllowed
+            allowedApps.contains(packageName)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao verificar se app é permitido: $packageName", e)
-            true // Por padrão, considerar permitido se houver erro
+            Log.e(TAG, "Erro ao verificar permissão de app: $packageName", e)
+            true
         }
     }
     

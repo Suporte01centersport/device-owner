@@ -5,11 +5,13 @@ export interface Device {
   status: 'online' | 'offline'
   lastSeen: number
   androidVersion: string
+  osType?: string
   model: string
   manufacturer: string
   apiLevel: number
   serialNumber?: string
   imei?: string
+  meid?: string
   macAddress?: string
   ipAddress?: string
   batteryLevel: number
@@ -37,6 +39,7 @@ export interface Device {
   timezone: string
   language: string
   country: string
+  complianceStatus?: 'compliant' | 'non_compliant' | 'unknown'
   restrictions: DeviceRestrictions
   installedApps?: AppInfo[]
   allowedApps?: string[]
@@ -52,6 +55,28 @@ export interface Device {
   // Campos de uso do app
   appUsageData?: AppUsageData
   lastUsageUpdate?: number
+  // Campos de usuário vinculado (novo modelo com banco de dados)
+  assignedDeviceUserId?: string | null // UUID do device_user
+  assignedUser?: DeviceUser | null // Objeto completo do usuário
+  // Campos legados (manter por compatibilidade temporária)
+  assignedUserId?: string | null
+  assignedUserName?: string | null
+}
+
+export interface DeviceUser {
+  id: string // UUID
+  userId: string // ID customizado
+  name: string
+  cpf: string
+  email?: string
+  phone?: string
+  department?: string
+  position?: string
+  notes?: string
+  isActive: boolean
+  devicesCount?: number
+  createdAt: string
+  updatedAt: string
 }
 
 export interface AppInfo {

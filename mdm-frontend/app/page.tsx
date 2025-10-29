@@ -9,6 +9,9 @@ import DeviceModal from './components/DeviceModal'
 import SupportMessagesModal from './components/SupportMessagesModal'
 import UpdateAppModal from './components/UpdateAppModal'
 import BulkUpdateModal from './components/BulkUpdateModal'
+import UserSelectionModal from './components/UserSelectionModal'
+import UserConflictModal from './components/UserConflictModal'
+import ConfigModal from './components/ConfigModal'
 import PoliciesPage from './policies/page'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
@@ -33,6 +36,28 @@ export default function Home() {
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
   const [updateDevice, setUpdateDevice] = useState<Device | null>(null)
   const [isBulkUpdateModalOpen, setIsBulkUpdateModalOpen] = useState(false)
+  const [isUserSelectionModalOpen, setIsUserSelectionModalOpen] = useState(false)
+  const [deviceForUserAssignment, setDeviceForUserAssignment] = useState<Device | null>(null)
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false)
+  const [usersCount, setUsersCount] = useState(0)
+  const [isConflictModalOpen, setIsConflictModalOpen] = useState(false)
+  const [conflictInfo, setConflictInfo] = useState<any>(null)
+  
+  // Carregar contagem de usuários
+  useEffect(() => {
+    const loadUsersCount = async () => {
+      try {
+        const response = await fetch('/api/device-users?active=true')
+        const result = await response.json()
+        if (result.success) {
+          setUsersCount(result.count)
+        }
+      } catch (e) {
+        console.error('Erro ao carregar contagem de usuários:', e)
+      }
+    }
+    loadUsersCount()
+  }, [isConfigModalOpen])
   
   // Debug: Monitorar mudanças no estado devices
   useEffect(() => {
@@ -256,9 +281,25 @@ export default function Home() {
         })
         break
       case 'device_deleted':
+        // Remover dispositivo da lista (vínculo já foi removido no banco pelo servidor)
+        console.log(`🗑️ Dispositivo ${message.deviceId} deletado - vínculo de usuário removido`)
         updateDevices(prevDevices => 
           prevDevices.filter(device => device.deviceId !== message.deviceId)
         )
+        break
+      case 'delete_device_response':
+        // Tratar resposta de deleção
+        if (message.success) {
+          console.log(`✅ Dispositivo ${message.deviceId} deletado com sucesso`)
+          // O dispositivo já foi removido da lista pela mensagem device_deleted
+          // Mas se por algum motivo não foi, remover agora
+          updateDevices(prevDevices => 
+            prevDevices.filter(device => device.deviceId !== message.deviceId)
+          )
+        } else {
+          console.error(`❌ Erro ao deletar dispositivo:`, message.error)
+          alert(`Erro ao deletar dispositivo: ${message.error}`)
+        }
         break
       case 'device_disconnected':
         console.log('Dispositivo desconectado:', message.deviceId, message.reason)
@@ -397,6 +438,32 @@ export default function Home() {
           showSupportNotification(message.data)
         }
         break
+      case 'user_conflict_warning':
+        // ✅ Tratar aviso de conflito de usuário do WebSocket
+        console.log('⚠️ Aviso de conflito de usuário recebido:', message.conflict)
+        if (message.conflict) {
+          setConflictInfo({
+            ...message.conflict,
+            currentDeviceName: message.deviceName
+          })
+          setIsConflictModalOpen(true)
+          
+          // Atualizar dispositivos que tiveram vínculo removido
+          updateDevices((prevDevices: Device[]) => 
+            prevDevices.map(d => {
+              if (message.conflict.otherDevices.some((other: any) => other.deviceId === d.deviceId)) {
+                return {
+                  ...d,
+                  assignedDeviceUserId: null,
+                  assignedUserId: null,
+                  assignedUserName: null
+                }
+              }
+              return d
+            })
+          )
+        }
+        break
       default:
         console.log('Mensagem WebSocket não reconhecida:', message)
     }
@@ -411,8 +478,144 @@ export default function Home() {
   }, [ws])
 
   const handleDeviceClick = (device: Device) => {
-    setSelectedDevice(device)
-    setIsModalOpen(true)
+    // Se já tem usuário vinculado, abrir direto o modal do dispositivo
+    if (device.assignedUserId) {
+      setSelectedDevice(device)
+      setIsModalOpen(true)
+    } else {
+      // Se não tem usuário, abrir modal de seleção de usuário
+      setDeviceForUserAssignment(device)
+      setIsUserSelectionModalOpen(true)
+    }
+  }
+  
+  const handleUserSelected = async (userUuid: string, userId: string, userName: string) => {
+    if (!deviceForUserAssignment) return
+    
+    console.log('🔗 === VINCULANDO USUÁRIO ===')
+    console.log('Dispositivo:', deviceForUserAssignment.deviceId, '-', deviceForUserAssignment.name)
+    console.log('Usuário UUID:', userUuid)
+    console.log('Usuário ID:', userId)
+    console.log('Usuário Nome:', userName)
+    
+    try {
+      // Vincular via API
+      const response = await fetch('/api/devices/assign-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          deviceId: deviceForUserAssignment.deviceId,
+          deviceUserId: userUuid || null
+        })
+      })
+
+      const result = await response.json()
+
+      // ✅ TRATAR ERRO DE CONFLITO (409 - Usuário já vinculado)
+      if (!result.success && result.conflict && response.status === 409) {
+        console.log('⚠️ Conflito detectado - vinculação IMPEDIDA:', result.conflict)
+        setConflictInfo({
+          ...result.conflict,
+          currentDeviceName: deviceForUserAssignment.name
+        })
+        setIsConflictModalOpen(true)
+        // Não atualizar dispositivos - a vinculação foi bloqueada
+        return
+      }
+
+      if (result.success) {
+        console.log('✅ Vínculo salvo no banco de dados com sucesso!')
+        
+        // Atualização normal (sem conflito)
+        const updatedDevices = devices.map(d => 
+          d.deviceId === deviceForUserAssignment.deviceId
+            ? { 
+                ...d, 
+                assignedDeviceUserId: userUuid || null,
+                assignedUserId: userId || null, 
+                assignedUserName: userName || null 
+              }
+            : d
+        )
+        
+        updateDevices(updatedDevices)
+        
+        const finalDevice = updatedDevices.find(d => d.deviceId === deviceForUserAssignment.deviceId)
+        if (finalDevice) {
+          setSelectedDevice(finalDevice)
+          setIsModalOpen(true)
+        }
+      } else {
+        // Outros erros (não relacionados a conflito)
+        alert('❌ Erro ao vincular usuário: ' + (result.message || result.error))
+      }
+    } catch (error) {
+      console.error('❌ Erro ao vincular usuário:', error)
+      alert('❌ Erro ao conectar com o servidor')
+    } finally {
+      setIsUserSelectionModalOpen(false)
+      setDeviceForUserAssignment(null)
+    }
+  }
+
+  const handleUnlinkUser = async () => {
+    if (!selectedDevice) return
+    
+    console.log('🔓 === DESVINCULANDO USUÁRIO ===')
+    console.log('Dispositivo:', selectedDevice.deviceId, '-', selectedDevice.name)
+    console.log('Usuário atual:', {
+      assignedDeviceUserId: selectedDevice.assignedDeviceUserId,
+      assignedUserId: selectedDevice.assignedUserId,
+      assignedUserName: selectedDevice.assignedUserName
+    })
+    
+    if (confirm(`Desvincular usuário de ${selectedDevice.name}?`)) {
+      try {
+        // Desvincular via API
+        const response = await fetch('/api/devices/assign-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            deviceId: selectedDevice.deviceId,
+            deviceUserId: null
+          })
+        })
+
+        const result = await response.json()
+
+        if (result.success) {
+          console.log('✅ Usuário desvinculado no banco de dados com sucesso!')
+          
+          // Atualizar dispositivo localmente
+          const updatedDevices = devices.map(d => 
+            d.deviceId === selectedDevice.deviceId
+              ? { ...d, assignedDeviceUserId: null, assignedUserId: null, assignedUserName: null }
+              : d
+          )
+          
+          console.log('📝 Dispositivo atualizado localmente - vínculo removido')
+          
+          updateDevices(updatedDevices)
+          
+          // Atualizar o dispositivo selecionado no modal
+          const updatedDevice = updatedDevices.find(d => d.deviceId === selectedDevice.deviceId)
+          if (updatedDevice) {
+            setSelectedDevice(updatedDevice)
+          }
+        } else {
+          alert('❌ Erro ao desvincular usuário: ' + result.error)
+        }
+      } catch (error) {
+        console.error('❌ Erro ao desvincular usuário:', error)
+        alert('❌ Erro ao conectar com o servidor')
+      }
+    }
+  }
+
+  const handleSaveConfig = (users: Array<{ id: string; name: string; cpf: string }>) => {
+    // Atualizar contagem de usuários
+    setUsersCount(users.length)
+    console.log('✅ Usuários salvos no banco:', users.length)
   }
 
   const handleCloseModal = () => {
@@ -664,16 +867,24 @@ export default function Home() {
               </div>
               <div className="flex gap-3">
                 <button 
+                  className="btn btn-secondary"
+                  onClick={() => setIsConfigModalOpen(true)}
+                >
+                  <span>👥</span>
+                  Usuários
+                  {usersCount > 0 && (
+                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
+                      {usersCount}
+                    </span>
+                  )}
+                </button>
+                <button 
                   className="btn btn-primary"
                   onClick={() => setIsBulkUpdateModalOpen(true)}
                   disabled={devices.length === 0}
                 >
                   <span>📥</span>
                   Atualização em Massa
-                </button>
-                <button className="btn btn-secondary">
-                  <span>⚙️</span>
-                  Configurações
                 </button>
               </div>
             </div>
@@ -971,6 +1182,7 @@ export default function Home() {
           onClose={handleCloseModal}
           onDelete={() => handleDeleteDevice(selectedDevice.deviceId)}
           sendMessage={sendMessage}
+          onUnlinkUser={handleUnlinkUser}
         />
       )}
 
@@ -1004,6 +1216,43 @@ export default function Home() {
           isOpen={isBulkUpdateModalOpen}
           onClose={() => setIsBulkUpdateModalOpen(false)}
           onConfirm={handleBulkUpdateApp}
+        />
+      )}
+
+      {/* User Selection Modal */}
+      {isUserSelectionModalOpen && deviceForUserAssignment && (
+        <UserSelectionModal
+          isOpen={isUserSelectionModalOpen}
+          onClose={() => {
+            setIsUserSelectionModalOpen(false)
+            setDeviceForUserAssignment(null)
+          }}
+          onSelectUser={handleUserSelected}
+          currentUserId={deviceForUserAssignment.assignedUserId || null}
+        />
+      )}
+
+      {isConflictModalOpen && conflictInfo && (
+        <UserConflictModal
+          isOpen={isConflictModalOpen}
+          onClose={() => {
+            setIsConflictModalOpen(false)
+            setConflictInfo(null)
+            // Abrir modal do dispositivo após fechar o modal de conflito
+            if (selectedDevice) {
+              setIsModalOpen(true)
+            }
+          }}
+          conflict={conflictInfo}
+        />
+      )}
+
+      {/* Config Modal - Usuários */}
+      {isConfigModalOpen && (
+        <ConfigModal
+          isOpen={isConfigModalOpen}
+          onClose={() => setIsConfigModalOpen(false)}
+          onSave={handleSaveConfig}
         />
       )}
     </div>

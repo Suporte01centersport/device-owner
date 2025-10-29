@@ -114,6 +114,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
             </span>
           </div>
 
+
           {/* Support Notifications */}
           <div className="relative support-dropdown-container">
             <button 

@@ -38,10 +38,7 @@ object AppUpdater {
         onProgress: ((Int) -> Unit)? = null,
         onComplete: ((Boolean, String) -> Unit)? = null
     ) {
-        Log.d(TAG, "════════════════════════════════════════")
-        Log.d(TAG, "📥 INICIANDO ATUALIZAÇÃO AUTOMÁTICA")
-        Log.d(TAG, "════════════════════════════════════════")
-        Log.d(TAG, "URL do APK: $apkUrl")
+        Log.d(TAG, "Iniciando atualização: $apkUrl")
         
         // Mostrar notificação de início
         showUpdateNotification(context, "Preparando atualização...", 0)
@@ -52,12 +49,10 @@ object AppUpdater {
             val isDeviceOwner = dpm.isDeviceOwnerApp(context.packageName)
             
             if (!isDeviceOwner) {
-                Log.e(TAG, "❌ App não é Device Owner - não pode instalar automaticamente")
+                Log.e(TAG, "App não é Device Owner - não pode instalar automaticamente")
                 onComplete?.invoke(false, "App não é Device Owner")
                 return
             }
-            
-            Log.d(TAG, "✅ App é Device Owner - instalação silenciosa permitida")
             
             // Criar diretório de download se não existir
             val downloadDir = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "updates")
@@ -68,8 +63,6 @@ object AppUpdater {
             // Nome do arquivo
             val fileName = "update_${System.currentTimeMillis()}.apk"
             val destinationFile = File(downloadDir, fileName)
-            
-            Log.d(TAG, "📂 Destino: ${destinationFile.absolutePath}")
             
             // Configurar DownloadManager
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -83,7 +76,7 @@ object AppUpdater {
             
             // Iniciar download
             downloadId = downloadManager.enqueue(request)
-            Log.d(TAG, "🔽 Download iniciado - ID: $downloadId")
+            Log.d(TAG, "Download iniciado - ID: $downloadId")
             
             // Monitorar progresso
             monitorDownloadProgress(context, downloadManager, downloadId, onProgress)
@@ -91,12 +84,10 @@ object AppUpdater {
             // Registrar receiver para detectar conclusão do download
             downloadReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
-                    Log.d(TAG, "📨 Receiver chamado - intent: ${intent?.action}")
                     val id = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                    Log.d(TAG, "📨 Download ID recebido: $id, esperado: $downloadId")
                     
                     if (id == downloadId) {
-                        Log.d(TAG, "✅ Download concluído!")
+                        Log.d(TAG, "Download concluído")
                         
                         // Desregistrar receiver
                         try {
@@ -114,12 +105,7 @@ object AppUpdater {
                             val status = cursor.getInt(columnIndex)
                             
                             if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                                Log.d(TAG, "✅ Download bem-sucedido - iniciando instalação...")
-                                
-                                // Atualizar notificação
                                 showUpdateNotification(context!!, "Instalando atualização...", 100)
-                                
-                                // Instalar APK silenciosamente (Device Owner)
                                 installApkSilently(context, destinationFile, onComplete)
                             } else {
                                 val reasonIndex = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
@@ -147,16 +133,13 @@ object AppUpdater {
             }
             
             // Registrar receiver
-            // IMPORTANTE: RECEIVER_EXPORTED porque recebe broadcast do DownloadManager (sistema)
             val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-            Log.d(TAG, "📋 Registrando receiver para download ID: $downloadId")
             
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(downloadReceiver, filter, Context.RECEIVER_EXPORTED)
             } else {
                 context.registerReceiver(downloadReceiver, filter)
             }
-            Log.d(TAG, "✅ Receiver registrado com sucesso (EXPORTED para receber do sistema)")
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao iniciar download", e)
@@ -188,10 +171,7 @@ object AppUpdater {
                     
                     if (bytesTotal > 0) {
                         val progress = ((bytesDownloaded * 100) / bytesTotal).toInt()
-                        Log.d(TAG, "📊 Progresso: $progress% ($bytesDownloaded / $bytesTotal bytes)")
                         onProgress?.invoke(progress)
-                        
-                        // Atualizar notificação com progresso
                         showUpdateNotification(context, "Baixando atualização...", progress)
                     }
                     
@@ -216,17 +196,13 @@ object AppUpdater {
         onComplete: ((Boolean, String) -> Unit)?
     ) {
         try {
-            Log.d(TAG, "════════════════════════════════════════")
-            Log.d(TAG, "📦 INSTALANDO APK SILENCIOSAMENTE")
-            Log.d(TAG, "════════════════════════════════════════")
-            Log.d(TAG, "Arquivo: ${apkFile.absolutePath}")
-            Log.d(TAG, "Tamanho: ${apkFile.length() / 1024} KB")
-            
             if (!apkFile.exists()) {
-                Log.e(TAG, "❌ Arquivo APK não encontrado!")
+                Log.e(TAG, "Arquivo APK não encontrado")
                 onComplete?.invoke(false, "Arquivo não encontrado")
                 return
             }
+            
+            Log.d(TAG, "Instalando APK: ${apkFile.name}")
             
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             
@@ -258,14 +234,10 @@ object AppUpdater {
                     android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
                 )
                 
-                // Commit da instalação
                 session.commit(pendingIntent.intentSender)
                 session.close()
                 
-                Log.d(TAG, "✅ Instalação iniciada - Session ID: $sessionId")
-                Log.d(TAG, "⏳ Aguardando conclusão...")
-                
-                // O resultado será recebido no AppUpdateReceiver
+                Log.d(TAG, "Instalação iniciada - Session ID: $sessionId")
                 onComplete?.invoke(true, "Instalação em andamento")
                 
             } else {
@@ -344,7 +316,7 @@ object AppUpdater {
         if (downloadId != -1L) {
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             downloadManager.remove(downloadId)
-            Log.d(TAG, "🚫 Download cancelado - ID: $downloadId")
+            Log.d(TAG, "Download cancelado")
             downloadId = -1
         }
         
@@ -368,10 +340,7 @@ class AppUpdateReceiver : BroadcastReceiver() {
         
         when (status) {
             android.content.pm.PackageInstaller.STATUS_SUCCESS -> {
-                Log.d("AppUpdateReceiver", "✅ ═══════════════════════════════════════")
-                Log.d("AppUpdateReceiver", "✅ INSTALAÇÃO CONCLUÍDA COM SUCESSO!")
-                Log.d("AppUpdateReceiver", "✅ ═══════════════════════════════════════")
-                Log.d("AppUpdateReceiver", "🔄 O app será reiniciado automaticamente...")
+                Log.d("AppUpdateReceiver", "Instalação concluída com sucesso")
                 
                 // Remover notificação de progresso
                 context?.let {
