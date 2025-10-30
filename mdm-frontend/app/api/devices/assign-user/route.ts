@@ -40,7 +40,12 @@ export async function POST(request: NextRequest) {
       
       if (conflictCheck.rows.length > 0) {
         // Usuário está vinculado a outro(s) dispositivo(s) - IMPEDIR VINCULAÇÃO
-        const conflictInfo = {
+        const conflictInfo: {
+          userId: any
+          otherDevices: { deviceId: any; name: any }[]
+          userName?: string
+          userCustomId?: string
+        } = {
           userId: deviceUserId,
           otherDevices: conflictCheck.rows.map((r: any) => ({
             deviceId: r.device_id,
