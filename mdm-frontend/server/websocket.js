@@ -217,7 +217,9 @@ const server = http.createServer((req, res) => {
     
     if (path === '/api/devices/status' && req.method === 'GET') {
         // Endpoint para status dos dispositivos (fallback HTTP)
-        const devices = Array.from(persistentDevices.values()).map(device => ({
+        const devices = Array.from(persistentDevices.values())
+            .filter(device => !deletedDeviceIds.has(device.deviceId))
+            .map(device => ({
             ...device,
             // Garantir que todas as informações detalhadas estejam incluídas
             name: device.name || device.model || 'Dispositivo Desconhecido',
@@ -358,6 +360,23 @@ const webClients = new Set();
 
 // Armazenar dispositivos persistentes (mesmo quando desconectados)
 const persistentDevices = new Map();
+// Mantém IDs de dispositivos explicitamente deletados pela UI.
+// Esses dispositivos não devem aparecer na lista enviada para clientes web
+// até que se reconectem (quando removeremos o ID desta lista).
+const deletedDeviceIds = new Set();
+
+// Garante coluna de soft-delete no banco para não listar itens deletados após reinícios
+async function ensureSoftDeleteColumn() {
+    try {
+        await query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`);
+        console.log('✅ Coluna deleted_at verificada/criada');
+    } catch (e) {
+        console.error('❌ Falha ao garantir coluna deleted_at:', e.message);
+    }
+}
+
+// Executa verificação de schema assim que o módulo carrega
+ensureSoftDeleteColumn();
 
 // Rastrear pings pendentes para validação de pong
 const pendingPings = new Map(); // deviceId -> { timestamp, timeoutId }
@@ -848,6 +867,18 @@ async function handleDeviceStatus(ws, data) {
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
         console.error('❌ DeviceId inválido:', deviceId);
         return;
+    }
+    // Caso o dispositivo tenha sido marcado como deletado anteriormente,
+    // remove-o da lista de deletados ao receber novo status (reconexão).
+    if (deletedDeviceIds.has(deviceId)) {
+        deletedDeviceIds.delete(deviceId);
+        console.log(`♻️ Dispositivo ${deviceId} reconectado — removido da lista de deletados`);
+    }
+    // Se havia marcação de deleted_at no banco, limpa ao reconectar
+    try {
+        await query(`UPDATE devices SET deleted_at = NULL, updated_at = NOW() WHERE device_id = $1`, [deviceId]);
+    } catch (e) {
+        console.error('❌ Falha ao limpar deleted_at no reconnect:', e.message);
     }
     
     // Marcar como dispositivo Android
@@ -1463,6 +1494,7 @@ async function handleWebClient(ws, data) {
                 d.assigned_device_user_id
             FROM devices d
             LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
+            WHERE d.deleted_at IS NULL
             ORDER BY d.last_seen DESC
         `);
         
@@ -1554,13 +1586,18 @@ async function handleWebClient(ws, data) {
     // Se um dispositivo está na memória (conectado), usar dados mais recentes mas preservar vínculo de usuário
     const devicesMap = new Map();
     
-    // Primeiro, adicionar todos os dispositivos do banco
-    dbDevices.forEach(device => {
+    // Primeiro, adicionar todos os dispositivos do banco, exceto os marcados como deletados
+    const filteredDbDevices = dbDevices.filter(d => !deletedDeviceIds.has(d.deviceId));
+    filteredDbDevices.forEach(device => {
         devicesMap.set(device.deviceId, device);
     });
     
     // Depois, mesclar com dados em tempo real (se conectado)
     Array.from(persistentDevices.values()).forEach(liveDevice => {
+        // Ignorar dispositivos marcados como deletados até que reconectem
+        if (deletedDeviceIds.has(liveDevice.deviceId)) {
+            return;
+        }
         const existing = devicesMap.get(liveDevice.deviceId);
         
         if (existing) {
@@ -1694,7 +1731,7 @@ async function handleDeleteDevice(ws, data) {
         try {
             await query(
                 `UPDATE devices 
-                 SET assigned_device_user_id = NULL, updated_at = NOW()
+                 SET assigned_device_user_id = NULL, deleted_at = NOW(), updated_at = NOW()
                  WHERE device_id = $1`,
                 [deviceId]
             );
@@ -1714,6 +1751,8 @@ async function handleDeleteDevice(ws, data) {
         
         // Remover apenas das listas em memória (mantém registro no banco para reconexão)
         persistentDevices.delete(deviceId);
+        // Marcar como deletado para não ser reenviado em listas até reconexão
+        deletedDeviceIds.add(deviceId);
         connectedDevices.delete(deviceId);
         
         console.log(`🗑️ Dispositivo ${deviceId} removido da memória e vínculo de usuário zerado no banco`);

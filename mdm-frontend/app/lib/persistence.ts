@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Device } from '../types/device'
 
 interface PersistenceConfig {
@@ -20,6 +20,9 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [devices, setDevices] = useState<Device[]>([])
   const [adminPassword, setAdminPassword] = useState<string>('')
+  // Mantém os dispositivos carregados localmente apenas para fins de mesclagem,
+  // evitando que sejam renderizados antes da primeira sincronização com o servidor.
+  const initialLocalDevicesRef = useRef<Device[]>([])
 
   // Função para salvar dispositivos
   const saveDevices = useCallback((newDevices: Device[]) => {
@@ -115,7 +118,10 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
     const savedDevices = loadDevices()
     const savedPassword = loadAdminPassword()
     
-    setDevices(savedDevices)
+    // Não popular o estado visível com os dispositivos locais para evitar
+    // que itens deletados apareçam rapidamente antes da sincronização do servidor.
+    // Guardamos apenas em um ref para preservar vínculos de usuário durante o merge.
+    initialLocalDevicesRef.current = savedDevices
     setAdminPassword(savedPassword)
     setIsLoaded(true)
     
@@ -129,7 +135,8 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
   const syncWithServer = useCallback((serverDevices: Device[], serverPassword?: string) => {
     console.log('Sincronizando com dados do servidor:', {
       serverDevices: serverDevices.length,
-      currentDevices: devices.length,
+      // Considera o snapshot local inicial (não renderizado) para logs de depuração
+      currentDevices: initialLocalDevicesRef.current?.length || 0,
       hasServerPassword: !!serverPassword
     })
 
@@ -155,7 +162,8 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
     // ✅ ESTRATÉGIA INTELIGENTE DE MESCLAGEM
     // PRIORIDADE: Servidor (banco de dados) > Local (fallback temporário)
     const mergedDevices = serverDevices.map(serverDevice => {
-      const localDevice = devices.find(d => d.deviceId === serverDevice.deviceId)
+      const localSnapshot = initialLocalDevicesRef.current || []
+      const localDevice = localSnapshot.find(d => d.deviceId === serverDevice.deviceId)
       
       const hasServerUser = !!(serverDevice.assignedUserId || serverDevice.assignedUserName)
       const hasLocalUser = !!(localDevice?.assignedUserId || localDevice?.assignedUserName)
