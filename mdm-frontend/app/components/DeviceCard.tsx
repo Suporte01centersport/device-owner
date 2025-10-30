@@ -14,17 +14,6 @@ interface DeviceCardProps {
 
 export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
-  
-  // Debug: verificar dados do dispositivo
-  console.log('DeviceCard renderizando:', {
-    deviceId: device.deviceId,
-    name: device.name,
-    batteryLevel: device.batteryLevel,
-    installedAppsCount: device.installedAppsCount,
-    allowedAppsCount: device.allowedApps?.length || 0,
-    storageTotal: device.storageTotal,
-    storageUsed: device.storageUsed
-  })
 
   const loadReadMessagesCount = useCallback(async () => {
     try {
@@ -120,8 +109,10 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
             <h3 className="font-semibold text-primary group-hover:text-primary-dark transition-colors">
               {device.name}
             </h3>
-            <p className="text-sm text-secondary">{device.model}</p>
-            <p className="text-xs text-muted">{device.manufacturer}</p>
+            {device.assignedUserName && (
+              <p className="text-sm font-medium text-blue-600">{device.assignedUserName}</p>
+            )}
+            <p className="text-sm text-secondary">{device.model} • {device.manufacturer}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">

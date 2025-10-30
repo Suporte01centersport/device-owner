@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Device, AppInfo } from '../types/device'
 import LocationView from './LocationView'
 import ReportsTab from './ReportsTab'
+import TermsModal from './TermsModal'
 
 // Interfaces Device e AppInfo importadas de '../types/device'
 
@@ -12,21 +13,47 @@ interface DeviceModalProps {
   onClose: () => void
   onDelete: (deviceId: string) => void
   sendMessage: (message: any) => void
+  onUnlinkUser?: () => void
 }
 
-export default function DeviceModal({ device, onClose, onDelete, sendMessage }: DeviceModalProps) {
+export default function DeviceModal({ device, onClose, onDelete, sendMessage, onUnlinkUser }: DeviceModalProps) {
   const [activeTab, setActiveTab] = useState('overview')
+  const [assignedUser, setAssignedUser] = useState<any>(null)
+  const [loadingUser, setLoadingUser] = useState(false)
   
-  // Debug: verificar dados do dispositivo
-  console.log('DeviceModal renderizando:', {
-    deviceId: device.deviceId,
-    name: device.name,
-    batteryLevel: device.batteryLevel,
-    installedAppsCount: device.installedAppsCount,
-    allowedAppsCount: device.allowedApps?.length || 0,
-    storageTotal: device.storageTotal,
-    storageUsed: device.storageUsed
-  })
+  // Buscar dados completos do usuário da API
+  useEffect(() => {
+    const loadUserData = async () => {
+      if (!device.assignedDeviceUserId && !device.assignedUserId) {
+        setAssignedUser(null)
+        return
+      }
+      
+      setLoadingUser(true)
+      try {
+        const response = await fetch(`/api/devices/assign-user?deviceId=${device.deviceId}`)
+        const result = await response.json()
+        
+        if (result.success && result.device) {
+          setAssignedUser({
+            id: result.device.user_id,
+            name: result.device.name,
+            cpf: result.device.cpf,
+            email: result.device.email,
+            phone: result.device.phone,
+            department: result.device.department,
+            position: result.device.position
+          })
+        }
+      } catch (error) {
+        console.error('Erro ao buscar dados do usuário:', error)
+      } finally {
+        setLoadingUser(false)
+      }
+    }
+    
+    loadUserData()
+  }, [device.deviceId, device.assignedDeviceUserId, device.assignedUserId])
 
   // Função para detectar se os dados são válidos ou ainda estão carregando
   const isDataLoading = () => {
@@ -51,6 +78,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
   const [messageText, setMessageText] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [showTermsModal, setShowTermsModal] = useState(false)
   const [messageHistory, setMessageHistory] = useState<Array<{
     id: string
     message: string
@@ -288,12 +316,11 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
 
   const tabs = [
     { id: 'overview', label: 'Visão Geral', icon: '📊' },
-    { id: 'hardware', label: 'Hardware', icon: '🔧' },
-    { id: 'network', label: 'Rede', icon: '🌐' },
-    { id: 'security', label: 'Segurança', icon: '🔒' },
     { id: 'apps', label: 'Aplicações', icon: '📱' },
     { id: 'map', label: 'Localização', icon: '🗺️' },
-    { id: 'reports', label: 'Relatórios', icon: '📈' }
+    { id: 'reports', label: 'Relatórios', icon: '📈' },
+    { id: 'network', label: 'Rede', icon: '🌐' },
+    { id: 'info', label: 'Informações', icon: '📋' }
   ]
 
   return (
@@ -307,7 +334,9 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                 <span className="text-white text-2xl">📱</span>
               </div>
               <div>
-                <h2 className="text-2xl font-bold text-primary">{device.name}</h2>
+                <h2 className="text-2xl font-bold text-primary">
+                  {device.assignedUserName ? `${device.name} • ${device.assignedUserName}` : device.name}
+                </h2>
                 <p className="text-secondary">{device.model} • {device.manufacturer}</p>
                 <div className="flex items-center gap-4 mt-2">
                   <div className={`status-dot ${
@@ -444,10 +473,26 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                 <div className="space-y-4">
                   <h3 className="text-lg font-semibold text-primary">Informações Básicas</h3>
                   <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-secondary">ID do Dispositivo</span>
-                      <span className="font-mono text-sm text-primary">{device.deviceId}</span>
-                    </div>
+                    {assignedUser ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-secondary font-semibold">👤 Usuário</span>
+                        </div>
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-primary font-semibold">{assignedUser.name}</span>
+                            <span className="text-sm text-secondary">CPF: {assignedUser.cpf}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-gray-100 border border-gray-300 rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-gray-500">
+                          <span>👤</span>
+                          <span className="text-sm">Nenhum usuário vinculado</span>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-secondary">Versão do App</span>
                       <span className="text-primary">{device.appVersion}</span>
@@ -485,35 +530,65 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                   </div>
                 </div>
               </div>
-
-              {/* Controles Rápidos */}
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-primary">Controles Rápidos</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 justify-center">
-                  <button 
-                    className="btn btn-primary"
-                    onClick={handleOpenMessageModal}
-                  >
-                    <span>💬</span>
-                    Mandar Mensagem
-                  </button>
-                  <button 
-                    className="btn btn-secondary"
-                    onClick={handleOpenHistoryModal}
-                  >
-                    <span>📋</span>
-                    Histórico
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
-          {activeTab === 'hardware' && (
+          {activeTab === 'info' && (
             <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-primary">Especificações de Hardware</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-4">
+              {/* Informações do Sistema */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-4">Informações do Sistema</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="card p-4">
+                    <h4 className="font-semibold text-primary mb-3">Sistema Operacional</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-secondary">OS Type</span>
+                        <span className="text-primary">{device.osType || 'Android'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-secondary">Versão Android</span>
+                        <span className="text-primary">{device.androidVersion}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-secondary">API Level</span>
+                        <span className="text-primary">{device.apiLevel}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-secondary">Fabricante</span>
+                        <span className="text-primary">{device.manufacturer}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-secondary">Modelo</span>
+                        <span className="text-primary">{device.model}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card p-4">
+                    <h4 className="font-semibold text-primary mb-3">Identificadores</h4>
+                    <div className="space-y-2">
+                      <div className="flex justify-between gap-2">
+                        <span className="text-secondary flex-shrink-0">Device ID</span>
+                        <span className="font-mono text-xs text-primary truncate">{device.deviceId}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-secondary flex-shrink-0">IMEI</span>
+                        <span className="font-mono text-xs text-primary truncate">{device.imei || 'N/A'}</span>
+                      </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-secondary flex-shrink-0">MEID</span>
+                        <span className="font-mono text-xs text-primary truncate">{device.meid || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Hardware */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-4">Especificações de Hardware</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="card p-4">
                     <h4 className="font-semibold text-primary mb-3">Processador</h4>
                     <div className="space-y-2">
@@ -537,9 +612,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                       </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="space-y-4">
                   <div className="card p-4">
                     <h4 className="font-semibold text-primary mb-3">Memória</h4>
                     <div className="space-y-2">
@@ -554,6 +627,66 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                       <div className="flex justify-between">
                         <span className="text-secondary">Livre</span>
                         <span className="text-primary">{formatStorage(device.memoryTotal - device.memoryUsed)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Segurança e Conformidade */}
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-4">Segurança e Conformidade</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="card p-4">
+                    <h4 className="font-semibold text-primary mb-3">Status de Conformidade</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">Compliance Status</span>
+                        <span className={`badge ${
+                          device.complianceStatus === 'compliant' ? 'badge-success' : 
+                          device.complianceStatus === 'non_compliant' ? 'badge-warning' : 
+                          'badge-gray'
+                        }`}>
+                          {device.complianceStatus === 'compliant' ? 'Conforme' :
+                           device.complianceStatus === 'non_compliant' ? 'Não Conforme' :
+                           'Desconhecido'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">Device Owner</span>
+                        <span className={`badge ${device.isDeviceOwner ? 'badge-success' : 'badge-error'}`}>
+                          {device.isDeviceOwner ? 'Sim' : 'Não'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">Profile Owner</span>
+                        <span className={`badge ${device.isProfileOwner ? 'badge-success' : 'badge-error'}`}>
+                          {device.isProfileOwner ? 'Sim' : 'Não'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card p-4">
+                    <h4 className="font-semibold text-primary mb-3">Configurações do Sistema</h4>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">Opções de Desenvolvedor</span>
+                        <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
+                          {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">ADB</span>
+                        <span className={`badge ${device.isAdbEnabled ? 'badge-warning' : 'badge-gray'}`}>
+                          {device.isAdbEnabled ? 'Habilitado' : 'Desabilitado'}
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-secondary">Fontes Desconhecidas</span>
+                        <span className={`badge ${device.isUnknownSourcesEnabled ? 'badge-warning' : 'badge-gray'}`}>
+                          {device.isUnknownSourcesEnabled ? 'Habilitado' : 'Desabilitado'}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -607,55 +740,6 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
                       <span className="text-secondary">Localização</span>
                       <span className={`badge ${device.isLocationEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isLocationEnabled ? 'Habilitado' : 'Desabilitado'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'security' && (
-            <div className="space-y-6">
-              <h3 className="text-lg font-semibold text-primary">Configurações de Segurança</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="card p-4">
-                  <h4 className="font-semibold text-primary mb-3">Controle de Dispositivo</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-secondary">Device Owner</span>
-                      <span className={`badge ${device.isDeviceOwner ? 'badge-success' : 'badge-error'}`}>
-                        {device.isDeviceOwner ? 'Sim' : 'Não'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-secondary">Profile Owner</span>
-                      <span className={`badge ${device.isProfileOwner ? 'badge-success' : 'badge-error'}`}>
-                        {device.isProfileOwner ? 'Sim' : 'Não'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="card p-4">
-                  <h4 className="font-semibold text-primary mb-3">Configurações do Sistema</h4>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-secondary">Opções de Desenvolvedor</span>
-                      <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                        {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-secondary">ADB</span>
-                      <span className={`badge ${device.isAdbEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                        {device.isAdbEnabled ? 'Habilitado' : 'Desabilitado'}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-secondary">Fontes Desconhecidas</span>
-                      <span className={`badge ${device.isUnknownSourcesEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                        {device.isUnknownSourcesEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                   </div>
@@ -848,6 +932,42 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
           )}
         </div>
 
+        {/* Footer - Controles Rápidos */}
+        <div className="border-t border-border p-4 bg-gray-50">
+          <div className="flex gap-3 justify-center max-w-2xl mx-auto">
+            <button 
+              className="btn btn-primary flex-1"
+              onClick={handleOpenMessageModal}
+            >
+              <span>💬</span>
+              Mandar Mensagem
+            </button>
+            <button 
+              className="btn btn-secondary flex-1"
+              onClick={handleOpenHistoryModal}
+            >
+              <span>📋</span>
+              Histórico
+            </button>
+            <button 
+              className="btn btn-success flex-1"
+              onClick={() => setShowTermsModal(true)}
+            >
+              <span>📄</span>
+              Termos
+            </button>
+            {device.assignedUserId && onUnlinkUser && (
+              <button 
+                className="btn btn-danger flex-1"
+                onClick={onUnlinkUser}
+              >
+                <span>🔓</span>
+                Desvincular
+              </button>
+            )}
+          </div>
+        </div>
+
       </div>
 
       {/* Modal de Mensagem */}
@@ -985,6 +1105,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage }: 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Termos */}
+      {showTermsModal && (
+        <TermsModal
+          isOpen={showTermsModal}
+          onClose={() => setShowTermsModal(false)}
+          device={device}
+          assignedUser={assignedUser ? {
+            name: assignedUser.name || '',
+            cpf: assignedUser.cpf || ''
+          } : null}
+        />
       )}
     </div>
   )

@@ -13,17 +13,18 @@ class DeviceModel {
             const result = await query(`
                 INSERT INTO devices (
                     organization_id, device_id, name, model, manufacturer, android_version,
-                    api_level, serial_number, imei, mac_address, ip_address, battery_level,
-                    battery_status, is_charging, storage_total, storage_used, memory_total,
-                    memory_used, cpu_architecture, screen_resolution, screen_density,
+                    api_level, serial_number, imei, meid, mac_address, ip_address, 
+                    battery_level, battery_status, is_charging, storage_total, storage_used, 
+                    memory_total, memory_used, cpu_architecture, screen_resolution, screen_density,
                     network_type, wifi_ssid, is_wifi_enabled, is_bluetooth_enabled,
                     is_location_enabled, is_developer_options_enabled, is_adb_enabled,
                     is_unknown_sources_enabled, is_device_owner, is_profile_owner,
-                    is_kiosk_mode, app_version, timezone, language, country, status, last_seen
+                    is_kiosk_mode, app_version, timezone, language, country, compliance_status,
+                    status, last_seen
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16,
                     $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
-                    $31, $32, $33, $34, $35, $36, $37, $38
+                    $31, $32, $33, $34, $35, $36, $37, $38, $39, $40
                 ) ON CONFLICT (organization_id, device_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     model = EXCLUDED.model,
@@ -32,6 +33,7 @@ class DeviceModel {
                     api_level = EXCLUDED.api_level,
                     serial_number = EXCLUDED.serial_number,
                     imei = EXCLUDED.imei,
+                    meid = EXCLUDED.meid,
                     mac_address = EXCLUDED.mac_address,
                     ip_address = EXCLUDED.ip_address,
                     battery_level = EXCLUDED.battery_level,
@@ -59,24 +61,26 @@ class DeviceModel {
                     timezone = EXCLUDED.timezone,
                     language = EXCLUDED.language,
                     country = EXCLUDED.country,
+                    compliance_status = EXCLUDED.compliance_status,
                     status = EXCLUDED.status,
                     last_seen = EXCLUDED.last_seen,
                     updated_at = NOW()
                 RETURNING *
             `, [
                 organizationId, deviceData.deviceId, deviceData.name, deviceData.model,
-                deviceData.manufacturer, deviceData.androidVersion, deviceData.apiLevel,
-                deviceData.serialNumber, deviceData.imei, deviceData.macAddress,
-                deviceData.ipAddress, deviceData.batteryLevel, deviceData.batteryStatus,
-                deviceData.isCharging, deviceData.storageTotal, deviceData.storageUsed,
-                deviceData.memoryTotal, deviceData.memoryUsed, deviceData.cpuArchitecture,
-                deviceData.screenResolution, deviceData.screenDensity, deviceData.networkType,
-                deviceData.wifiSSID, deviceData.isWifiEnabled, deviceData.isBluetoothEnabled,
-                deviceData.isLocationEnabled, deviceData.isDeveloperOptionsEnabled,
-                deviceData.isAdbEnabled, deviceData.isUnknownSourcesEnabled,
-                deviceData.isDeviceOwner, deviceData.isProfileOwner, deviceData.isKioskMode,
-                deviceData.appVersion, deviceData.timezone, deviceData.language,
-                deviceData.country, deviceData.status || 'online',
+                deviceData.manufacturer, deviceData.androidVersion,
+                deviceData.apiLevel, deviceData.serialNumber, deviceData.imei, deviceData.meid,
+                deviceData.macAddress, deviceData.ipAddress, deviceData.batteryLevel, 
+                deviceData.batteryStatus, deviceData.isCharging, deviceData.storageTotal, 
+                deviceData.storageUsed, deviceData.memoryTotal, deviceData.memoryUsed, 
+                deviceData.cpuArchitecture, deviceData.screenResolution, deviceData.screenDensity, 
+                deviceData.networkType, deviceData.wifiSSID, deviceData.isWifiEnabled, 
+                deviceData.isBluetoothEnabled, deviceData.isLocationEnabled, 
+                deviceData.isDeveloperOptionsEnabled, deviceData.isAdbEnabled, 
+                deviceData.isUnknownSourcesEnabled, deviceData.isDeviceOwner, 
+                deviceData.isProfileOwner, deviceData.isKioskMode, deviceData.appVersion, 
+                deviceData.timezone, deviceData.language, deviceData.country, 
+                deviceData.complianceStatus || 'unknown', deviceData.status || 'online',
                 deviceData.lastSeen ? new Date(deviceData.lastSeen) : new Date()
             ]);
 
@@ -167,9 +171,11 @@ class DeviceModel {
                 model: device.model,
                 manufacturer: device.manufacturer,
                 androidVersion: device.android_version,
+                osType: device.os_type || 'Android',
                 apiLevel: device.api_level,
                 serialNumber: device.serial_number || 'n/d',
                 imei: device.imei || 'n/d',
+                meid: device.meid || 'n/d',
                 macAddress: device.mac_address,
                 ipAddress: device.ip_address,
                 batteryLevel: device.battery_level || 0,
@@ -197,6 +203,7 @@ class DeviceModel {
                 timezone: device.timezone,
                 language: device.language,
                 country: device.country,
+                complianceStatus: device.compliance_status || 'unknown',
                 status: device.status,
                 lastSeen: device.last_seen,
                 installedAppsCount: 0,
@@ -287,14 +294,17 @@ class DeviceModel {
             let queryText = `
             SELECT 
                 COUNT(*) as total_devices,
-                    COUNT(CASE WHEN status = 'online' THEN 1 END) as online_devices,
-                    COUNT(CASE WHEN status = 'offline' THEN 1 END) as offline_devices,
-                    COUNT(CASE WHEN is_device_owner = true THEN 1 END) as device_owner_count,
-                    COUNT(CASE WHEN is_profile_owner = true THEN 1 END) as profile_owner_count,
+                COUNT(CASE WHEN status = 'online' THEN 1 END) as online_devices,
+                COUNT(CASE WHEN status = 'offline' THEN 1 END) as offline_devices,
+                COUNT(CASE WHEN is_device_owner = true THEN 1 END) as device_owner_count,
+                COUNT(CASE WHEN is_profile_owner = true THEN 1 END) as profile_owner_count,
+                COUNT(CASE WHEN compliance_status = 'compliant' THEN 1 END) as compliant_devices,
+                COUNT(CASE WHEN compliance_status = 'non_compliant' THEN 1 END) as non_compliant_devices,
+                COUNT(CASE WHEN compliance_status = 'unknown' THEN 1 END) as unknown_compliance_devices,
                 AVG(battery_level) as avg_battery_level,
-                    COUNT(CASE WHEN battery_level < 20 THEN 1 END) as low_battery_count
+                COUNT(CASE WHEN battery_level < 20 THEN 1 END) as low_battery_count
             FROM devices
-                WHERE 1=1
+            WHERE 1=1
             `;
             let params = [];
 

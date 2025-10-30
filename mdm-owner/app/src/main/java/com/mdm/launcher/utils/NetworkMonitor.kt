@@ -51,36 +51,28 @@ class NetworkMonitor(private val context: Context) {
     
     fun startMonitoring(onConnectivityChange: (Boolean) -> Unit) {
         this.onConnectivityChange = onConnectivityChange
-        if (isMonitoring) {
-            Log.d(TAG, "Monitoramento já ativo")
-            return
-        }
+        if (isMonitoring) return
         
-        Log.d(TAG, "🚀 Iniciando monitoramento de rede...")
         isMonitoring = true
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             // Android 7+ - usar registerDefaultNetworkCallback
             networkCallback = object : ConnectivityManager.NetworkCallback() {
                 override fun onAvailable(network: Network) {
-                    Log.d(TAG, "🌐 Rede disponível: ${network}")
                     scope.launch {
-                        delay(1000) // Aguardar estabilização
+                        delay(1000)
                         val connected = isNetworkAvailable()
                         _isConnected.value = connected
                         onConnectivityChange(connected)
-                        Log.d(TAG, "✅ Conectividade confirmada: $connected")
                     }
                 }
                 
                 override fun onLost(network: Network) {
-                    Log.d(TAG, "❌ Rede perdida: ${network}")
                     scope.launch {
-                        delay(500) // Aguardar um pouco para confirmar
+                        delay(500)
                         val connected = isNetworkAvailable()
                         _isConnected.value = connected
                         onConnectivityChange(connected)
-                        Log.d(TAG, "❌ Conectividade perdida: $connected")
                     }
                 }
                 
@@ -89,10 +81,8 @@ class NetworkMonitor(private val context: Context) {
                     val isValidated = networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
                     val connected = hasInternet && isValidated
                     
-                    // Debounce: só notificar se mudou E passou tempo suficiente
                     val now = System.currentTimeMillis()
                     if (connected != lastConnectedState && (now - lastNotificationTime) > NOTIFICATION_DEBOUNCE_MS) {
-                        Log.d(TAG, "🔄 Mudança real de capacidades: internet=$hasInternet, validado=$isValidated")
                         lastConnectedState = connected
                         lastNotificationTime = now
                         
@@ -100,7 +90,6 @@ class NetworkMonitor(private val context: Context) {
                             delay(500)
                             _isConnected.value = connected
                             onConnectivityChange?.invoke(connected)
-                            Log.d(TAG, "✅ Notificação de conectividade enviada: $connected")
                         }
                     }
                 }

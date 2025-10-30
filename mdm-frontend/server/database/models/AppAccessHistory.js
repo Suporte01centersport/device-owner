@@ -26,8 +26,19 @@ class AppAccessHistory {
             const existingResult = await query(existingQuery, [deviceId, packageName, accessDate]);
             
             if (existingResult.rows.length > 0) {
-                // Atualizar registro existente
+                // ✅ CORREÇÃO: Verificar se o acesso é realmente novo (mais de 30 segundos desde o último)
                 const existing = existingResult.rows[0];
+                const lastAccessTime = new Date(existing.last_access_time);
+                const timeDiff = accessTime - lastAccessTime; // Diferença em milissegundos
+                const minTimeBetweenAccesses = 30 * 1000; // 30 segundos
+                
+                // Se o acesso for muito recente (< 30 segundos), considerar como duplicado e NÃO incrementar
+                if (timeDiff < minTimeBetweenAccesses) {
+                    console.log(`⚠️ Acesso duplicado ignorado: ${appName} (${packageName}) - último acesso há ${Math.round(timeDiff/1000)}s`);
+                    return existing; // Retornar registro existente sem atualizar
+                }
+                
+                // Atualizar registro existente (acesso legítimo > 30 segundos)
                 const updateQuery = `
                     UPDATE app_access_history 
                     SET 
@@ -51,7 +62,7 @@ class AppAccessHistory {
                     existing.id
                 ]);
                 
-                console.log(`📊 App access atualizado: ${appName} (${packageName}) - ${newCount} acessos`);
+                console.log(`📊 App access atualizado: ${appName} (${packageName}) - ${newCount} acessos (último acesso há ${Math.round(timeDiff/1000)}s)`);
                 return updateResult.rows[0];
             } else {
                 // Criar novo registro

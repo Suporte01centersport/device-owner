@@ -35,27 +35,15 @@ class WebSocketClient private constructor(
     
     private val webSocketListener = object : WebSocketListener() {
         override fun onOpen(webSocket: WebSocket, response: Response) {
-            Log.d(TAG, "═══════════════════════════════════════")
-            Log.d(TAG, "🎉 WebSocket ABERTO!")
-            Log.d(TAG, "═══════════════════════════════════════")
-            Log.d(TAG, "🌐 URL: $serverUrl")
-            Log.d(TAG, "📱 DeviceId: ${deviceId.takeLast(8)}")
-            Log.d(TAG, "🔌 Response Code: ${response.code}")
-            Log.d(TAG, "🔌 Response Message: ${response.message}")
+            Log.d(TAG, "WebSocket conectado")
             
-            // Reset de tentativas
             isReconnecting = false
             reconnectAttempts = 0
-            
-            // Marcar como conectado IMEDIATAMENTE ao abrir conexão
             isConnected = true
             onConnectionChange(true)
             
-            // Registrar sucesso de conexão no ServerDiscovery
             com.mdm.launcher.utils.ServerDiscovery.registerConnectionSuccess()
-            Log.d(TAG, "✅ MARCADO COMO CONECTADO após onOpen()")
             
-            // Enviar ping inicial para receber pong do servidor
             try {
                 val pingMessage = mapOf(
                     "type" to "ping",
@@ -63,41 +51,29 @@ class WebSocketClient private constructor(
                     "timestamp" to System.currentTimeMillis()
                 )
                 val jsonMessage = com.google.gson.Gson().toJson(pingMessage)
-                val sent = webSocket.send(jsonMessage)
-                Log.d(TAG, "📤 Ping inicial enviado: ${if (sent) "SUCESSO" else "FALHOU"}")
+                webSocket.send(jsonMessage)
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Erro ao enviar ping inicial", e)
+                Log.e(TAG, "Erro ao enviar ping inicial", e)
             }
             
-            // Iniciar sistema de heartbeat
             startHeartbeat()
-            
-            Log.d(TAG, "✅ Conexão WebSocket estabelecida com sucesso!")
-            Log.d(TAG, "═══════════════════════════════════════")
         }
         
         override fun onMessage(webSocket: WebSocket, text: String) {
-            Log.d(TAG, "📩 Mensagem recebida: ${text.take(100)}...")
             val now = System.currentTimeMillis()
             lastSuccessfulMessage = now
             
-            // Verificar se é pong
             try {
                 val gson = com.google.gson.Gson()
                 val message = gson.fromJson(text, Map::class.java)
                 if (message["type"] == "pong") {
                     lastPongReceived = now
-                    val serverTime = (message["serverTime"] as? Double)?.toLong() ?: 0
-                    val latency = if (serverTime > 0) now - serverTime else 0
-                    Log.d(TAG, "✅ Pong recebido - latência: ${latency}ms")
                 }
             } catch (e: Exception) {
-                // Ignorar erro de parse
+                // Ignorar
             }
             
-            // Garantir que está marcado como conectado
             if (!isConnected) {
-                Log.w(TAG, "⚠️ Recebeu mensagem mas não estava marcado como conectado - corrigindo...")
                 isConnected = true
                 onConnectionChange(true)
             }
@@ -298,9 +274,11 @@ class WebSocketClient private constructor(
                 model = android.os.Build.MODEL,
                 manufacturer = android.os.Build.MANUFACTURER,
                 androidVersion = android.os.Build.VERSION.RELEASE,
+                osType = "Android",
                 apiLevel = android.os.Build.VERSION.SDK_INT,
                 serialNumber = android.os.Build.SERIAL,
                 imei = null,
+                meid = null,
                 macAddress = null,
                 ipAddress = null,
                 batteryLevel = 85, // Valor simulado
@@ -328,6 +306,7 @@ class WebSocketClient private constructor(
                 timezone = java.util.TimeZone.getDefault().id,
                 language = java.util.Locale.getDefault().language,
                 country = java.util.Locale.getDefault().country,
+                complianceStatus = "unknown",
                 installedApps = emptyList(),
                 allowedApps = emptyList(),
                 lastKnownLocation = null,
@@ -337,15 +316,7 @@ class WebSocketClient private constructor(
             )
         }
         
-        Log.d(TAG, "=== ENVIANDO DEVICE_STATUS ===")
-        Log.d(TAG, "DeviceId: ${dataToSend.deviceId}")
-        Log.d(TAG, "Name: ${dataToSend.name}")
-        Log.d(TAG, "Model: ${dataToSend.model}")
-        Log.d(TAG, "Battery: ${dataToSend.batteryLevel}%")
-        Log.d(TAG, "Apps instalados: ${dataToSend.installedAppsCount}")
-        Log.d(TAG, "Storage total: ${dataToSend.storageTotal}")
-        Log.d(TAG, "Device Owner: ${dataToSend.isDeviceOwner}")
-        Log.d(TAG, "=============================")
+        Log.d(TAG, "Enviando device_status: ${dataToSend.name} (compliance=${dataToSend.complianceStatus})")
         
         val message = mapOf(
             "type" to "device_status",
@@ -401,9 +372,11 @@ class WebSocketClient private constructor(
             model = android.os.Build.MODEL,
             manufacturer = android.os.Build.MANUFACTURER,
             androidVersion = android.os.Build.VERSION.RELEASE,
+            osType = "Android",
             apiLevel = android.os.Build.VERSION.SDK_INT,
             serialNumber = android.os.Build.SERIAL,
             imei = null,
+            meid = null,
             macAddress = null,
             ipAddress = null,
             batteryLevel = 0,
@@ -430,7 +403,8 @@ class WebSocketClient private constructor(
             appVersion = "1.0.0",
             timezone = "unknown",
             language = "unknown",
-            country = "unknown"
+            country = "unknown",
+            complianceStatus = "unknown"
         )
     }
     

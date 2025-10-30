@@ -393,7 +393,7 @@ Estados possíveis:
 
 ---
 
-## 🔄 Reconexão Automática (Atualização 21/10/2024)
+## 🔄 Reconexão Automática (Atualização 21/10/2025)
 
 O sistema agora **reconecta automaticamente** após o servidor reiniciar:
 
@@ -442,5 +442,15 @@ Se encontrar problemas:
 
 ---
 
-**Última atualização:** 21/10/2024
+## 📚 Documentação Relacionada
+
+- **[README.md](README.md)** - Documentação principal do projeto
+- **[DEPLOY-GUIDE.md](DEPLOY-GUIDE.md)** - Guia completo de deploy
+- **[CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md)** - Configuração do servidor
+
+---
+
+**Última atualização:** 28/10/2025
+
+> **🎯 Desenvolvimento baseado em:** ScaleFusion - Plataforma líder de UEM (Unified Endpoint Management)
 

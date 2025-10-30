@@ -32,12 +32,8 @@ object DeviceIdManager {
         // 1. Verificar se já existe um deviceId salvo
         val savedDeviceId = prefs.getString(KEY_DEVICE_ID, null)
         if (!savedDeviceId.isNullOrEmpty() && savedDeviceId != "unknown" && savedDeviceId != "unknown-device") {
-            val source = prefs.getString(KEY_DEVICE_ID_SOURCE, "cached")
-            Log.d(TAG, "✓ DeviceId recuperado do cache: ${savedDeviceId.takeLast(8)} (fonte: $source)")
             return savedDeviceId
         }
-        
-        Log.d(TAG, "⚠️ DeviceId não encontrado no cache, gerando novo...")
         
         // 2. Tentar obter ANDROID_ID
         val androidId = try {
@@ -50,24 +46,19 @@ object DeviceIdManager {
         if (!androidId.isNullOrEmpty() && 
             androidId != "9774d56d682e549c" && // ANDROID_ID padrão de emuladores Android 2.2
             androidId.length >= 8) {
-            Log.d(TAG, "✓ Usando ANDROID_ID do sistema: ${androidId.takeLast(8)}")
             saveDeviceId(context, androidId, "ANDROID_ID")
             return androidId
         }
         
-        Log.w(TAG, "⚠️ ANDROID_ID não disponível ou inválido: $androidId")
-        
         // 3. Gerar ID baseado em características únicas do hardware
         val hardwareId = generateHardwareBasedId()
         if (hardwareId != null) {
-            Log.d(TAG, "✓ Usando ID baseado em hardware: ${hardwareId.takeLast(8)}")
             saveDeviceId(context, hardwareId, "HARDWARE")
             return hardwareId
         }
         
         // 4. Último recurso: gerar UUID aleatório
         val uuid = UUID.randomUUID().toString().replace("-", "")
-        Log.w(TAG, "⚠️ Gerando UUID aleatório (último recurso): ${uuid.takeLast(8)}")
         saveDeviceId(context, uuid, "UUID")
         return uuid
     }
@@ -96,8 +87,6 @@ object DeviceIdManager {
                 serialNumber != "UNKNOWN" &&
                 serialNumber.length >= 6) {
                 
-                Log.d(TAG, "Serial Number encontrado: ${serialNumber.takeLast(4)}")
-                
                 // Combinar com outras características para maior unicidade
                 val combined = "${serialNumber}_${Build.BOARD}_${Build.BRAND}_${Build.DEVICE}"
                 
@@ -109,11 +98,8 @@ object DeviceIdManager {
                 // Converter para hex string
                 val hexString = digest.joinToString("") { "%02x".format(it) }
                 
-                Log.d(TAG, "ID gerado baseado em hardware: ${hexString.takeLast(8)}")
                 return hexString.substring(0, 32) // Primeiros 32 caracteres
             }
-            
-            Log.w(TAG, "Serial number não disponível ou inválido: $serialNumber")
             null
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao gerar ID baseado em hardware: ${e.message}", e)
@@ -133,9 +119,8 @@ object DeviceIdManager {
                 putLong("saved_timestamp", System.currentTimeMillis())
                 apply()
             }
-            Log.d(TAG, "✓ DeviceId salvo: ${deviceId.takeLast(8)} (fonte: $source)")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao salvar deviceId: ${e.message}", e)
+            Log.e(TAG, "Erro ao salvar deviceId: ${e.message}")
         }
     }
     
@@ -152,7 +137,6 @@ object DeviceIdManager {
     fun clearDeviceId(context: Context) {
         val prefs = getPreferences(context)
         prefs.edit().clear().apply()
-        Log.d(TAG, "DeviceId limpo do cache")
     }
     
     /**

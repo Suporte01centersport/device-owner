@@ -101,52 +101,30 @@ class LocationService : Service(), LocationListener {
     }
     
     private fun startLocationUpdates() {
-        Log.d(TAG, "🔍 === INICIANDO ATUALIZAÇÕES DE LOCALIZAÇÃO ===")
-        Log.d(TAG, "isLocationUpdatesActive: $isLocationUpdatesActive")
-        Log.d(TAG, "hasLocationPermissions: ${hasLocationPermissions()}")
-        
-        if (isLocationUpdatesActive) {
-            Log.d(TAG, "Atualizações de localização já estão ativas")
-            return
-        }
+        if (isLocationUpdatesActive) return
         
         if (!hasLocationPermissions()) {
-            Log.w(TAG, "❌ Permissões de localização não concedidas")
-            Log.w(TAG, "ACCESS_FINE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)}")
-            Log.w(TAG, "ACCESS_COARSE_LOCATION: ${ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)}")
+            Log.w(TAG, "Permissões de localização não concedidas")
             return
         }
         
         try {
-            Log.d(TAG, "🔍 Verificando provedores de localização:")
-            Log.d(TAG, "GPS_PROVIDER habilitado: ${locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)}")
-            Log.d(TAG, "NETWORK_PROVIDER habilitado: ${locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)}")
-            Log.d(TAG, "PASSIVE_PROVIDER habilitado: ${locationManager.isProviderEnabled(LocationManager.PASSIVE_PROVIDER)}")
-            
             // Verificar última localização conhecida primeiro
             try {
                 val lastKnownGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
                 val lastKnownNetwork = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
                 
-                Log.d(TAG, "📍 Última localização GPS conhecida: $lastKnownGps")
-                Log.d(TAG, "📍 Última localização Network conhecida: $lastKnownNetwork")
-                
                 if (lastKnownGps != null) {
-                    Log.d(TAG, "✅ Usando última localização GPS conhecida")
                     onLocationChanged(lastKnownGps)
                 } else if (lastKnownNetwork != null) {
-                    Log.d(TAG, "✅ Usando última localização Network conhecida")
                     onLocationChanged(lastKnownNetwork)
-                } else {
-                    Log.w(TAG, "⚠️ Nenhuma localização conhecida disponível")
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Erro ao obter última localização conhecida: ${e.message}")
+                Log.w(TAG, "Erro ao obter última localização: ${e.message}")
             }
             
             // Tentar GPS primeiro (mais preciso)
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                Log.d(TAG, "✅ Iniciando atualizações GPS")
                 locationManager.requestLocationUpdates(
                     LocationManager.GPS_PROVIDER,
                     LOCATION_UPDATE_INTERVAL,
@@ -154,37 +132,28 @@ class LocationService : Service(), LocationListener {
                     this
                 )
                 isLocationUpdatesActive = true
-                Log.d(TAG, "✅ GPS provider registrado com sucesso")
-            } else {
-                Log.w(TAG, "⚠️ GPS_PROVIDER não está habilitado")
             }
             
-            // Também usar Network Provider (menos preciso, mas funciona em ambientes fechados)
+            // Também usar Network Provider
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-                Log.d(TAG, "✅ Iniciando atualizações Network")
                 locationManager.requestLocationUpdates(
                     LocationManager.NETWORK_PROVIDER,
                     LOCATION_UPDATE_INTERVAL,
                     LOCATION_UPDATE_DISTANCE,
                     this
                 )
-                Log.d(TAG, "✅ Network provider registrado com sucesso")
-            } else {
-                Log.w(TAG, "⚠️ NETWORK_PROVIDER não está habilitado")
             }
             
-            Log.d(TAG, "✅ Atualizações de localização iniciadas - isLocationUpdatesActive: $isLocationUpdatesActive")
-            
-            // Verificar se pelo menos um provedor foi registrado
             if (!isLocationUpdatesActive) {
-                Log.e(TAG, "❌ NENHUM provedor de localização foi registrado!")
-                Log.e(TAG, "❌ Verifique se o GPS está habilitado nas configurações")
+                Log.e(TAG, "Nenhum provedor de localização disponível")
+            } else {
+                Log.d(TAG, "Rastreamento de localização iniciado")
             }
             
         } catch (e: SecurityException) {
-            Log.e(TAG, "❌ Erro de permissão ao iniciar atualizações de localização", e)
+            Log.e(TAG, "Erro de permissão ao iniciar localização", e)
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao iniciar atualizações de localização", e)
+            Log.e(TAG, "Erro ao iniciar localização", e)
         }
     }
     
@@ -212,33 +181,13 @@ class LocationService : Service(), LocationListener {
     }
     
     override fun onLocationChanged(location: Location) {
-        Log.d(TAG, "📍 === NOVA LOCALIZAÇÃO RECEBIDA ===")
-        Log.d(TAG, "Latitude: ${location.latitude}")
-        Log.d(TAG, "Longitude: ${location.longitude}")
-        Log.d(TAG, "Precisão: ${location.accuracy}m")
-        Log.d(TAG, "Provedor: ${location.provider}")
-        Log.d(TAG, "Timestamp: ${location.time}")
-        Log.d(TAG, "Velocidade: ${location.speed}")
-        Log.d(TAG, "================================")
-        
         serviceScope.launch {
             try {
-                Log.d(TAG, "🔄 Processando localização em background...")
-                
-                // Salvar no histórico local
                 val address = getAddressFromLocation(location.latitude, location.longitude)
-                Log.d(TAG, "🏠 Endereço obtido: $address")
-                
                 LocationHistoryManager.saveLocation(this@LocationService, location, address)
-                Log.d(TAG, "💾 Localização salva no histórico local")
-                
-                // Enviar para o servidor via WebSocket
                 sendLocationToServer(location, address)
-                Log.d(TAG, "📤 Localização enviada para o servidor")
-                
-                Log.d(TAG, "✅ Localização processada e enviada com sucesso")
             } catch (e: Exception) {
-                Log.e(TAG, "❌ Erro ao processar localização", e)
+                Log.e(TAG, "Erro ao processar localização", e)
             }
         }
     }
@@ -292,15 +241,12 @@ class LocationService : Service(), LocationListener {
             val gson = com.google.gson.Gson()
             val jsonMessage = gson.toJson(locationData)
             
-            // Enviar via broadcast para o MainActivity processar
             val intent = Intent("com.mdm.launcher.LOCATION_UPDATE")
             intent.putExtra("location_data", jsonMessage)
             sendBroadcast(intent)
             
-            Log.d(TAG, "📤 Localização enviada via broadcast: ${location.latitude}, ${location.longitude}")
-            
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao enviar localização para o servidor", e)
+            Log.e(TAG, "Erro ao enviar localização", e)
         }
     }
     

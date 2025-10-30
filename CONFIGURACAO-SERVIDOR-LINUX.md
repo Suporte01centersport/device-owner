@@ -20,8 +20,9 @@ sudo ufw status
 O servidor Linux precisa rodar o **Discovery Server** na porta 3003 para responder aos broadcasts UDP:
 
 ```bash
-# No diretório do projeto (CORRIGIDO)
-cd /home/devcenter/device-owner/mdm-frontend
+# No diretório do projeto
+cd /opt/mdm-owner/mdm-frontend
+# ou seu caminho: cd /home/$USER/device-owner/mdm-frontend
 
 # Iniciar servidor de descoberta
 node server/discovery-server.js
@@ -246,3 +247,19 @@ Com essas configurações, o launcher Android conseguirá:
 4. **Usar fallbacks** para múltiplos IPs se configurado
 
 O sistema ficará **100% resiliente** para acessar o servidor Linux! 🚀
+
+---
+
+## 📚 Documentação Relacionada
+
+- **[DEPLOY-GUIDE.md](DEPLOY-GUIDE.md)** - Guia completo de deploy
+- **[README.md](README.md)** - Documentação principal do projeto
+- **[ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização de APK
+
+---
+
+**Última atualização:** 28/10/2025
+
+**Consulte também:** [DEPLOY-GUIDE.md](DEPLOY-GUIDE.md) para instruções completas de implantação
+
+> **🎯 Desenvolvimento baseado em:** ScaleFusion - Plataforma líder de UEM (Unified Endpoint Management)

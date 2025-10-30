@@ -66,6 +66,7 @@ import com.mdm.launcher.utils.PermissionManager
 import com.mdm.launcher.utils.NetworkMonitor
 import com.mdm.launcher.utils.ServerDiscovery
 import com.mdm.launcher.utils.RealmeHelper
+import com.mdm.launcher.utils.AppUsageTracker
 import kotlinx.coroutines.*
 
 // Enum para tipos de permissão
@@ -146,6 +147,9 @@ class MainActivity : AppCompatActivity() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var isServiceBound = false
     
+    // Rastreamento de uso de apps
+    private lateinit var appUsageTracker: AppUsageTracker
+    
     // Localização
     private var locationManager: LocationManager? = null
     private var lastKnownLocation: Location? = null
@@ -168,82 +172,34 @@ class MainActivity : AppCompatActivity() {
     // BroadcastReceiver para mensagens do Service
     private val serviceMessageReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            Log.d(TAG, "🔔 === BROADCAST RECEIVER CHAMADO ===")
-            Log.d(TAG, "Action: ${intent?.action}")
-            Log.d(TAG, "Context: ${context != null}")
-            Log.d(TAG, "Intent: ${intent != null}")
-            
             when (intent?.action) {
                 "com.mdm.launcher.UPDATE_APP_PERMISSIONS" -> {
                     val message = intent.getStringExtra("message")
-                    if (message != null) {
-                        Log.d(TAG, "📨 Mensagem de permissões recebida do Service via Broadcast")
-                        handleWebSocketMessage(message)
-                    }
+                    message?.let { handleWebSocketMessage(it) }
                 }
                 "com.mdm.launcher.LOCATION_UPDATE" -> {
                     val locationData = intent.getStringExtra("location_data")
-                    if (locationData != null) {
-                        Log.d(TAG, "📍 Recebendo atualização de localização via broadcast")
-                        sendLocationToServer(locationData)
-                    }
+                    locationData?.let { sendLocationToServer(it) }
                 }
                 "com.mdm.launcher.SET_KIOSK_MODE" -> {
                     val message = intent.getStringExtra("message")
-                    if (message != null) {
-                        Log.d(TAG, "📱 SET_KIOSK_MODE recebido via Broadcast")
-                        handleWebSocketMessage(message)
-                    }
+                    message?.let { handleWebSocketMessage(it) }
                 }
                 "com.mdm.launcher.UEM_COMMAND" -> {
                     val message = intent.getStringExtra("message")
-                    if (message != null) {
-                        Log.d(TAG, "📱 UEM_COMMAND recebido via Broadcast")
-                        handleWebSocketMessage(message)
-                    }
+                    message?.let { handleWebSocketMessage(it) }
                 }
                 "com.mdm.launcher.ADMIN_PASSWORD_CHANGED" -> {
                     val newPassword = intent.getStringExtra("password")
-                    Log.d(TAG, "🔐 === SENHA DE ADMINISTRADOR MUDOU ===")
-                    Log.d(TAG, "Senha antiga: '$adminPassword'")
-                    Log.d(TAG, "Senha nova: '$newPassword'")
-                    
                     if (newPassword != null && newPassword.isNotEmpty()) {
-                        // Atualizar variável em memória
                         adminPassword = newPassword
-                        
-                        // Garantir que está salva no SharedPreferences
                         val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                         prefs.edit().putString("admin_password", newPassword).apply()
-                        
-                        Log.d(TAG, "✅ adminPassword atualizado na MainActivity: '$adminPassword'")
-                        Log.d(TAG, "✅ Senha pronta para uso!")
                     }
-                    Log.d(TAG, "========================================")
                 }
                 "com.mdm.launcher.MESSAGE_RECEIVED" -> {
-                    val unreadCount = intent.getIntExtra("unread_count", 0)
-                    Log.d(TAG, "📬 ══════════════════════════════════════════")
-                    Log.d(TAG, "📬 BROADCAST MESSAGE_RECEIVED RECEBIDO!")
-                    Log.d(TAG, "📬 ══════════════════════════════════════════")
-                    Log.d(TAG, "Unread count do broadcast: $unreadCount")
-                    Log.d(TAG, "Mensagens antes de recarregar: ${receivedMessages.size}")
-                    
-                    // Recarregar mensagens do SharedPreferences
                     loadReceivedMessages()
-                    
-                    Log.d(TAG, "Após carregar - Total: ${receivedMessages.size}, Não lidas: $unreadMessagesCount")
-                    
-                    // Listar mensagens carregadas
-                    receivedMessages.forEachIndexed { index, msg ->
-                        Log.d(TAG, "  Mensagem $index: ${msg.message.take(30)}... (lida=${msg.read})")
-                    }
-                    
-                    // Atualizar badge visual
                     updateMessageBadge()
-                    
-                    Log.d(TAG, "✅ Badge atualizado via broadcast")
-                    Log.d(TAG, "════════════════════════════════════════════")
                 }
             }
         }
@@ -345,6 +301,11 @@ class MainActivity : AppCompatActivity() {
         
         // Inicializar PermissionManager
         permissionManager = PermissionManager(this)
+        
+        // Inicializar AppUsageTracker
+        appUsageTracker = AppUsageTracker(this)
+        appUsageTracker.startTracking()
+        Log.d(TAG, "✅ AppUsageTracker inicializado e rastreamento iniciado")
         
         // Configurar otimizações de bateria para garantir conexão persistente
         configureBatteryOptimizations()
@@ -2404,15 +2365,11 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun getDeviceName(): String {
-        val deviceName = if (customDeviceName.isNotEmpty()) {
+        return if (customDeviceName.isNotEmpty()) {
             customDeviceName
         } else {
             "${Build.MANUFACTURER} ${Build.MODEL}"
         }
-        Log.d(TAG, "📝 getDeviceName() chamado:")
-        Log.d(TAG, "   customDeviceName: \"$customDeviceName\"")
-        Log.d(TAG, "   deviceName final: \"$deviceName\"")
-        return deviceName
     }
     
     
@@ -2955,6 +2912,10 @@ class MainActivity : AppCompatActivity() {
     
     private fun launchApp(app: AppInfo) {
         try {
+            // ✅ REGISTRAR ACESSO AO APP ANTES DE LANÇAR
+            Log.d(TAG, "📊 Registrando acesso ao app: ${app.appName} (${app.packageName})")
+            appUsageTracker.recordAppAccess(app.packageName, app.appName)
+            
             val intent = packageManager.getLaunchIntentForPackage(app.packageName)
             if (intent != null) {
                 // Adicionar flags para evitar que o launcher seja destruído
@@ -3371,108 +3332,55 @@ class MainActivity : AppCompatActivity() {
         val currentTime = System.currentTimeMillis()
         val timeSinceLastResume = currentTime - lastResumeTime
         
-        Log.d(TAG, "onResume() chamado - Activity retomada (${timeSinceLastResume}ms desde último resume)")
-        
-        // Recarregar mensagens e atualizar badge SEMPRE que a Activity retorna
         loadReceivedMessages()
         updateMessageBadge()
-        Log.d(TAG, "🔄 Mensagens recarregadas no onResume: total=${receivedMessages.size}, não lidas=$unreadMessagesCount")
         
-        // REMOVIDO: ensureDefaultLauncher() - causava boot loops
-        // O launcher é configurado automaticamente pelo Device Owner Policy
+        if (isActivityDestroyed) return
         
-        // Evitar processamento desnecessário se a activity foi destruída
-        if (isActivityDestroyed) {
-            Log.w(TAG, "Activity foi destruída, ignorando onResume")
-            return
-        }
-        
-        // Verificar permissões essenciais a cada retorno ao foreground
         checkPermissionsOnResume()
-        
-        // Tela desbloqueada - garantir conexão ativa
         handleScreenUnlocked()
         
-        // 🎯 GARANTIR QUE O MONITOR DE APPS ESTEJA ATIVO
         try {
-            Log.d(TAG, "🎯 Verificando monitor de apps no onResume...")
             com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
-            Log.d(TAG, "✅ Monitor de apps iniciado no onResume")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao iniciar monitor de apps no onResume", e)
+            Log.e(TAG, "Erro ao iniciar monitor: ${e.message}")
         }
         
-        // ✅ NOVO: Garantir que Settings e Lock Task estão desabilitados
-        // Isso garante que apps recentes funcionem corretamente
         try {
-            // Garantir que Lock Task está desabilitado
-            try {
-                stopLockTask()
-                Log.d(TAG, "✅ Lock Task Mode garantido como desabilitado no onResume")
-            } catch (e: Exception) {
-                Log.d(TAG, "Lock Task já estava desabilitado no onResume")
-            }
-            
-            // Reabilitar Settings
+            stopLockTask()
             reenableSettingsIfHidden()
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao reabilitar Settings no onResume", e)
+            Log.e(TAG, "Erro ao reabilitar Settings: ${e.message}")
         }
         
-        // ✅ CORREÇÃO: SEMPRE recarregar allowedApps do SharedPreferences
-        // Carregar dados salvos para garantir que a lista esteja atualizada
         loadSavedData()
         
-        Log.d(TAG, "✅ Apps permitidos recarregados no onResume: ${allowedApps.size}")
-        Log.d(TAG, "✅ Apps instalados disponíveis: ${installedApps.size}")
-        
-        // Se ainda estiver vazio, tentar carregar do WebSocketService
-        if (allowedApps.isEmpty() && installedApps.isNotEmpty()) {
-            Log.w(TAG, "⚠️ allowedApps está vazio mas temos apps instalados")
-            Log.w(TAG, "Tentando recarregar do servidor via WebSocket...")
-        }
-                    
-                    // Forçar atualização da UI
-                    if (installedApps.isNotEmpty()) {
-                        updateAppsList()
+        if (installedApps.isNotEmpty()) {
+            updateAppsList()
         }
         
-        // Evitar processamento muito frequente (menos de 1 segundo)
-        if (timeSinceLastResume < 1000) {
-            Log.d(TAG, "onResume muito frequente, ignorando processamento adicional")
-            return
-        }
+        if (timeSinceLastResume < 1000) return
         
-        // Detectar ciclo de pause/resume excessivo
         val timeSinceLastPause = currentTime - lastPauseTime
-        if (pauseResumeCount > 5 && timeSinceLastPause < 2000) {
-            Log.w(TAG, "Ciclo de pause/resume excessivo detectado ($pauseResumeCount ciclos), ignorando processamento")
-            return
-        }
+        if (pauseResumeCount > 5 && timeSinceLastPause < 2000) return
         
         lastResumeTime = currentTime
         
-        // Reset do contador se a activity ficou estável por mais de 5 segundos
         if (timeSinceLastResume > 5000) {
             pauseResumeCount = 0
-            Log.d(TAG, "Activity estável, resetando contador de ciclos")
         }
         
-        // Verificar se o app foi reinstalado e precisa verificar permissões imediatamente
         val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
         val forcePermissionCheck = sharedPreferences.getBoolean("force_permission_check", false)
         if (forcePermissionCheck) {
-            Log.d(TAG, "🔄 REINSTALAÇÃO DETECTADA NO onResume - verificando permissões imediatamente")
             checkPermissions()
-            return // Interromper processamento normal para focar nas permissões
+            return
         }
         
-        // Marcar como interação significativa se foi um resume após pausa longa
-        if (timeSinceLastResume > 10000) { // 10 segundos
+        if (timeSinceLastResume > 10000) {
             markUserInteraction()
         }
         
-        // Garantir que a barra de navegação permaneça visível
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.insetsController?.let { controller ->
                 controller.show(android.view.WindowInsets.Type.navigationBars())
@@ -3483,10 +3391,7 @@ class MainActivity : AppCompatActivity() {
             window.decorView.systemUiVisibility = 0
         }
         
-        // Verificar saúde da conexão WebSocket após inatividade
         checkWebSocketHealth()
-        
-        // Carregar apps apenas se necessário (cache inteligente)
         loadAppsIfNeeded()
     }
     
@@ -3494,32 +3399,15 @@ class MainActivity : AppCompatActivity() {
         super.onPause()
         lastPauseTime = System.currentTimeMillis()
         pauseResumeCount++
-        Log.d(TAG, "onPause() chamado - Activity pausada (ciclo #$pauseResumeCount)")
-        
-        // Tela pode estar sendo bloqueada - verificar estado
         checkScreenState()
-        
-        // REMOVIDO: Não forçar retorno automático ao launcher
-        // O usuário pode estar abrindo um app permitido
-        // O launcher só volta quando o usuário apertar HOME ou finalizar o app
     }
     
     override fun onStop() {
         super.onStop()
-        Log.d(TAG, "onStop() chamado - Activity parada")
-        
-        // Prevenir destruição desnecessária da activity
-        if (!isFinishing && !isChangingConfigurations) {
-            Log.w(TAG, "Activity sendo parada mas não finalizada - pode ser destruída desnecessariamente")
-        }
     }
     
     override fun onRestart() {
         super.onRestart()
-        Log.d(TAG, "onRestart() chamado - Activity reiniciada")
-        
-        // REMOVIDO: ensureDefaultLauncher() - causava boot loops
-        // O launcher é configurado automaticamente pelo Device Owner Policy
     }
     
     /**
