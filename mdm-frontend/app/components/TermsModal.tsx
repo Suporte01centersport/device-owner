@@ -19,6 +19,7 @@ interface DeviceEntry {
   deliveryDate: string
   height?: number // Altura salva do textarea
   codInv?: string
+  codHeight?: number
 }
 
 const CACHE_KEY = 'terms-modal-temp-cache'
@@ -61,10 +62,15 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
   const currentDate = new Date().toLocaleDateString('pt-BR')
   const deviceCodInv = device.name || 'Dispositivo' // COD INV. padrão (1ª linha)
 
+  // Removido soft-wrap no PDF para manter quebra natural por limite da célula
+
   const handleAddDeviceEntry = () => {
     // Salva estados de todos os textareas ANTES de adicionar novo entry
     const textareas = document.querySelectorAll('textarea[data-entry-index]') as NodeListOf<HTMLTextAreaElement>
     const savedStates: Array<{ index: number; height: string; content: string; adjusted: boolean }> = []
+    // Salva estados dos textareas de COD INV também
+    const codTextareas = document.querySelectorAll('textarea[data-cod-index]') as NodeListOf<HTMLTextAreaElement>
+    const savedCodStates: Array<{ index: number; height: string; content: string; adjusted: boolean }> = []
     
     textareas.forEach((textarea) => {
       const index = parseInt(textarea.getAttribute('data-entry-index') || '-1')
@@ -82,6 +88,22 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
         
         // Atualiza estado no React ANTES de adicionar novo
         handleUpdateEntry(index, 'description', textarea.value)
+      }
+    })
+    // Salva estado dos COD INV
+    codTextareas.forEach((textarea) => {
+      const index = parseInt(textarea.getAttribute('data-cod-index') || '-1')
+      if (index >= 0) {
+        textarea.style.height = 'auto'
+        const calculatedHeight = Math.max(textarea.scrollHeight, 20)
+        savedCodStates.push({
+          index,
+          height: `${calculatedHeight}px`,
+          content: textarea.value,
+          adjusted: textarea.getAttribute('data-adjusted') === 'true'
+        })
+        // Atualiza estado do COD INV antes de adicionar
+        handleUpdateEntry(index, 'codInv', textarea.value)
       }
     })
     
@@ -140,6 +162,38 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
               // Se não estava ajustado, apenas ajusta inicialmente
               textarea.style.height = 'auto'
               autoResizeTextarea(textarea)
+            }
+          }
+        })
+        // Restaura estados dos COD INV
+        const newCodTextareas = document.querySelectorAll('textarea[data-cod-index]') as NodeListOf<HTMLTextAreaElement>
+        newCodTextareas.forEach((textarea) => {
+          const index = parseInt(textarea.getAttribute('data-cod-index') || '-1')
+          const savedState = savedCodStates.find(s => s.index === index)
+          if (savedState) {
+            textarea.value = savedState.content
+            textarea.style.height = 'auto'
+            const heightValue = parseInt(savedState.height.replace('px', '')) || 20
+            const restoredHeight = Math.max(textarea.scrollHeight, heightValue)
+            textarea.style.height = `${restoredHeight}px`
+            if (savedState.adjusted) {
+              textarea.setAttribute('data-adjusted', 'true')
+              textarea.setAttribute('data-adjusted-height', `${restoredHeight}`)
+              textarea.setAttribute('data-adjusted-content', savedState.content)
+              requestAnimationFrame(() => {
+                if (textarea.style.height !== `${restoredHeight}px`) {
+                  textarea.style.height = `${restoredHeight}px`
+                }
+                requestAnimationFrame(() => {
+                  if (textarea.style.height !== `${restoredHeight}px`) {
+                    textarea.style.height = `${restoredHeight}px`
+                  }
+                })
+              })
+            } else {
+              textarea.style.height = 'auto'
+              const h = Math.max(textarea.scrollHeight, 20)
+              textarea.style.height = `${h}px`
             }
           }
         })
@@ -281,7 +335,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       flexGrow: 0,
       flexShrink: 0,
     },
-    // Cabeçalho da coluna de data (18%)
+    // Cabeçalho da coluna de data (20% - igual à Web)
     tableHeaderCellDate: {
       padding: 4,
       borderRightWidth: 1,
@@ -290,7 +344,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       fontWeight: 'bold',
       justifyContent: 'flex-start',
       alignItems: 'flex-start',
-      width: '18%',
+      width: '20%',
       flexGrow: 0,
       flexShrink: 0,
     },
@@ -312,7 +366,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       fontWeight: 'bold',
       justifyContent: 'flex-start',
       alignItems: 'flex-start',
-      width: '22%',
+      width: '20%',
       flexGrow: 0,
       flexShrink: 0,
     },
@@ -339,7 +393,22 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       flexGrow: 0,
       flexShrink: 0,
     },
-    // Célula da coluna de data (18%)
+    // Célula específica para COD INV. permitindo quebra e expansão de altura
+    tableCellCod: {
+      padding: 4,
+      borderRightWidth: 1,
+      borderRightColor: '#000',
+      fontSize: 9,
+      minHeight: 20,
+      justifyContent: 'flex-start',
+      alignItems: 'flex-start',
+      width: '15%',
+      flexGrow: 0,
+      flexShrink: 0,
+      flexWrap: 'wrap',
+      flexDirection: 'row',
+    },
+    // Célula da coluna de data (20% - igual à Web)
     tableCellDate: {
       padding: 4,
       borderRightWidth: 1,
@@ -348,7 +417,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       minHeight: 20,
       justifyContent: 'flex-start',
       alignItems: 'flex-start',
-      width: '18%',
+      width: '20%',
       flexGrow: 0,
       flexShrink: 0,
     },
@@ -358,7 +427,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       minHeight: 20,
       justifyContent: 'flex-start',
       alignItems: 'flex-start',
-      width: '22%',
+      width: '20%',
       flexGrow: 0,
       flexShrink: 0,
     },
@@ -377,9 +446,10 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       wordBreak: 'break-word',
       hyphens: 'none',
     },
-    // Mantém o COD INV. em linha única no PDF
+    // COD INV. com mesma lógica de quebra da descrição
     codText: {
-      wordBreak: 'keep-all',
+      wordBreak: 'break-word',
+      hyphens: 'none',
     },
     agreement: {
       textAlign: 'justify',
@@ -446,8 +516,8 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
         </View>
 240|        {deviceEntries.map((entry, index) => (
           <View key={index} style={index === deviceEntries.length - 1 ? pdfStyles.tableRowLast : pdfStyles.tableRow}>
-            <View style={pdfStyles.tableCell}>
-              <Text>{typeof entry.codInv === 'string' ? (entry.codInv || ' ') : (index === 0 ? deviceCodInv : ' ')}</Text>
+            <View style={pdfStyles.tableCellCod}>
+              <Text wrap style={pdfStyles.codText}>{typeof entry.codInv === 'string' ? (entry.codInv || ' ') : (index === 0 ? deviceCodInv : ' ')}</Text>
             </View>
             <View style={pdfStyles.tableCellDescription}>
               <Text wrap style={pdfStyles.descriptionText}>{entry.description || ' '}</Text>
@@ -604,6 +674,43 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
           }
         }
       })
+      // Aplica mesma lógica aos textareas de COD INV
+      const codTextareas = document.querySelectorAll('textarea.term-input-cod') as NodeListOf<HTMLTextAreaElement>
+      codTextareas.forEach((textarea, idx) => {
+        if (document.activeElement === textarea) return
+        if (justBlurredRef.current.has(idx)) return
+
+        const isAdjusted = textarea.getAttribute('data-adjusted') === 'true'
+        if (isAdjusted) {
+          const savedHeight = textarea.getAttribute('data-adjusted-height')
+          const savedContent = textarea.getAttribute('data-adjusted-content')
+          const currentContent = textarea.value
+          if (savedContent === currentContent && savedHeight) {
+            const expectedHeight = `${savedHeight}px`
+            if (textarea.style.height !== expectedHeight) {
+              textarea.style.height = expectedHeight
+            }
+          }
+          return
+        }
+
+        if (deviceEntries[idx]) {
+          const currentValue = textarea.value
+          const expectedValue = typeof deviceEntries[idx].codInv === 'string'
+            ? deviceEntries[idx].codInv || (idx === 0 ? deviceCodInv : '')
+            : (idx === 0 ? deviceCodInv : '')
+          if (currentValue !== expectedValue) {
+            textarea.value = expectedValue
+          }
+          if (deviceEntries[idx].codHeight && deviceEntries[idx].codHeight! > 20) {
+            textarea.style.height = `${deviceEntries[idx].codHeight}px`
+          } else if (!textarea.style.height || textarea.style.height === '' || textarea.style.height === 'auto') {
+            textarea.style.height = 'auto'
+            const h = Math.max(textarea.scrollHeight, 20)
+            textarea.style.height = `${h}px`
+          }
+        }
+      })
     }, 0)
     return () => clearTimeout(timer)
   }, [deviceEntries.length, isOpen, autoResizeTextarea]) // Apenas quando quantidade muda ou modal abre
@@ -638,6 +745,30 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
             }
           } else {
             // Conteúdo mudou - recalcula
+            textarea.style.height = 'auto'
+            const newHeight = Math.max(textarea.scrollHeight, 20)
+            textarea.style.height = `${newHeight}px`
+            textarea.setAttribute('data-adjusted-height', `${newHeight}`)
+            textarea.setAttribute('data-adjusted-content', currentContent)
+            adjustedTextareasRef.current.add(idx)
+          }
+        }
+      })
+      // Mesma garantia para os textareas de COD INV
+      const codTextareas = document.querySelectorAll('textarea.term-input-cod') as NodeListOf<HTMLTextAreaElement>
+      codTextareas.forEach((textarea, idx) => {
+        const isAdjusted = textarea.getAttribute('data-adjusted') === 'true'
+        const savedHeight = textarea.getAttribute('data-adjusted-height')
+        if (isAdjusted && savedHeight) {
+          if (document.activeElement === textarea) return
+          const savedContent = textarea.getAttribute('data-adjusted-content')
+          const currentContent = textarea.value
+          if (savedContent === currentContent) {
+            if (textarea.style.height !== `${savedHeight}px`) {
+              textarea.style.height = `${savedHeight}px`
+              adjustedTextareasRef.current.add(idx)
+            }
+          } else {
             textarea.style.height = 'auto'
             const newHeight = Math.max(textarea.scrollHeight, 20)
             textarea.style.height = `${newHeight}px`
@@ -757,22 +888,81 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
             {deviceEntries.map((entry, index) => (
               <tr key={index}>
                 <td style={{ border: '1px solid #000', padding: '4px', fontSize: '9pt', verticalAlign: 'middle' }}>
-                  <input
-                    type="text"
+                  <textarea
+                    key={`cod-${index}`}
                     defaultValue={
                       typeof entry.codInv === 'string'
                         ? (entry.codInv || (index === 0 ? deviceCodInv : ''))
                         : (index === 0 ? deviceCodInv : '')
                     }
-                    onBlur={(e) => handleUpdateEntry(index, 'codInv', e.target.value)}
-                    className="term-input"
+                    data-cod-index={index}
+                    onBlur={(e) => {
+                      const textarea = e.target as HTMLTextAreaElement
+                      // Calcula altura final antes de salvar estado
+                      textarea.style.height = 'auto'
+                      const finalHeight = Math.max(textarea.scrollHeight, 20)
+                      textarea.style.height = `${finalHeight}px`
+
+                      // Marca e persiste nos data-attributes (reforça em re-render)
+                      textarea.setAttribute('data-adjusted', 'true')
+                      textarea.setAttribute('data-adjusted-height', `${finalHeight}`)
+                      textarea.setAttribute('data-adjusted-content', textarea.value)
+
+                      // Salva conteúdo e altura no estado/cache
+                      setDeviceEntries(prev => {
+                        const updated = prev.map((row, i) => 
+                          i === index ? { ...row, codInv: textarea.value, codHeight: finalHeight } : row
+                        )
+                        try {
+                          localStorage.setItem(CACHE_KEY, JSON.stringify(updated))
+                        } catch (e) {
+                          console.error('Erro ao salvar cache:', e)
+                        }
+                        return updated
+                      })
+
+                      // Reforça após re-render
+                      const enforceHeight = () => {
+                        const current = document.querySelector(`textarea[data-cod-index="${index}"]`) as HTMLTextAreaElement | null
+                        if (!current) return
+                        const savedContent = current.getAttribute('data-adjusted-content')
+                        if (savedContent === current.value) {
+                          current.style.height = `${finalHeight}px`
+                        } else {
+                          current.style.height = 'auto'
+                          const newHeight = Math.max(current.scrollHeight, 20)
+                          current.style.height = `${newHeight}px`
+                          current.setAttribute('data-adjusted-height', `${newHeight}`)
+                          current.setAttribute('data-adjusted-content', current.value)
+                        }
+                        current.setAttribute('data-adjusted', 'true')
+                      }
+                      requestAnimationFrame(() => {
+                        enforceHeight()
+                        requestAnimationFrame(() => enforceHeight())
+                      })
+                    }}
+                    onInput={(e) => {
+                      const textarea = e.target as HTMLTextAreaElement
+                      textarea.style.height = 'auto'
+                      const newHeight = Math.max(textarea.scrollHeight, 20)
+                      textarea.style.height = `${newHeight}px`
+                    }}
+                    className="term-input-cod"
                     placeholder="Código inventário"
-                    style={{ 
-                      width: '100%', 
-                      border: 'none', 
+                    rows={1}
+                    style={{
+                      width: '100%',
+                      border: 'none',
                       outline: 'none',
                       fontSize: '9pt',
-                      backgroundColor: 'transparent'
+                      backgroundColor: 'transparent',
+                      resize: 'none',
+                      overflow: 'hidden',
+                      minHeight: '20px',
+                      lineHeight: '1.4',
+                      fontFamily: 'inherit',
+                      height: entry.codHeight && entry.codHeight > 20 ? `${entry.codHeight}px` : 'auto'
                     }}
                   />
                 </td>
