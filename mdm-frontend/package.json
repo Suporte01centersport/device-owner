@@ -23,7 +23,8 @@
     "remove-duplicates": "node server/remove-duplicate-devices.js",
     "remove-duplicates:confirm": "node server/remove-duplicate-devices.js --confirm",
     "fix-null-device-ids": "node server/fix-null-device-ids.js",
-    "fix-null-device-ids:confirm": "node server/fix-null-device-ids.js --confirm"
+    "fix-null-device-ids:confirm": "node server/fix-null-device-ids.js --confirm",
+    "db:migrate:add-new-fields": "node server/database/migrations/run-add-new-fields.js"
   },
   "dependencies": {
     "@coreui/icons-react": "^2.3.0",
