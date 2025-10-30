@@ -1,3 +1,7 @@
 {
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/api/device-users/route": "app/api/device-users/route.js",
+  "/api/support-messages/route": "app/api/support-messages/route.js",
+  "/api/devices/assign-user/route": "app/api/devices/assign-user/route.js",
+  "/api/devices/status-history/route": "app/api/devices/status-history/route.js"
 }
