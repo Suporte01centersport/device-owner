@@ -1,4 +1,34 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const runtime = 'nodejs'
+// @ts-ignore
+require('dotenv').config()
+import DeviceGroupModel from '../../../../../server/database/models/DeviceGroup.js'
+
+// GET - Listar políticas do grupo
+export async function GET(
+  request: NextRequest,
+  { params }: { params: { groupId: string } }
+) {
+  try {
+    const { groupId } = params
+
+    if (!groupId) {
+      return NextResponse.json(
+        { success: false, detail: 'ID do grupo é obrigatório' },
+        { status: 400 }
+      )
+    }
+
+    const policies = await DeviceGroupModel.getGroupPolicies(groupId)
+    return NextResponse.json({ success: true, data: policies })
+  } catch (error: any) {
+    console.error('Erro ao listar políticas:', error?.message || error)
+    return NextResponse.json(
+      { success: false, detail: error?.message || 'Erro ao listar políticas' },
+      { status: 500 }
+    )
+  }
+}
 
 // POST - Adicionar política de aplicativo ao grupo
 export async function POST(
@@ -8,38 +38,26 @@ export async function POST(
   try {
     const { groupId } = params
     const body = await request.json()
-    const { packageName, appName, isAllowed, policyType } = body
+    const { packageName, appName, policyType } = body
 
     if (!groupId || !packageName || !appName) {
       return NextResponse.json(
-        { success: false, error: 'Dados obrigatórios não fornecidos' },
+        { success: false, detail: 'Dados obrigatórios não fornecidos' },
         { status: 400 }
       )
     }
 
-    // const policy = await DeviceGroupModel.addAppPolicy(groupId, {
-    //   packageName,
-    //   appName,
-    //   isAllowed: isAllowed !== false,
-    //   policyType: policyType || 'allow'
-    // })
-
-    // Mock para demonstração
-    const policy = {
-      id: `policy_${Date.now()}`,
+    const policy = await DeviceGroupModel.addAppPolicy(groupId, {
       packageName,
       appName,
-      isAllowed: isAllowed !== false,
-      policyType: policyType || 'allow',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
+      policyType: policyType || 'allow'
+    })
 
     return NextResponse.json({ success: true, data: policy })
-  } catch (error) {
-    console.error('Erro ao adicionar política:', error)
+  } catch (error: any) {
+    console.error('Erro ao adicionar política:', error?.message || error)
     return NextResponse.json(
-      { success: false, error: 'Erro interno do servidor' },
+      { success: false, detail: error?.message || 'Erro ao adicionar política' },
       { status: 500 }
     )
   }
@@ -57,25 +75,23 @@ export async function DELETE(
 
     if (!groupId || !packageName) {
       return NextResponse.json(
-        { success: false, error: 'ID do grupo e nome do pacote são obrigatórios' },
+        { success: false, detail: 'ID do grupo e nome do pacote são obrigatórios' },
         { status: 400 }
       )
     }
 
-    // const deleted = await DeviceGroupModel.removeAppPolicy(groupId, packageName)
+    const deleted = await DeviceGroupModel.removeAppPolicy(groupId, packageName)
 
-    // Mock para demonstração
-    const deleted = true
-
-    return NextResponse.json({ success: true, deleted })
-  } catch (error) {
-    console.error('Erro ao remover política:', error)
+    return NextResponse.json({ success: true, data: deleted })
+  } catch (error: any) {
+    console.error('Erro ao remover política:', error?.message || error)
     return NextResponse.json(
-      { success: false, error: 'Erro interno do servidor' },
+      { success: false, detail: error?.message || 'Erro ao remover política' },
       { status: 500 }
     )
   }
 }
+
 
 
 

@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const WebSocket = require('ws');
 const http = require('http');
+const https = require('https');
 const url = require('url');
 const fs = require('fs');
 const path = require('path');
@@ -16,6 +17,79 @@ const DeviceGroupModel = require('./database/models/DeviceGroup');
 const AppAccessHistory = require('./database/models/AppAccessHistory');
 const DeviceStatusHistory = require('./database/models/DeviceStatusHistory');
 const { query, transaction } = require('./database/config');
+
+// Função para obter IP público da rede
+let cachedPublicIp = null;
+let publicIpCacheTime = 0;
+const PUBLIC_IP_CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
+
+async function getPublicIp() {
+    // Usar cache se ainda válido
+    const now = Date.now();
+    if (cachedPublicIp && (now - publicIpCacheTime) < PUBLIC_IP_CACHE_DURATION) {
+        return cachedPublicIp;
+    }
+    
+    // Tentar múltiplos serviços para obter IP público
+    const services = [
+        { url: 'https://api.ipify.org?format=json', type: 'json' },
+        { url: 'https://api64.ipify.org?format=json', type: 'json' },
+        { url: 'https://ifconfig.me/ip', type: 'text' }
+    ];
+    
+    for (const service of services) {
+        try {
+            const ip = await new Promise((resolve, reject) => {
+                let req;
+                const timeout = setTimeout(() => {
+                    if (req) req.destroy();
+                    reject(new Error('Timeout'));
+                }, 5000);
+                
+                req = https.get(service.url, (res) => {
+                    let data = '';
+                    
+                    res.on('data', (chunk) => {
+                        data += chunk;
+                    });
+                    
+                    res.on('end', () => {
+                        clearTimeout(timeout);
+                        try {
+                            if (service.type === 'json') {
+                                const json = JSON.parse(data);
+                                resolve(json.ip);
+                            } else {
+                                resolve(data.trim());
+                            }
+                        } catch (error) {
+                            reject(error);
+                        }
+                    });
+                });
+                
+                req.on('error', (error) => {
+                    clearTimeout(timeout);
+                    reject(error);
+                });
+            });
+            
+            // Validar IP
+            if (ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+                cachedPublicIp = ip;
+                publicIpCacheTime = now;
+                console.log(`🌐 IP público obtido: ${ip}`);
+                return ip;
+            }
+        } catch (error) {
+            console.warn(`⚠️ Erro ao obter IP público de ${service.url}:`, error.message);
+            continue;
+        }
+    }
+    
+    console.warn('⚠️ Não foi possível obter IP público de nenhum serviço');
+    return null;
+}
 
 // Classes de otimização integradas
 class PingThrottler {
@@ -215,6 +289,35 @@ const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const path = parsedUrl.pathname;
     
+    if (path === '/api/devices/realtime' && req.method === 'GET') {
+        // Endpoint para obter dados em tempo real dos dispositivos
+        const devices = Array.from(persistentDevices.values())
+            .filter(device => !deletedDeviceIds.has(device.deviceId))
+            .map(device => ({
+            deviceId: device.deviceId,
+            name: device.name,
+            status: device.status,
+            batteryLevel: device.batteryLevel || 0,
+            batteryStatus: device.batteryStatus,
+            isCharging: device.isCharging || false,
+            latitude: device.latitude,
+            longitude: device.longitude,
+            address: device.address || null,
+            lastLocationUpdate: device.lastLocationUpdate || null,
+            locationProvider: device.locationProvider || null,
+            locationAccuracy: device.locationAccuracy || null,
+            wifiSSID: device.wifiSSID || null,
+            networkType: device.networkType || null,
+            isWifiEnabled: device.isWifiEnabled || false,
+            ipAddress: device.ipAddress || device.publicIpAddress || null,
+            lastSeen: device.lastSeen || Date.now()
+        }));
+        
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, data: devices }));
+        return;
+    }
+    
     if (path === '/api/devices/status' && req.method === 'GET') {
         // Endpoint para status dos dispositivos (fallback HTTP)
         const devices = Array.from(persistentDevices.values())
@@ -256,7 +359,7 @@ const server = http.createServer((req, res) => {
             serialNumber: device.serialNumber || null,
             imei: device.imei || null,
             macAddress: device.macAddress || null,
-            ipAddress: device.ipAddress || null,
+            ipAddress: device.ipAddress || device.publicIpAddress || null,
             apiLevel: device.apiLevel || 0
         }));
         
@@ -336,6 +439,189 @@ const server = http.createServer((req, res) => {
                 log.error('Erro ao processar requisição HTTP', { error: error.message });
                 res.writeHead(400, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+        
+    } else if (req.method === 'POST' && path.startsWith('/api/groups/') && path.includes('/apply-policies')) {
+        // Rota para aplicar políticas de apps a dispositivos do grupo
+        let body = '';
+        req.on('data', chunk => {
+            body += chunk.toString();
+        });
+        
+        req.on('end', async () => {
+            let groupId = null;
+            try {
+                // Extrair groupId do path: /api/groups/{groupId}/apply-policies
+                const pathMatch = path.match(/\/api\/groups\/([^\/]+)\/apply-policies/);
+                if (!pathMatch || !pathMatch[1]) {
+                    log.error('Erro ao extrair groupId do path', { path });
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Formato de URL inválido' }));
+                    return;
+                }
+                
+                groupId = pathMatch[1];
+                let parsedBody;
+                try {
+                    parsedBody = JSON.parse(body);
+                } catch (parseError) {
+                    log.error('Erro ao fazer parse do body', { error: parseError.message, body });
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'JSON inválido' }));
+                    return;
+                }
+                
+                const { allowedApps } = parsedBody;
+                
+                if (!groupId) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'ID do grupo é obrigatório' }));
+                    return;
+                }
+                
+                if (!Array.isArray(allowedApps)) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'allowedApps deve ser um array' }));
+                    return;
+                }
+                
+                log.info('Aplicando política de grupo', { groupId, allowedAppsCount: allowedApps.length });
+                
+                // Buscar dispositivos do grupo
+                const devices = await DeviceGroupModel.getGroupDevices(groupId);
+                log.info('Dispositivos encontrados no grupo', { groupId, devicesCount: devices.length });
+                
+                const deviceIds = devices.map((d) => {
+                    // Tentar device_id primeiro, depois deviceId, depois serial_number como fallback
+                    const deviceId = d.device_id || d.deviceId || d.serial_number;
+                    if (!deviceId) {
+                        log.warn('Dispositivo sem device_id/serial_number encontrado', { 
+                            device: {
+                                id: d.id,
+                                name: d.name,
+                                device_id: d.device_id,
+                                serial_number: d.serial_number
+                            }
+                        });
+                    }
+                    return deviceId;
+                }).filter(Boolean);
+                
+                log.info('Device IDs extraídos', { groupId, deviceIds });
+                
+                if (deviceIds.length === 0) {
+                    log.warn('Nenhum dispositivo encontrado no grupo', { groupId });
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Nenhum dispositivo no grupo' }));
+                    return;
+                }
+                
+                // ✅ LÓGICA CORRIGIDA: Apps individuais têm prioridade ABSOLUTA sobre política de grupo
+                // Para identificar apps individuais: apps que estão no dispositivo mas NÃO estão em NENHUMA política de grupo
+                // IMPORTANTE: Precisamos buscar a política ANTES de aplicar, para identificar corretamente os individuais
+                
+                // Buscar política ATUAL do grupo (ANTES da atualização que vai acontecer no frontend)
+                // Isso nos permite identificar quais apps eram da política e quais são individuais
+                let currentGroupPolicyApps = [];
+                try {
+                    const currentPoliciesResult = await query(`
+                        SELECT package_name FROM app_policies WHERE group_id = $1
+                    `, [groupId]);
+                    currentGroupPolicyApps = currentPoliciesResult.rows.map((r) => r.package_name);
+                    log.info('Política atual do grupo (antes da atualização)', { groupId, policyApps: currentGroupPolicyApps });
+                } catch (error) {
+                    log.warn('Erro ao buscar política atual do grupo, continuando...', { error: error.message });
+                }
+                
+                const results = [];
+                for (const deviceId of deviceIds) {
+                    const deviceWs = connectedDevices.get(deviceId);
+                    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+                        try {
+                            // Buscar estado ATUAL do dispositivo
+                            const device = persistentDevices.get(deviceId);
+                            const currentAllowedApps = device && device.allowedApps ? [...device.allowedApps] : [];
+                            
+                            // ✅ OBTER APPS INDIVIDUAIS diretamente do dispositivo
+                            // Estes apps foram marcados como individuais quando salvos via DeviceModal
+                            const individualApps = device && device.individualApps ? [...device.individualApps] : [];
+                            
+                            log.info('Apps individuais do dispositivo', { 
+                                deviceId, 
+                                individualAppsCount: individualApps.length,
+                                individualApps: individualApps 
+                            });
+                            
+                            // Apps da política de grupo: apenas os selecionados agora (que não estão individuais)
+                            // Se um app está individual E na política, o individual prevalece (será ignorado da política)
+                            const groupAppsToApply = allowedApps.filter(app => !individualApps.includes(app));
+                            
+                            // ✅ RESULTADO FINAL: 
+                            // - Apps individuais (prioritários - SEMPRE preservados, mesmo se removidos da política)
+                            // - Apps da política nova (que não são individuais)
+                            const finalAllowedApps = [...new Set([...individualApps, ...groupAppsToApply])];
+                            
+                            const message = {
+                                type: 'update_app_permissions',
+                                data: {
+                                    allowedApps: finalAllowedApps // Apps individuais (sempre preservados) + apps da política (não individuais)
+                                },
+                                timestamp: Date.now()
+                            };
+                            deviceWs.send(JSON.stringify(message));
+                            results.push({ success: true, deviceId });
+                            log.info(`Política de grupo aplicada (apps individuais preservados)`, { 
+                                deviceId, 
+                                currentAllowedAppsCount: currentAllowedApps.length,
+                                currentAllowedApps: currentAllowedApps,
+                                individualAppsCount: individualApps.length,
+                                individualApps: individualApps,
+                                currentGroupPolicyApps: currentGroupPolicyApps,
+                                otherGroupsPolicyAppsCount: otherGroupsPolicyApps.length,
+                                newPolicyApps: allowedApps,
+                                groupAppsSelected: allowedApps.length,
+                                groupAppsIgnored: allowedApps.filter(app => individualApps.includes(app)).length,
+                                groupAppsApplied: groupAppsToApply.length,
+                                totalAppsCount: finalAllowedApps.length,
+                                finalAllowedApps: finalAllowedApps
+                            });
+                        } catch (error) {
+                            results.push({ success: false, deviceId, reason: error.message });
+                            log.error(`Erro ao enviar política para dispositivo`, { deviceId, error: error.message });
+                        }
+                    } else {
+                        results.push({ success: false, deviceId, reason: 'Dispositivo não está online' });
+                    }
+                }
+                
+                const successCount = results.filter((r) => r.success).length;
+                const failedCount = results.length - successCount;
+                
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    success: true,
+                    data: {
+                        total: deviceIds.length,
+                        success: successCount,
+                        failed: failedCount,
+                        results: results
+                    }
+                }));
+                
+            } catch (error) {
+                log.error('Erro ao aplicar políticas', { 
+                    error: error.message, 
+                    stack: error.stack,
+                    path: path,
+                    groupId: groupId || 'não extraído'
+                });
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: error.message || 'Erro desconhecido ao aplicar políticas',
+                    detail: error.stack
+                }));
             }
         });
         
@@ -459,6 +745,66 @@ async function saveDeviceToDatabase(deviceData) {
         const result = await DeviceModel.upsert(deviceData);
         console.log(`✅ Dispositivo ${deviceData.deviceId} salvo no PostgreSQL com sucesso`);
         log.debug(`Dispositivo salvo no PostgreSQL`, { deviceId: deviceData.deviceId });
+        
+        // ✅ Salvar localização na tabela device_locations se disponível
+        // Salvar apenas se tiver coordenadas válidas e mudou significativamente
+        if (deviceData.latitude && deviceData.longitude && result && result.id) {
+            try {
+                // Verificar última localização salva para evitar duplicatas muito próximas
+                const lastLocation = await query(`
+                    SELECT latitude, longitude, created_at
+                    FROM device_locations
+                    WHERE device_id = $1
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                `, [result.id]);
+                
+                let shouldSave = true;
+                if (lastLocation.rows.length > 0) {
+                    const last = lastLocation.rows[0];
+                    // Converter para número (pode vir como string do banco)
+                    const lastLat = parseFloat(last.latitude);
+                    const lastLon = parseFloat(last.longitude);
+                    const currentLat = parseFloat(deviceData.latitude);
+                    const currentLon = parseFloat(deviceData.longitude);
+                    
+                    // Calcular distância aproximada (Haversine simplificado)
+                    const latDiff = Math.abs(lastLat - currentLat);
+                    const lonDiff = Math.abs(lastLon - currentLon);
+                    const distance = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111000; // metros aproximados
+                    
+                    // Salvar apenas se mudou mais de 50 metros ou se passou mais de 5 minutos
+                    const timeDiff = Date.now() - new Date(last.created_at).getTime();
+                    shouldSave = distance > 50 || timeDiff > 5 * 60 * 1000;
+                }
+                
+                if (shouldSave) {
+                    await query(`
+                        INSERT INTO device_locations (
+                            device_id, 
+                            latitude, 
+                            longitude, 
+                            accuracy, 
+                            provider, 
+                            address,
+                            created_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, NOW())
+                    `, [
+                        result.id,
+                        deviceData.latitude,
+                        deviceData.longitude,
+                        deviceData.locationAccuracy || null,
+                        deviceData.locationProvider || 'unknown',
+                        deviceData.address || deviceData.lastKnownLocation || null
+                    ]);
+                    console.log(`📍 Localização salva para dispositivo ${deviceData.deviceId}`);
+                }
+            } catch (locationError) {
+                // Não falhar se houver erro ao salvar localização (não crítico)
+                console.error(`⚠️ Erro ao salvar localização (não crítico):`, locationError.message);
+            }
+        }
+        
         return result;
     } catch (error) {
         console.error(`❌ ERRO ao salvar dispositivo ${deviceData.deviceId} no PostgreSQL:`, error.message);
@@ -1031,6 +1377,13 @@ async function handleDeviceStatus(ws, data) {
         }
     }
     
+    // ✅ Obter IP público da rede (substituir IP privado do dispositivo)
+    let publicIp = await getPublicIp();
+    if (!publicIp) {
+        // Se falhou, tentar usar IP público existente ou manter o privado como fallback
+        publicIp = existingDevice?.publicIpAddress || null;
+    }
+    
     // ✅ Armazenar dispositivo persistente COM DADOS DO BANCO (vínculo de usuário)
     const deviceData = {
         ...data.data,
@@ -1039,12 +1392,32 @@ async function handleDeviceStatus(ws, data) {
         lastSeen: now,
         connectionId: ws.connectionId,
         connectedAt: ws.connectedAt,
+        // ✅ SUBSTITUIR IP PRIVADO PELO IP PÚBLICO DA REDE
+        ipAddress: publicIp || data.data.ipAddress, // IP público tem prioridade
+        publicIpAddress: publicIp, // Armazenar separadamente também
+        // ✅ PRESERVAR ENDEREÇO E LOCALIZAÇÃO
+        // O endereço pode vir como 'address' ou 'lastKnownLocation' do Android
+        address: data.data.address || data.data.lastKnownLocation || existingDevice?.address || null,
+        latitude: data.data.latitude || existingDevice?.latitude || null,
+        longitude: data.data.longitude || existingDevice?.longitude || null,
+        locationAccuracy: data.data.locationAccuracy || existingDevice?.locationAccuracy || null,
+        locationProvider: data.data.locationProvider || existingDevice?.locationProvider || null,
+        lastLocationUpdate: data.data.lastLocationUpdate || existingDevice?.lastLocationUpdate || null,
+        // Preservar lastKnownLocation também
+        lastKnownLocation: data.data.lastKnownLocation || existingDevice?.lastKnownLocation || null,
         // ✅ INCLUIR VÍNCULO DE USUÁRIO DO BANCO (se existir)
         assignedDeviceUserId: dbUserBinding?.assignedDeviceUserId || null,
         assignedUserId: dbUserBinding?.assignedUserId || null,
         assignedUserName: dbUserBinding?.assignedUserName || null,
-        assignedUserCpf: dbUserBinding?.assignedUserCpf || null
+        assignedUserCpf: dbUserBinding?.assignedUserCpf || null,
+        // ✅ PRESERVAR individualApps se existir no dispositivo existente (importante para rastreamento)
+        ...(existingDevice && existingDevice.individualApps ? { individualApps: existingDevice.individualApps } : {})
     };
+    
+    // Log apenas se endereço for recebido (para monitoramento)
+    if (deviceData.address) {
+        console.log(`📍 Endereço recebido do dispositivo ${deviceId}: ${deviceData.address.substring(0, 50)}...`);
+    }
     
     console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
     
@@ -1055,6 +1428,16 @@ async function handleDeviceStatus(ws, data) {
         console.log('🔔 Nome mudou durante atualização de status!');
         console.log(`   Nome anterior: "${existingDevice.name}"`);
         console.log(`   Nome novo: "${finalName}"`);
+    }
+    
+    // ✅ Log para debug: verificar se individualApps foi preservado
+    if (existingDevice && existingDevice.individualApps) {
+        console.log(`✅ Apps individuais preservados na reconexão:`, existingDevice.individualApps);
+        log.info('Apps individuais preservados na reconexão', { 
+            deviceId, 
+            individualAppsCount: existingDevice.individualApps.length,
+            individualApps: existingDevice.individualApps 
+        });
     }
     
 persistentDevices.set(deviceId, deviceData);
@@ -1395,6 +1778,41 @@ persistentDevices.set(deviceId, deviceData);
             device: deviceWithUser,
             timestamp: Date.now()
         });
+
+        // Sincronizar apps do dispositivo com os grupos aos quais pertence
+        if (data.data.installedApps && Array.isArray(data.data.installedApps) && data.data.installedApps.length > 0) {
+            try {
+                // Buscar grupos aos quais o dispositivo pertence
+                const deviceInternalId = dbDevice ? dbDevice.id : null;
+                if (deviceInternalId) {
+                    const groupsResult = await query(`
+                        SELECT DISTINCT dgm.group_id 
+                        FROM device_group_memberships dgm
+                        WHERE dgm.device_id = $1
+                    `, [deviceInternalId]);
+
+                    if (groupsResult.rows.length > 0) {
+                        const apps = data.data.installedApps.map((app) => ({
+                            packageName: app.packageName,
+                            appName: app.appName || app.packageName,
+                            icon: app.icon || null
+                        }));
+
+                        // Sincronizar apps para cada grupo
+                        for (const groupRow of groupsResult.rows) {
+                            const groupId = groupRow.group_id;
+                            await DeviceGroupModel.syncGroupAvailableApps(groupId, [{
+                                deviceId: deviceId,
+                                apps: apps
+                            }]);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Erro ao sincronizar apps do dispositivo com grupos:', error);
+                // Não bloquear o fluxo principal se houver erro na sincronização
+            }
+        }
     }
 }
 
@@ -1802,11 +2220,13 @@ async function handleDeleteDevice(ws, data) {
 }
 
 function handleUpdateAppPermissions(ws, data) {
-    const { deviceId, allowedApps } = data;
+    const { deviceId, allowedApps, isIndividual = false, individualApps: receivedIndividualApps } = data;
     
     console.log('=== UPDATE APP PERMISSIONS RECEBIDO ===');
     console.log('DeviceId:', deviceId);
     console.log('AllowedApps:', allowedApps);
+    console.log('IsIndividual:', isIndividual);
+    console.log('ReceivedIndividualApps:', receivedIndividualApps);
     console.log('Tipo de dados:', typeof allowedApps);
     console.log('É array?', Array.isArray(allowedApps));
     console.log('=====================================');
@@ -1820,9 +2240,30 @@ function handleUpdateAppPermissions(ws, data) {
         return;
     }
     
-    // Atualizar permissões no armazenamento persistente
     const device = persistentDevices.get(deviceId);
-    device.allowedApps = allowedApps || [];
+    const appsToApply = Array.isArray(allowedApps) ? allowedApps : [];
+    
+    // ✅ Se é individual (salvo via DeviceModal), marcar apps como individuais
+    // O DeviceModal envia individualApps separadamente com apenas os apps selecionados individualmente
+    if (isIndividual && receivedIndividualApps && Array.isArray(receivedIndividualApps)) {
+        // Inicializar individualApps se não existir
+        if (!device.individualApps) {
+            device.individualApps = [];
+        }
+        
+        // Atualizar lista de apps individuais com os recebidos do DeviceModal
+        // Estes são os apps que o usuário selecionou individualmente (sem os da política)
+        device.individualApps = [...new Set(receivedIndividualApps)];
+        
+        log.info('Apps marcados como individuais', { 
+            deviceId, 
+            individualApps: device.individualApps,
+            totalAllowedApps: appsToApply.length
+        });
+    }
+    
+    // Atualizar allowedApps (mescla apps individuais + apps de política de grupo)
+    device.allowedApps = appsToApply;
     persistentDevices.set(deviceId, device);
     
     console.log('=== DADOS ATUALIZADOS NO DISPOSITIVO ===');
@@ -1836,17 +2277,18 @@ function handleUpdateAppPermissions(ws, data) {
     log.info(`Permissões de aplicativos atualizadas`, {
         deviceId: deviceId,
         connectionId: ws.connectionId,
-        allowedAppsCount: allowedApps?.length || 0,
-        allowedApps: allowedApps
+        allowedAppsCount: appsToApply.length,
+        allowedApps: appsToApply
     });
     
     // Enviar permissões para o dispositivo Android se estiver conectado
+    // ✅ Substituir completamente - política de grupo tem prioridade absoluta
     const deviceWs = connectedDevices.get(deviceId);
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         const message = {
             type: 'update_app_permissions',
             data: {
-                allowedApps: allowedApps || []
+                allowedApps: appsToApply // Já normalizado como array (pode estar vazio)
             },
             timestamp: Date.now()
         };
@@ -1861,7 +2303,7 @@ function handleUpdateAppPermissions(ws, data) {
         
         log.info(`Permissões enviadas para o dispositivo Android`, {
             deviceId: deviceId,
-            allowedAppsCount: allowedApps?.length || 0
+            allowedAppsCount: appsToApply.length
         });
     } else {
         console.log('=== DISPOSITIVO ANDROID NÃO CONECTADO ===');
@@ -2636,7 +3078,7 @@ setInterval(async () => {
             serialNumber: device.serialNumber,
             imei: device.imei,
             macAddress: device.macAddress,
-            ipAddress: device.ipAddress,
+            ipAddress: device.ipAddress || device.publicIpAddress,
             apiLevel: device.apiLevel,
             // ✅ ADICIONAR DADOS DE USUÁRIO VINCULADO DO BANCO
             assignedDeviceUserId: userBinding.assignedDeviceUserId || null,
@@ -3088,3 +3530,8 @@ function handleGeofenceEvent(ws, data) {
         console.log('Dispositivo não encontrado para evento de geofencing:', deviceId);
     }
 }
+
+// Exportar connectedDevices para uso em API routes
+module.exports = {
+    connectedDevices
+};

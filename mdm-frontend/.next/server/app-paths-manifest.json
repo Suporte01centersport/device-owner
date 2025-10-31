@@ -1,8 +1,16 @@
 {
-  "/page": "app/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
   "/api/device-users/route": "app/api/device-users/route.js",
+  "/page": "app/page.js",
+  "/api/groups/[groupId]/stats/route": "app/api/groups/[groupId]/stats/route.js",
+  "/api/groups/[groupId]/policies/route": "app/api/groups/[groupId]/policies/route.js",
+  "/api/groups/[groupId]/restrictions/route": "app/api/groups/[groupId]/restrictions/route.js",
+  "/api/groups/[groupId]/available-apps/route": "app/api/groups/[groupId]/available-apps/route.js",
+  "/api/groups/[groupId]/devices/route": "app/api/groups/[groupId]/devices/route.js",
   "/api/support-messages/route": "app/api/support-messages/route.js",
   "/api/devices/status-history/route": "app/api/devices/status-history/route.js",
+  "/api/groups/route": "app/api/groups/route.js",
+  "/api/devices/route": "app/api/devices/route.js",
   "/api/devices/assign-user/route": "app/api/devices/assign-user/route.js",
-  "/api/devices/app-history/route": "app/api/devices/app-history/route.js"
+  "/api/devices/[deviceId]/groups/route": "app/api/devices/[deviceId]/groups/route.js"
 }
