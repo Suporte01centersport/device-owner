@@ -8,9 +8,10 @@ interface LocationMapProps {
   latitude: number | null
   longitude: number | null
   radiusKm: number | null
+  onLocationChange?: (lat: number, lng: number) => void
 }
 
-function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
+function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const circleRef = useRef<any>(null)
@@ -19,6 +20,9 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
   const isMountedRef = useRef(true)
   const [isMapLoaded, setIsMapLoaded] = useState(false)
   const [mapError, setMapError] = useState<string | null>(null)
+  const isDraggingRef = useRef(false) // Flag para indicar que o marcador está sendo arrastado
+  const lastLatRef = useRef<number | null>(null)
+  const lastLngRef = useRef<number | null>(null)
 
   // Garantir que isMountedRef está true quando o componente monta
   useEffect(() => {
@@ -113,7 +117,8 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
       latitude,
       longitude,
       radiusKm,
-      isMounted: isMountedRef.current
+      isMounted: isMountedRef.current,
+      isDragging: isDraggingRef.current
     })
 
     if (!isMapLoaded || !window.L) {
@@ -128,6 +133,13 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
 
     if (latitude === null || longitude === null || isNaN(latitude) || isNaN(longitude)) {
       console.log('⚠️ Coordenadas inválidas:', { latitude, longitude })
+      return
+    }
+
+    // IMPORTANTE: Se o marcador está sendo arrastado, não fazer nada
+    // Isso previne recriação do mapa durante o arraste
+    if (isDraggingRef.current) {
+      console.log('⚠️ Marcador está sendo arrastado, ignorando atualização do useEffect')
       return
     }
 
@@ -225,16 +237,109 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
       }
     }
 
+    // Se o marcador está sendo arrastado, não recriar o mapa - apenas atualizar posição
+    if (isDraggingRef.current) {
+      console.log('⚠️ Marcador está sendo arrastado, ignorando atualização do mapa')
+      return
+    }
+
     // Verificar se já existe um mapa válido antes de criar um novo
     if (mapInstanceRef.current && mapRef.current) {
       try {
-        // Verificar se o mapa ainda está válido (tem o mesmo container e coordenadas)
+        // Verificar se o mapa ainda está válido (tem o mesmo container)
         const existingMap = mapInstanceRef.current
-        if (existingMap.getContainer() === mapRef.current && 
-            Math.abs(existingMap.getCenter().lat - latitude) < 0.0001 &&
-            Math.abs(existingMap.getCenter().lng - longitude) < 0.0001) {
-          console.log('✅ Mapa já existe e está válido, não precisa recriar')
-          return
+        if (existingMap.getContainer() === mapRef.current) {
+          // PRIMEIRA VERIFICAÇÃO: Comparar com as últimas coordenadas conhecidas (última posição do marcador)
+          // Se temos coordenadas anteriores salvas, verificar se a mudança foi pequena (arraste)
+          if (lastLatRef.current !== null && lastLngRef.current !== null) {
+            const lastLatDiff = Math.abs(lastLatRef.current - latitude)
+            const lastLngDiff = Math.abs(lastLngRef.current - longitude)
+            
+            // Se a diferença for pequena (< 1 grau ≈ 111 km), provavelmente foi um arraste
+            // Apenas atualizar a posição do marcador, não recriar o mapa
+            if (lastLatDiff < 1 && lastLngDiff < 1) {
+              console.log('✅ Coordenadas próximas das últimas conhecidas (provavelmente arraste), atualizando apenas posição')
+              try {
+                if (markerRef.current) {
+                  markerRef.current.setLatLng([latitude, longitude])
+                }
+                if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                  circleRef.current.setLatLng([latitude, longitude])
+                }
+                // Atualizar popup se houver marcador
+                if (markerRef.current) {
+                  const updatePopupFunc = () => {
+                    const currentLat = markerRef.current?.getLatLng().lat || latitude
+                    const currentLng = markerRef.current?.getLatLng().lng || longitude
+                    markerRef.current?.bindPopup(`
+                      <div style="min-width: 200px;">
+                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
+                          📍 Ponto Escolhido
+                        </h3>
+                        <p style="margin: 4px 0; font-size: 12px; font-family: monospace;">
+                          ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}
+                        </p>
+                        ${radiusKm ? `<p style="margin: 4px 0; font-size: 12px;">Raio: ${radiusKm} km</p>` : ''}
+                        <p style="margin: 4px 0; font-size: 11px; color: #666; font-style: italic;">
+                          💡 Arraste o marcador para reposicionar
+                        </p>
+                      </div>
+                    `)
+                  }
+                  updatePopupFunc()
+                }
+                // Atualizar referências
+                lastLatRef.current = latitude
+                lastLngRef.current = longitude
+              } catch (e) {
+                console.error('Erro ao atualizar marcador:', e)
+              }
+              return
+            }
+          }
+          
+          // SEGUNDA VERIFICAÇÃO: Se temos um marcador, verificar se as coordenadas mudaram apenas ligeiramente
+          if (markerRef.current) {
+            try {
+              const currentMarkerPos = markerRef.current.getLatLng()
+              const latDiff = Math.abs(currentMarkerPos.lat - latitude)
+              const lngDiff = Math.abs(currentMarkerPos.lng - longitude)
+              
+              // Se a diferença for muito pequena (< 0.0001 graus ≈ 11 metros), não recriar
+              if (latDiff < 0.0001 && lngDiff < 0.0001) {
+                console.log('✅ Mapa já existe e coordenadas são praticamente iguais, não precisa recriar')
+                // Atualizar referências
+                lastLatRef.current = latitude
+                lastLngRef.current = longitude
+                return
+              }
+            } catch (e) {
+              // Se não conseguir obter posição do marcador, continuar com recriação
+              console.log('⚠️ Erro ao obter posição do marcador, continuando com recriação:', e)
+            }
+          }
+          
+          // Se chegou aqui, as coordenadas mudaram significativamente ou não há marcador
+          // Verificar se o centro do mapa está próximo das novas coordenadas (indicando mudança manual via input)
+          try {
+            const mapCenter = existingMap.getCenter()
+            const centerLatDiff = Math.abs(mapCenter.lat - latitude)
+            const centerLngDiff = Math.abs(mapCenter.lng - longitude)
+            
+            // Se o centro do mapa está muito diferente (> 0.1 graus), pode ser uma mudança manual significativa
+            // Nesse caso, vamos recriar o mapa
+            if (centerLatDiff > 0.1 || centerLngDiff > 0.1) {
+              console.log('⚠️ Coordenadas mudaram significativamente, recriando mapa')
+              // Continuar para recriar o mapa
+            } else {
+              // Coordenadas estão próximas, não recriar - apenas atualizar se necessário
+              console.log('✅ Mapa já está nas coordenadas corretas, não precisa recriar')
+              return
+            }
+          } catch (e) {
+            // Se não conseguir obter centro, continuar com recriação
+            console.log('⚠️ Erro ao obter centro do mapa, continuando com recriação:', e)
+          }
         }
       } catch (e) {
         // Mapa inválido, precisa limpar
@@ -370,21 +475,290 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
                       iconAnchor: [8, 8]
                     })
 
-                    const marker = window.L.marker([lat, lng], { icon: centerIcon }).addTo(map)
-                    markerRef.current = marker
+                             // Criar marcador arrastável
+                             const marker = window.L.marker([lat, lng], { 
+                               icon: centerIcon,
+                               draggable: true, // Tornar o marcador arrastável
+                               autoPan: true // Mover o mapa automaticamente quando arrastar próximo às bordas
+                             }).addTo(map)
+                             markerRef.current = marker
+                             
+                             // Inicializar referências das últimas coordenadas
+                             lastLatRef.current = lat
+                             lastLngRef.current = lng
 
-                    // Adicionar popup no marcador
-                    marker.bindPopup(`
-                      <div style="min-width: 200px;">
-                        <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
-                          📍 Ponto Escolhido
-                        </h3>
-                        <p style="margin: 4px 0; font-size: 12px; font-family: monospace;">
-                          ${lat.toFixed(4)}, ${lng.toFixed(4)}
-                        </p>
-                        ${radiusKm ? `<p style="margin: 4px 0; font-size: 12px;">Raio: ${radiusKm} km</p>` : ''}
-                      </div>
-                    `)
+                    // Função para atualizar popup
+                    const updatePopup = () => {
+                      const currentLat = marker.getLatLng().lat
+                      const currentLng = marker.getLatLng().lng
+                      marker.bindPopup(`
+                        <div style="min-width: 200px;">
+                          <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
+                            📍 Ponto Escolhido
+                          </h3>
+                          <p style="margin: 4px 0; font-size: 12px; font-family: monospace;">
+                            ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}
+                          </p>
+                          ${radiusKm ? `<p style="margin: 4px 0; font-size: 12px;">Raio: ${radiusKm} km</p>` : ''}
+                          <p style="margin: 4px 0; font-size: 11px; color: #666; font-style: italic;">
+                            💡 Arraste o marcador para reposicionar
+                          </p>
+                        </div>
+                      `)
+                    }
+                    updatePopup()
+
+                    // Event listener para quando o marcador começar a ser arrastado
+                    marker.on('dragstart', () => {
+                      isDraggingRef.current = true
+                      console.log('🖱️ Iniciando arraste do marcador')
+                    })
+
+                    // Event listener para quando o marcador estiver sendo arrastado (em tempo real)
+                    marker.on('drag', () => {
+                      const newLat = marker.getLatLng().lat
+                      const newLng = marker.getLatLng().lng
+                      
+                      // Atualizar círculo durante o arraste (para feedback visual em tempo real)
+                      if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                        try {
+                          circleRef.current.setLatLng([newLat, newLng])
+                        } catch (e) {
+                          // Ignorar erros durante arraste
+                        }
+                      }
+                    })
+
+                    // Event listener para quando o marcador for solto após arrastar
+                    marker.on('dragend', () => {
+                      const newLat = marker.getLatLng().lat
+                      const newLng = marker.getLatLng().lng
+                      
+                      console.log('📍 Marcador arrastado para:', newLat, newLng)
+                      
+                      // Atualizar referências das últimas coordenadas PRIMEIRO
+                      lastLatRef.current = newLat
+                      lastLngRef.current = newLng
+                      
+                      // Atualizar popup com novas coordenadas
+                      updatePopup()
+                      
+                      // IMPORTANTE: Manter isDraggingRef como true por um tempo suficiente
+                      // para evitar que o useEffect tente recriar o mapa enquanto estamos centralizando
+                      // O useEffect verifica isDraggingRef no início e ignora se for true
+                      
+                      // Primeiro, centralizar o mapa (isso pode levar alguns milissegundos)
+                      // DEPOIS, resetar a flag e chamar onLocationChange
+                      // Usar timeout maior para garantir que a centralização e todas as operações terminaram
+                      setTimeout(() => {
+                        // Resetar flag ANTES de chamar onLocationChange
+                        // Isso garante que o useEffect vai detectar as coordenadas já atualizadas
+                        // e não vai tentar recriar o mapa porque a diferença será pequena
+                        isDraggingRef.current = false
+                        
+                        // Pequeno delay adicional antes de atualizar coordenadas no componente pai
+                        // para garantir que o estado interno foi processado
+                        setTimeout(() => {
+                          // Agora podemos atualizar as coordenadas no componente pai
+                          // O useEffect vai detectar que é uma mudança pequena e apenas atualizar a posição
+                          if (onLocationChange) {
+                            onLocationChange(newLat, newLng)
+                          }
+                        }, 100)
+                      }, 500) // Aumentar para 500ms para garantir que tudo terminou
+                      
+                      // Garantir que o círculo está na nova posição
+                      if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                        try {
+                          const radiusMeters = radiusKm * 1000
+                          circleRef.current.setLatLng([newLat, newLng])
+                        } catch (e) {
+                          console.error('Erro ao atualizar círculo:', e)
+                        }
+                        
+                        // Centralizar e ajustar o mapa para mostrar o círculo completo
+                        // Usar um timeout maior para garantir que o estado foi atualizado e o useEffect não vai interferir
+                        setTimeout(() => {
+                          // Verificar se o mapa ainda existe e está válido
+                          if (!mapInstanceRef.current || mapInstanceRef.current !== map) {
+                            console.log('⚠️ Mapa não está mais disponível, pulando centralização')
+                            return
+                          }
+                          
+                          // Verificar se o mapa está totalmente inicializado
+                          try {
+                            // Verificar se o mapa tem todas as propriedades necessárias
+                            if (!map._loaded || !map._container || !map.getPane) {
+                              console.log('⚠️ Mapa não está totalmente carregado ainda, aguardando...')
+                              setTimeout(() => {
+                                if (mapInstanceRef.current === map && map._loaded && map._container && map.getPane) {
+                                  try {
+                                    const mapPane = map.getPane('mapPane')
+                                    if (!mapPane) {
+                                      console.log('⚠️ MapPane ainda não disponível')
+                                      return
+                                    }
+                                    
+                                    map.invalidateSize()
+                                    
+                                    // Pequeno delay para garantir que o invalidateSize foi processado
+                                    setTimeout(() => {
+                                      if (mapInstanceRef.current !== map) return
+                                      
+                                      try {
+                                        if (circleRef.current) {
+                                          const bounds = circleRef.current.getBounds()
+                                          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+                                            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 })
+                                          } else {
+                                            const currentZoom = map.getZoom() || 15
+                                            map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                          }
+                                        } else {
+                                          const currentZoom = map.getZoom() || 15
+                                          map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                        }
+                                      } catch (e) {
+                                        console.error('Erro ao centralizar mapa (tentativa 2):', e)
+                                      }
+                                    }, 50)
+                                  } catch (e) {
+                                    console.error('Erro ao preparar centralização (tentativa 2):', e)
+                                  }
+                                }
+                              }, 150)
+                              return
+                            }
+                            
+                            const mapPane = map.getPane('mapPane')
+                            if (!mapPane) {
+                              console.log('⚠️ MapPane não está disponível ainda, aguardando...')
+                              setTimeout(() => {
+                                if (mapInstanceRef.current === map && map.getPane('mapPane')) {
+                                  try {
+                                    map.invalidateSize()
+                                    
+                                    setTimeout(() => {
+                                      if (mapInstanceRef.current !== map) return
+                                      
+                                      try {
+                                        if (circleRef.current) {
+                                          const bounds = circleRef.current.getBounds()
+                                          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+                                            map.fitBounds(bounds, { padding: [50, 50], maxZoom: 18 })
+                                          } else {
+                                            const currentZoom = map.getZoom() || 15
+                                            map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                          }
+                                        } else {
+                                          const currentZoom = map.getZoom() || 15
+                                          map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                        }
+                                      } catch (e) {
+                                        console.error('Erro ao centralizar mapa (tentativa 3):', e)
+                                      }
+                                    }, 50)
+                                  } catch (e) {
+                                    console.error('Erro ao preparar centralização (tentativa 3):', e)
+                                  }
+                                }
+                              }, 150)
+                              return
+                            }
+                            
+                            // Garantir que o mapa está totalmente renderizado
+                            map.invalidateSize()
+                            
+                            // Verificar se o mapa está realmente pronto antes de chamar setView/fitBounds
+                            if (!map || !map.getContainer() || !map.getPane) {
+                              console.log('⚠️ Mapa não está totalmente inicializado, pulando centralização')
+                              return
+                            }
+
+                            if (circleRef.current) {
+                              // Ajustar view para mostrar o círculo completo com padding
+                              try {
+                                const bounds = circleRef.current.getBounds()
+                                if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+                                  map.fitBounds(bounds, { 
+                                    padding: [50, 50],
+                                    maxZoom: 18
+                                  })
+                                } else {
+                                  // Fallback: apenas centralizar
+                                  const currentZoom = map.getZoom() || 15
+                                  map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                }
+                              } catch (e) {
+                                console.error('Erro ao fazer fitBounds:', e)
+                                // Fallback: apenas centralizar
+                                try {
+                                  const currentZoom = map.getZoom() || 15
+                                  map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                } catch (e2) {
+                                  console.error('Erro ao fazer setView:', e2)
+                                }
+                              }
+                            } else {
+                              // Se não houver círculo, centralizar no marcador com zoom adequado
+                              try {
+                                const currentZoom = map.getZoom() || 15
+                                map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                              } catch (e) {
+                                console.error('Erro ao fazer setView:', e)
+                              }
+                            }
+                          } catch (e) {
+                            console.error('Erro ao centralizar mapa:', e)
+                            // Não tentar novamente para evitar loops
+                          }
+                        }, 200)
+                      } else {
+                        // Se não houver círculo, centralizar no marcador
+                        setTimeout(() => {
+                          if (!mapInstanceRef.current || mapInstanceRef.current !== map) return
+                          
+                          try {
+                            // Verificar se o mapa está totalmente inicializado
+                            if (!map.getPane('mapPane')) {
+                              console.log('⚠️ MapPane não disponível, aguardando...')
+                              setTimeout(() => {
+                                if (mapInstanceRef.current === map && map.getPane('mapPane')) {
+                                  try {
+                                    if (!map || !map.getContainer() || !map.getPane) {
+                                      console.log('⚠️ Mapa não está totalmente inicializado (tentativa 2 - sem círculo)')
+                                      return
+                                    }
+                                    map.invalidateSize()
+                                    const currentZoom = map.getZoom() || 15
+                                    map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                                  } catch (e) {
+                                    console.error('Erro ao centralizar mapa (tentativa 2):', e)
+                                  }
+                                }
+                              }, 100)
+                              return
+                            }
+                            
+                            // Verificar se o mapa está realmente pronto
+                            if (!map || !map.getContainer() || !map.getPane) {
+                              console.log('⚠️ Mapa não está totalmente inicializado, pulando centralização')
+                              return
+                            }
+
+                            map.invalidateSize()
+                            try {
+                              const currentZoom = map.getZoom() || 15
+                              map.setView([newLat, newLng], Math.max(currentZoom, 15), { animate: false })
+                            } catch (e) {
+                              console.error('Erro ao fazer setView:', e)
+                            }
+                          } catch (e) {
+                            console.error('Erro ao centralizar mapa:', e)
+                          }
+                        }, 200)
+                      }
+                    })
 
                     // Adicionar círculo da área permitida (se houver raio)
                     if (radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
@@ -417,14 +791,32 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
                       `)
 
                       // Ajustar view para mostrar o círculo completo
-                      try {
-                        map.fitBounds(circle.getBounds(), { 
-                          padding: [20, 20]
-                        })
-                      } catch (e) {
-                        // Se falhar, apenas centralizar
-                        map.setView([lat, lng], getZoom(radiusKm))
-                      }
+                      // Usar setTimeout para garantir que o mapa está totalmente renderizado
+                      setTimeout(() => {
+                        try {
+                          if (!mapInstanceRef.current || mapInstanceRef.current !== map) return
+                          if (!map._loaded || !map.getContainer() || !map.getPane) return
+                          
+                          const bounds = circle.getBounds()
+                          if (bounds && typeof bounds.isValid === 'function' && bounds.isValid()) {
+                            map.fitBounds(bounds, { 
+                              padding: [20, 20],
+                              maxZoom: 18
+                            })
+                          } else {
+                            map.setView([lat, lng], getZoom(radiusKm))
+                          }
+                        } catch (e) {
+                          // Se falhar, apenas centralizar
+                          try {
+                            if (mapInstanceRef.current === map) {
+                              map.setView([lat, lng], getZoom(radiusKm))
+                            }
+                          } catch (e2) {
+                            console.error('Erro ao centralizar mapa:', e2)
+                          }
+                        }
+                      }, 300)
                     }
 
                     console.log('✅ Mapa completamente inicializado!')
@@ -454,7 +846,7 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
 
   if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '300px' }}>
+      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="text-4xl mb-2">🗺️</div>
           <div className="text-sm">Preencha latitude e longitude para ver o mapa</div>
@@ -465,7 +857,7 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
 
   if (mapError) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '300px' }}>
+      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="text-4xl mb-2">⚠️</div>
           <div className="text-sm font-semibold mb-1">Erro ao carregar mapa</div>
@@ -477,7 +869,7 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
 
   if (!isMapLoaded) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '300px' }}>
+      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
           <div className="text-sm">Carregando mapa...</div>
@@ -488,29 +880,34 @@ function LocationMap({ latitude, longitude, radiusKm }: LocationMapProps) {
 
   return (
     <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ position: 'relative' }}>
-      <div 
-        ref={mapRef} 
-        className="w-full" 
-        style={{ 
-          height: '300px',
-          minHeight: '300px',
-          position: 'relative',
-          zIndex: 1,
-          backgroundColor: '#e5e7eb'
-        }}
-      />
-      {/* Overlay com informações */}
-      <div className="absolute top-2 left-2 bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-200 z-[1000]" style={{ pointerEvents: 'none' }}>
-        <div className="text-xs font-semibold text-primary">📍 Ponto Escolhido</div>
-        <div className="text-xs text-secondary font-mono">
-          {latitude.toFixed(4)}, {longitude.toFixed(4)}
-        </div>
-        {radiusKm && !isNaN(radiusKm) && (
-          <div className="text-xs text-secondary mt-1">
-            Raio: {radiusKm} km
+             <div 
+               ref={mapRef} 
+               className="w-full" 
+               style={{ 
+                 height: '500px',
+                 minHeight: '500px',
+                 position: 'relative',
+                 zIndex: 1,
+                 backgroundColor: '#e5e7eb'
+               }}
+             />
+      {/* Overlay com informações - atualizado dinamicamente */}
+      {latitude && longitude && (
+        <div className="absolute top-2 left-2 bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-200 z-[1000]" style={{ pointerEvents: 'none' }}>
+          <div className="text-xs font-semibold text-primary">📍 Ponto Escolhido</div>
+          <div className="text-xs text-secondary font-mono">
+            {latitude.toFixed(4)}, {longitude.toFixed(4)}
           </div>
-        )}
-      </div>
+          {radiusKm && !isNaN(radiusKm) && (
+            <div className="text-xs text-secondary mt-1">
+              Raio: {radiusKm} km
+            </div>
+          )}
+          <div className="text-xs text-secondary mt-1 italic">
+            💡 Arraste o marcador azul
+          </div>
+        </div>
+      )}
       {/* Link para abrir no Google Maps */}
       <a
         href={`https://www.google.com/maps?q=${latitude},${longitude}`}
@@ -539,7 +936,222 @@ interface GroupModalProps {
   onClose: () => void
 }
 
-type TabKey = 'overview' | 'devices' | 'policies' | 'monitoring'
+type TabKey = 'overview' | 'devices' | 'policies' | 'monitoring' | 'history'
+
+// Componente da aba de histórico
+interface HistoryTabProps {
+  groupId: string
+}
+
+function HistoryTab({ groupId }: HistoryTabProps) {
+  const [selectedDate, setSelectedDate] = useState<string>('')
+  const [historyAlerts, setHistoryAlerts] = useState<any[]>([])
+  const [availableDates, setAvailableDates] = useState<string[]>([])
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+
+  // Carregar datas disponíveis ao montar
+  useEffect(() => {
+    const loadAvailableDates = async () => {
+      try {
+        const res = await fetch(`/api/groups/${groupId}/alert-history`)
+        const result = await res.json()
+        if (result.success && result.data?.availableDates) {
+          setAvailableDates(result.data.availableDates)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar datas disponíveis:', error)
+      }
+    }
+
+    loadAvailableDates()
+  }, [groupId])
+
+  // Carregar alertas quando data for selecionada
+  useEffect(() => {
+    if (!selectedDate) {
+      setHistoryAlerts([])
+      return
+    }
+
+    const loadHistory = async () => {
+      setIsLoadingHistory(true)
+      try {
+        const res = await fetch(`/api/groups/${groupId}/alert-history?date=${selectedDate}`)
+        const result = await res.json()
+        if (result.success) {
+          setHistoryAlerts(result.data || [])
+        } else {
+          console.error('Erro ao carregar histórico:', result.detail)
+          setHistoryAlerts([])
+        }
+      } catch (error) {
+        console.error('Erro ao carregar histórico:', error)
+        setHistoryAlerts([])
+      } finally {
+        setIsLoadingHistory(false)
+      }
+    }
+
+    loadHistory()
+  }, [groupId, selectedDate])
+
+  // Formatar data para exibição
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr)
+      return date.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      })
+    } catch {
+      return dateStr
+    }
+  }
+
+  // Obter ícone e cor do tipo de alerta
+  const getAlertDisplay = (alertType: string) => {
+    switch (alertType) {
+      case 'error':
+        return { icon: '🔴', color: 'border-red-200 bg-red-50', textColor: 'text-red-700' }
+      case 'warning':
+        return { icon: '⚠️', color: 'border-yellow-200 bg-yellow-50', textColor: 'text-yellow-700' }
+      case 'info':
+        return { icon: 'ℹ️', color: 'border-blue-200 bg-blue-50', textColor: 'text-blue-700' }
+      default:
+        return { icon: '📌', color: 'border-gray-200 bg-gray-50', textColor: 'text-gray-700' }
+    }
+  }
+
+  // Data máxima permitida (hoje)
+  const maxDate = new Date().toISOString().split('T')[0]
+  // Data mínima permitida (60 dias atrás)
+  const minDate = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold text-primary mb-4">Histórico de Alertas</h3>
+        
+        {/* Seletor de Data */}
+        <div className="card p-4 mb-4">
+          <label className="block text-sm font-medium text-primary mb-2">
+            Selecionar Data para Visualizar Alertas
+          </label>
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              min={minDate}
+              max={maxDate}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            {availableDates.length > 0 && (
+              <div className="text-xs text-secondary">
+                {availableDates.length} data{availableDates.length > 1 ? 's' : ''} disponível{availableDates.length > 1 ? 'eis' : ''}
+              </div>
+            )}
+          </div>
+          {!selectedDate && (
+            <p className="text-sm text-secondary mt-2">
+              Selecione uma data acima para visualizar os alertas ocorridos naquele dia
+            </p>
+          )}
+        </div>
+
+        {/* Lista de Alertas */}
+        {selectedDate && (
+          <div>
+            {isLoadingHistory ? (
+              <div className="card p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
+                <div className="text-secondary">Carregando histórico...</div>
+              </div>
+            ) : historyAlerts.length === 0 ? (
+              <div className="card p-8 text-center">
+                <div className="text-4xl mb-2">📭</div>
+                <div className="text-secondary font-medium">Nenhum alerta encontrado para esta data</div>
+                <div className="text-xs text-secondary mt-1">
+                  Não houve alertas registrados no dia {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-md font-semibold text-primary">
+                    Alertas do dia {new Date(selectedDate).toLocaleDateString('pt-BR')}
+                  </h4>
+                  <span className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm font-medium">
+                    {historyAlerts.length} alerta{historyAlerts.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                
+                {historyAlerts.map((alert) => {
+                  const display = getAlertDisplay(alert.alertType)
+                  const hasMultipleOccurrences = alert.occurrenceCount && alert.occurrenceCount > 1
+                  const firstTime = alert.firstOccurrence ? formatDate(alert.firstOccurrence) : null
+                  const lastTime = alert.lastOccurrence ? formatDate(alert.lastOccurrence) : null
+                  const isSameTime = firstTime === lastTime
+                  
+                  return (
+                    <div
+                      key={alert.id}
+                      className={`card p-4 border-2 ${display.color}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="text-2xl">{display.icon}</div>
+                        <div className="flex-1">
+                          <div className="flex items-center justify-between mb-1">
+                            <h5 className={`font-semibold ${display.textColor}`}>
+                              {alert.alertTitle}
+                              {hasMultipleOccurrences && (
+                                <span className="ml-2 px-2 py-0.5 bg-primary/20 text-primary rounded text-xs font-normal">
+                                  {alert.occurrenceCount}x
+                                </span>
+                              )}
+                            </h5>
+                            <div className="text-right">
+                              {hasMultipleOccurrences && !isSameTime ? (
+                                <div className="text-xs text-secondary">
+                                  <div className="font-medium">Início: {firstTime}</div>
+                                  <div className="font-medium">Fim: {lastTime}</div>
+                                </div>
+                              ) : (
+                                <span className="text-xs text-secondary">
+                                  {firstTime || (alert.createdAt ? formatDate(alert.createdAt) : '')}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm text-primary mb-2">
+                            {alert.alertMessage}
+                          </p>
+                          <div className="flex items-center justify-between">
+                            <div className="text-xs text-secondary">
+                              <strong>Dispositivo:</strong> {alert.deviceName} ({alert.deviceId.substring(0, 8)}...)
+                            </div>
+                            {hasMultipleOccurrences && (
+                              <div className="text-xs text-secondary">
+                                Ocorreu <strong>{alert.occurrenceCount}</strong> vez{alert.occurrenceCount > 1 ? 'es' : ''}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
@@ -575,6 +1187,24 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
   const [locationLat, setLocationLat] = useState('')
   const [locationLon, setLocationLon] = useState('')
   const [locationRadius, setLocationRadius] = useState('5')
+  const [addressSearch, setAddressSearch] = useState('')
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false)
+  
+  // Ref para debounce do salvamento automático de localização
+  const saveLocationTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Ref para evitar recarregar dados quando salvamos localização
+  const isSavingLocationRef = useRef(false)
+
+  // Cleanup do timeout quando o componente for desmontado ou modal fechar
+  useEffect(() => {
+    return () => {
+      if (saveLocationTimeoutRef.current) {
+        clearTimeout(saveLocationTimeoutRef.current)
+        saveLocationTimeoutRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(() => {
     if (!group || !isOpen) return
@@ -814,7 +1444,8 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
         if (r.success) {
           setAllowedNetworks(r.data.allowedNetworks || [])
           setAllowedLocation(r.data.allowedLocation || null)
-          if (r.data.allowedLocation) {
+          // Só atualizar campos de localização se não estivermos salvando (evitar sobrescrever durante arraste)
+          if (r.data.allowedLocation && !isSavingLocationRef.current) {
             setLocationLat(r.data.allowedLocation.latitude?.toString() || '')
             setLocationLon(r.data.allowedLocation.longitude?.toString() || '')
             setLocationRadius(r.data.allowedLocation.radius_km?.toString() || '5')
@@ -912,9 +1543,10 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     devices.forEach((device) => {
       const deviceName = device.name || device.deviceId || 'Dispositivo desconhecido'
       
-      // 1. Bateria baixa (< 10%)
-      if (device.batteryLevel !== undefined && device.batteryLevel !== null) {
-        if (device.batteryLevel < 10 && !device.isCharging) {
+      // 1. Bateria baixa (1% a 10% e dispositivo online)
+      if (device.status === 'online' && device.batteryLevel !== undefined && device.batteryLevel !== null) {
+        // Apenas entre 1% e 10%, não considerar 0% (que geralmente indica dispositivo offline)
+        if (device.batteryLevel >= 1 && device.batteryLevel <= 10 && !device.isCharging) {
           alerts.push({
             id: `battery-low-${device.deviceId}`,
             type: 'warning',
@@ -996,6 +1628,119 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     })
   }, [devices, allowedNetworks, allowedLocation])
 
+  // Salvar alertas no histórico quando detectados
+  const lastSavedAlertsRef = useRef<Set<string>>(new Set())
+  
+  useEffect(() => {
+    if (!group || !isOpen) {
+      console.log('⚠️ Salvamento de alertas desabilitado:', { group: !!group, isOpen, alertsCount: detectAlerts.length })
+      return
+    }
+    
+    if (detectAlerts.length === 0) {
+      console.log('ℹ️ Nenhum alerta detectado para salvar')
+      return
+    }
+
+    console.log(`🔍 Detectados ${detectAlerts.length} alerta(s) para salvar`)
+
+    // Salvar cada alerta no histórico (evitar duplicatas)
+    const saveAlerts = async () => {
+      const now = Date.now()
+      const alertsToSave = detectAlerts.filter(alert => {
+        // Criar chave única: alertType + deviceId + título (mais específico)
+        // Usar minuto arredondado para permitir salvar a cada minuto, mas evitar múltiplos salvamentos no mesmo minuto
+        const minuteKey = Math.floor(now / 60000)
+        const alertKey = `${alert.type}-${alert.deviceId}-${alert.title}-${minuteKey}`
+        
+        // Salvar apenas se não foi salvo no mesmo minuto
+        if (lastSavedAlertsRef.current.has(alertKey)) {
+          console.log(`⏭️ Alerta já salvo neste minuto (ignorando): ${alertKey}`)
+          return false
+        }
+        
+        // Adicionar à lista de salvos
+        lastSavedAlertsRef.current.add(alertKey)
+        console.log(`✅ Alerta será salvo: ${alertKey}`)
+        return true
+      })
+
+      // Limpar chaves antigas (manter apenas últimos 10 minutos)
+      if (lastSavedAlertsRef.current.size > 100) {
+        lastSavedAlertsRef.current.clear()
+      }
+
+      if (alertsToSave.length === 0) {
+        console.log('ℹ️ Nenhum alerta novo para salvar (todos já foram salvos recentemente)')
+        return
+      }
+
+      console.log(`📝 Tentando salvar ${alertsToSave.length} alerta(s) no histórico`, alertsToSave)
+      
+      for (const alert of alertsToSave) {
+        // Guardar a chave original para poder remover depois se necessário
+        const minuteKey = Math.floor(now / 60000)
+        const alertKey = `${alert.type}-${alert.deviceId}-${alert.title}-${minuteKey}`
+        
+        try {
+          console.log(`💾 Salvando alerta:`, {
+            groupId: group.id,
+            deviceId: alert.deviceId,
+            alertType: alert.type,
+            alertTitle: alert.title,
+            alertKey
+          })
+          
+          const response = await fetch(`/api/groups/${group.id}/alert-history`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              deviceId: alert.deviceId,
+              deviceName: alert.deviceName,
+              alertType: alert.type,
+              alertTitle: alert.title,
+              alertMessage: alert.message,
+              alertData: {
+                timestamp: alert.timestamp,
+                batteryLevel: devices.find(d => d.deviceId === alert.deviceId)?.batteryLevel,
+                wifiSSID: devices.find(d => d.deviceId === alert.deviceId)?.wifiSSID,
+                latitude: devices.find(d => d.deviceId === alert.deviceId)?.latitude,
+                longitude: devices.find(d => d.deviceId === alert.deviceId)?.longitude
+              }
+            })
+          })
+          
+          const result = await response.json()
+          
+          if (response.ok && result.success) {
+            if (result.data === null) {
+              console.log('ℹ️ Alerta duplicado ignorado (já existe no banco):', result.message)
+              // Se foi ignorado por duplicata no banco, remover da cache do frontend
+              // para permitir tentar novamente no próximo ciclo (após 1 minuto)
+              lastSavedAlertsRef.current.delete(alertKey)
+            } else {
+              console.log('✅ Alerta salvo com sucesso:', result.data)
+              // Manter na cache apenas se foi realmente salvo
+            }
+          } else {
+            console.error('❌ Erro ao salvar alerta:', result.detail || result.error)
+            // Em caso de erro, remover da cache para tentar novamente
+            lastSavedAlertsRef.current.delete(alertKey)
+          }
+        } catch (error) {
+          console.error('❌ Erro ao salvar alerta no histórico:', error)
+          // Em caso de exceção, remover da cache
+          lastSavedAlertsRef.current.delete(alertKey)
+        }
+      }
+    }
+
+    // Salvar alertas imediatamente e depois a cada 15 segundos (mais frequente para garantir salvamento)
+    saveAlerts()
+    const intervalId = setInterval(saveAlerts, 15000) // Reduzido para 15 segundos para garantir salvamento
+    
+    return () => clearInterval(intervalId)
+  }, [group, isOpen, detectAlerts, devices])
 
   // Funções para salvar configurações
   const handleSaveNetworks = async () => {
@@ -1014,6 +1759,63 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     } catch (error) {
       console.error('Erro ao salvar redes:', error)
       alert('Erro ao salvar redes permitidas')
+    }
+  }
+
+  // Função para buscar endereço usando Nominatim (OpenStreetMap)
+  const handleSearchAddress = async () => {
+    if (!addressSearch.trim()) {
+      alert('Por favor, digite um endereço para buscar')
+      return
+    }
+
+    setIsSearchingAddress(true)
+    try {
+      // Usar Nominatim API do OpenStreetMap (gratuita e não precisa de chave)
+      const encodedAddress = encodeURIComponent(addressSearch.trim())
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&addressdetails=1`,
+        {
+          headers: {
+            'User-Agent': 'MDM-Owner/1.0' // Nominatim requer User-Agent
+          }
+        }
+      )
+
+      if (!response.ok) {
+        throw new Error('Erro ao buscar endereço')
+      }
+
+      const data = await response.json()
+
+      if (!data || data.length === 0) {
+        alert('Endereço não encontrado. Tente ser mais específico (ex: incluir cidade, estado)')
+        return
+      }
+
+      const result = data[0]
+      const lat = parseFloat(result.lat)
+      const lon = parseFloat(result.lon)
+
+      if (isNaN(lat) || isNaN(lon)) {
+        throw new Error('Coordenadas inválidas retornadas')
+      }
+
+      // Atualizar os campos de latitude e longitude
+      setLocationLat(lat.toString())
+      setLocationLon(lon.toString())
+
+      // Mostrar endereço encontrado
+      const displayName = result.display_name || addressSearch
+      alert(`📍 Endereço encontrado:\n${displayName}\n\nCoordenadas: ${lat.toFixed(6)}, ${lon.toFixed(6)}`)
+      
+      // Limpar o campo de busca
+      setAddressSearch('')
+    } catch (error) {
+      console.error('Erro ao buscar endereço:', error)
+      alert('Erro ao buscar endereço. Verifique sua conexão ou tente novamente com um endereço mais específico.')
+    } finally {
+      setIsSearchingAddress(false)
     }
   }
 
@@ -1126,7 +1928,8 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
               { id: 'overview', label: 'Visão Geral', icon: '📊' },
               { id: 'devices', label: 'Dispositivos', icon: '📱' },
               { id: 'policies', label: 'Políticas', icon: '📋' },
-              { id: 'monitoring', label: 'Monitoramento', icon: '📈' }
+              { id: 'monitoring', label: 'Monitoramento', icon: '📈' },
+              { id: 'history', label: 'Histórico', icon: '📜' }
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -1234,7 +2037,7 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                         {allowedLocation ? (
                           <div className="space-y-1">
                             <div className="text-xs text-secondary">
-                              Centro: {allowedLocation.latitude?.toFixed(4)}, {allowedLocation.longitude?.toFixed(4)}
+                              Centro: {typeof allowedLocation.latitude === 'number' ? allowedLocation.latitude.toFixed(4) : allowedLocation.latitude}, {typeof allowedLocation.longitude === 'number' ? allowedLocation.longitude.toFixed(4) : allowedLocation.longitude}
                             </div>
                             <div className="text-xs text-secondary">
                               Raio: {allowedLocation.radius_km} km
@@ -1861,26 +2664,41 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                                 <span className="text-xs font-medium text-secondary uppercase">Bateria</span>
                               </div>
                               <div className="space-y-1">
-                                <div className="flex items-center justify-between">
-                                  <span className="text-xs text-secondary">Nível:</span>
-                                  <span className={`text-xs font-bold ${getBatteryColor(device.batteryLevel || 0)}`}>
-                                    {device.batteryLevel !== undefined && device.batteryLevel !== null ? `${device.batteryLevel}%` : 'N/A'}
-                                  </span>
-                                </div>
-                                {device.batteryLevel !== undefined && device.batteryLevel !== null && (
-                                  <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                                    <div
-                                      className={`h-2 rounded-full ${getBatteryProgressColor(device.batteryLevel)}`}
-                                      style={{ width: `${Math.min(Math.max(device.batteryLevel, 0), 100)}%` }}
-                                    />
-                                  </div>
+                                {device.status === 'offline' ? (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-secondary">Nível:</span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
+                                    </div>
+                                    <div className="flex items-center justify-between mt-1">
+                                      <span className="text-xs text-secondary">Estado:</span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-secondary">Nível:</span>
+                                      <span className={`text-xs font-bold ${getBatteryColor(device.batteryLevel || 0)}`}>
+                                        {device.batteryLevel !== undefined && device.batteryLevel !== null ? `${device.batteryLevel}%` : 'N/A'}
+                                      </span>
+                                    </div>
+                                    {device.batteryLevel !== undefined && device.batteryLevel !== null && (
+                                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                        <div
+                                          className={`h-2 rounded-full ${getBatteryProgressColor(device.batteryLevel)}`}
+                                          style={{ width: `${Math.min(Math.max(device.batteryLevel, 0), 100)}%` }}
+                                        />
+                                      </div>
+                                    )}
+                                    <div className="flex items-center justify-between mt-1">
+                                      <span className="text-xs text-secondary">Estado:</span>
+                                      <span className="text-xs font-medium text-primary">
+                                        {device.isCharging ? '⚡ Carregando' : formatBatteryStatus(device.batteryStatus)}
+                                      </span>
+                                    </div>
+                                  </>
                                 )}
-                                <div className="flex items-center justify-between mt-1">
-                                  <span className="text-xs text-secondary">Estado:</span>
-                                  <span className="text-xs font-medium text-primary">
-                                    {device.isCharging ? '⚡ Carregando' : formatBatteryStatus(device.batteryStatus)}
-                                  </span>
-                                </div>
                               </div>
                             </div>
 
@@ -1891,7 +2709,9 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                                 <span className="text-xs font-medium text-secondary uppercase">Localização</span>
                               </div>
                               <div className="space-y-1">
-                                {(() => {
+                                {device.status === 'offline' ? (
+                                  <div className="text-xs text-secondary">N/D</div>
+                                ) : (() => {
                                   const hasAddress = device.address && device.address.trim().length > 0;
                                   const hasLatLon = device.latitude !== undefined && device.latitude !== null && 
                                                     device.longitude !== undefined && device.longitude !== null;
@@ -1947,45 +2767,68 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                                 <span className="text-xs font-medium text-secondary uppercase">Rede</span>
                               </div>
                               <div className="space-y-1">
-                                {device.wifiSSID ? (
+                                {device.status === 'offline' ? (
                                   <>
                                     <div className="flex items-center justify-between">
                                       <span className="text-xs text-secondary">WiFi:</span>
-                                      <span className="text-xs font-medium text-primary truncate ml-2" title={device.wifiSSID}>
-                                        {device.wifiSSID}
-                                      </span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
                                     </div>
-                                    {device.networkType && (
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-secondary">Tipo:</span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-secondary">IP:</span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-xs text-secondary">Status WiFi:</span>
+                                      <span className="text-xs font-medium text-secondary">N/D</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    {device.wifiSSID ? (
+                                      <>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-xs text-secondary">WiFi:</span>
+                                          <span className="text-xs font-medium text-primary truncate ml-2" title={device.wifiSSID}>
+                                            {device.wifiSSID}
+                                          </span>
+                                        </div>
+                                        {device.networkType && (
+                                          <div className="flex items-center justify-between">
+                                            <span className="text-xs text-secondary">Tipo:</span>
+                                            <span className="text-xs font-medium text-primary capitalize">
+                                              {device.networkType}
+                                            </span>
+                                          </div>
+                                        )}
+                                      </>
+                                    ) : device.isWifiEnabled ? (
+                                      <div className="text-xs text-secondary">WiFi ativado mas não conectado</div>
+                                    ) : (
+                                      <div className="text-xs text-secondary">WiFi não conectado</div>
+                                    )}
+                                    {device.ipAddress && (
                                       <div className="flex items-center justify-between">
-                                        <span className="text-xs text-secondary">Tipo:</span>
-                                        <span className="text-xs font-medium text-primary capitalize">
-                                          {device.networkType}
+                                        <span className="text-xs text-secondary">IP:</span>
+                                        <span className="text-xs font-mono text-primary">
+                                          {device.ipAddress}
+                                        </span>
+                                      </div>
+                                    )}
+                                    {device.isWifiEnabled !== undefined && (
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-xs text-secondary">Status WiFi:</span>
+                                        <span className={`text-xs font-medium ${
+                                          device.isWifiEnabled ? 'text-green-600' : 'text-gray-600'
+                                        }`}>
+                                          {device.isWifiEnabled ? 'Ativado' : 'Desativado'}
                                         </span>
                                       </div>
                                     )}
                                   </>
-                                ) : device.isWifiEnabled ? (
-                                  <div className="text-xs text-secondary">WiFi ativado mas não conectado</div>
-                                ) : (
-                                  <div className="text-xs text-secondary">WiFi não conectado</div>
-                                )}
-                                {device.ipAddress && (
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-secondary">IP:</span>
-                                    <span className="text-xs font-mono text-primary">
-                                      {device.ipAddress}
-                                    </span>
-                                  </div>
-                                )}
-                                {device.isWifiEnabled !== undefined && (
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-xs text-secondary">Status WiFi:</span>
-                                    <span className={`text-xs font-medium ${
-                                      device.isWifiEnabled ? 'text-green-600' : 'text-gray-600'
-                                    }`}>
-                                      {device.isWifiEnabled ? 'Ativado' : 'Desativado'}
-                                    </span>
-                                  </div>
                                 )}
                               </div>
                             </div>
@@ -1997,6 +2840,11 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                 )}
               </div>
             </div>
+          )}
+
+          {/* Aba Histórico */}
+          {!isLoading && activeTab === 'history' && (
+            <HistoryTab groupId={group.id} />
           )}
         </div>
       </div>
@@ -2142,7 +2990,7 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
           onClick={() => setConfigModalOpen(null)}
         >
           <div 
-            className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            className="bg-surface rounded-xl shadow-xl max-w-6xl w-full max-h-[95vh] overflow-hidden flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-6 border-b border-border">
@@ -2161,8 +3009,46 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {/* Formulário */}
+              {/* Busca por Endereço */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <label className="block text-sm font-medium text-primary mb-2">
+                  🔍 Buscar por Nome da Rua ou Endereço
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Ex: Rua das Flores, São Paulo, SP ou Avenida Paulista, 1000, São Paulo"
+                    value={addressSearch}
+                    onChange={(e) => setAddressSearch(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && addressSearch.trim()) {
+                        handleSearchAddress()
+                      }
+                    }}
+                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  />
+                  <button
+                    onClick={handleSearchAddress}
+                    disabled={!addressSearch.trim() || isSearchingAddress}
+                    className="px-4 py-2 bg-primary text-white rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {isSearchingAddress ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Buscando...
+                      </>
+                    ) : (
+                      'Buscar'
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-secondary mt-2">
+                  💡 Digite um endereço completo ou nome da rua com cidade para localizar no mapa
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Formulário - Coluna Esquerda */}
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-primary mb-2">
@@ -2211,16 +3097,71 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                   </div>
                 </div>
 
-                {/* Mapa Visual com Leaflet */}
-                <div>
+                {/* Mapa Visual com Leaflet - Coluna Central e Direita (2/3 do espaço) */}
+                <div className="lg:col-span-2">
                   <label className="block text-sm font-medium text-primary mb-2">
                     Visualização do Mapa
                   </label>
-                  <LocationMap
-                    latitude={locationLat ? parseFloat(locationLat) : null}
-                    longitude={locationLon ? parseFloat(locationLon) : null}
-                    radiusKm={locationRadius ? parseFloat(locationRadius) : null}
-                  />
+                  <div className="relative">
+                    <LocationMap
+                      latitude={locationLat ? parseFloat(locationLat) : null}
+                      longitude={locationLon ? parseFloat(locationLon) : null}
+                      radiusKm={locationRadius ? parseFloat(locationRadius) : null}
+                      onLocationChange={(lat, lng) => {
+                        // Atualizar campos de latitude e longitude quando o marcador for arrastado
+                        setLocationLat(lat.toString())
+                        setLocationLon(lng.toString())
+                        
+                        // Limpar timeout anterior se existir (debounce)
+                        if (saveLocationTimeoutRef.current) {
+                          clearTimeout(saveLocationTimeoutRef.current)
+                        }
+                        
+                        // Salvar automaticamente no servidor após 500ms sem arrastar (debounce)
+                        saveLocationTimeoutRef.current = setTimeout(() => {
+                          isSavingLocationRef.current = true // Marcar que estamos salvando
+                          
+                          const radius = parseFloat(locationRadius) || 5
+                          const location = {
+                            latitude: lat,
+                            longitude: lng,
+                            radius_km: radius
+                          }
+                          
+                          console.log('💾 Salvando localização automaticamente:', { lat, lng, radius })
+                          
+                          // Salvar de forma assíncrona sem bloquear a UI
+                          fetch(`/api/groups/${group.id}/restrictions`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ allowedLocation: location })
+                          }).then(async (res) => {
+                            if (res.ok) {
+                              const result = await res.json()
+                              if (result.success && result.data) {
+                                // Atualizar estado sem disparar reload dos dados
+                                setAllowedLocation(result.data.allowedLocation || location)
+                                console.log('✅ Localização salva automaticamente com sucesso:', { lat, lng, radius })
+                              } else {
+                                console.error('❌ Resposta do servidor sem sucesso:', result)
+                              }
+                            } else {
+                              const errorText = await res.text()
+                              console.error('❌ Erro ao salvar localização automaticamente:', res.status, errorText)
+                            }
+                          }).catch((error) => {
+                            console.error('❌ Erro ao salvar localização automaticamente:', error)
+                          }).finally(() => {
+                            // Resetar flag após um pequeno delay para evitar reload
+                            setTimeout(() => {
+                              isSavingLocationRef.current = false
+                            }, 1000)
+                            saveLocationTimeoutRef.current = null
+                          })
+                        }, 500) // Aguardar 500ms após parar de arrastar
+                      }}
+                    />
+                  </div>
                   <p className="text-xs text-secondary mt-2">
                     💡 O círculo azul marca o <strong>ponto exato escolhido</strong> e permanece fixo nas coordenadas, mesmo quando você move a câmera do mapa.
                   </p>
@@ -2241,12 +3182,14 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                         <button
                           key={idx}
                           onClick={() => {
-                            setLocationLat(device.latitude!.toString())
-                            setLocationLon(device.longitude!.toString())
+                            if (typeof device.latitude === 'number' && typeof device.longitude === 'number') {
+                              setLocationLat(device.latitude.toString())
+                              setLocationLon(device.longitude.toString())
+                            }
                           }}
                           className="w-full text-left px-3 py-2 rounded-lg text-sm bg-white hover:bg-blue-100 transition-colors"
                         >
-                          📍 {device.name} - {device.latitude?.toFixed(4)}, {device.longitude?.toFixed(4)}
+                          📍 {device.name} - {typeof device.latitude === 'number' ? device.latitude.toFixed(4) : 'N/D'}, {typeof device.longitude === 'number' ? device.longitude.toFixed(4) : 'N/D'}
                         </button>
                       ))}
                   </div>

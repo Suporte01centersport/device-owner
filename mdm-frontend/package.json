@@ -25,7 +25,9 @@
     "fix-null-device-ids": "node server/fix-null-device-ids.js",
     "fix-null-device-ids:confirm": "node server/fix-null-device-ids.js --confirm",
     "db:migrate:add-new-fields": "node server/database/migrations/run-add-new-fields.js",
-    "db:migrate:group-apps": "node server/database/migrations/run-add-group-available-apps.js"
+    "db:migrate:group-apps": "node server/database/migrations/run-add-group-available-apps.js",
+    "db:migrate:group-restrictions": "node server/database/migrations/run-add-group-restrictions.js",
+    "db:migrate:alert-history": "node server/database/migrations/run-add-group-alert-history.js"
   },
   "dependencies": {
     "@coreui/icons-react": "^2.3.0",
