@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 
 interface UpdateAppModalProps {
@@ -14,6 +14,19 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
   const [apkUrl, setApkUrl] = useState('https://github.com/suporte04centersport/qrcode/releases/download/v1/app-debug.apk')
   const [version, setVersion] = useState('1.0.1')
   const [isLoading, setIsLoading] = useState(false)
+
+  // Fechar ao pressionar ESC
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isLoading) {
+        onClose()
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEsc)
+      return () => document.removeEventListener('keydown', handleEsc)
+    }
+  }, [isOpen, isLoading, onClose])
 
   if (!isOpen || !device) return null
 

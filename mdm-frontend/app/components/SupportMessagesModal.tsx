@@ -174,13 +174,32 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
     }
   }
 
+  // Fechar ao pressionar ESC
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEsc)
+      return () => document.removeEventListener('keydown', handleEsc)
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
     <>
       {/* Modal principal */}
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[80vh] flex flex-col">
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        onClick={onClose}
+      >
+        <div 
+          className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[80vh] flex flex-col"
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="flex justify-between items-center p-6 border-b border-border">
             <h3 className="text-lg font-semibold text-primary flex items-center">
               <span className="mr-2">🔔</span>

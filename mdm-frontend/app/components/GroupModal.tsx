@@ -556,6 +556,21 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
   const [allowedNetworks, setAllowedNetworks] = useState<string[]>([])
   const [allowedLocation, setAllowedLocation] = useState<{ latitude: number; longitude: number; radius_km: number } | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState<'networks' | 'location' | null>(null)
+
+  // Fechar modais internos ao pressionar ESC (prioridade sobre o modal principal)
+  useEffect(() => {
+    if (!configModalOpen) return
+    
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation() // Prevenir que o handler do modal principal também execute
+        setConfigModalOpen(null)
+      }
+    }
+    // Usar capture phase para garantir que executa primeiro
+    document.addEventListener('keydown', handleEsc, true)
+    return () => document.removeEventListener('keydown', handleEsc, true)
+  }, [configModalOpen])
   const [newNetworkName, setNewNetworkName] = useState('')
   const [locationLat, setLocationLat] = useState('')
   const [locationLon, setLocationLon] = useState('')
@@ -912,26 +927,7 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
         }
       }
 
-      // 2. Dispositivo offline há muito tempo (> 1 hora)
-      if (device.status === 'offline' && device.lastSeen) {
-        const timeOffline = now - device.lastSeen
-        const oneHourInMs = 60 * 60 * 1000
-        if (timeOffline > oneHourInMs) {
-          const hoursOffline = Math.floor(timeOffline / oneHourInMs)
-          const minutesOffline = Math.floor((timeOffline % oneHourInMs) / (60 * 1000))
-          alerts.push({
-            id: `offline-${device.deviceId}`,
-            type: 'warning',
-            title: 'Dispositivo offline',
-            message: `${deviceName} está offline há ${hoursOffline > 0 ? `${hoursOffline}h ` : ''}${minutesOffline}min`,
-            deviceId: device.deviceId,
-            deviceName: deviceName,
-            timestamp: device.lastSeen
-          })
-        }
-      }
-
-      // 3. Sem localização há muito tempo (se dispositivo está online)
+      // 2. Sem localização há muito tempo (se dispositivo está online)
       if (device.status === 'online') {
         if (!device.latitude || !device.longitude || !device.lastLocationUpdate) {
           alerts.push({
@@ -1071,11 +1067,39 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     return userId
   }
 
+  // Fechar ao pressionar ESC (modal principal) - só fecha se não houver modais internos abertos
+  useEffect(() => {
+    if (!isOpen) return
+    
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Se há um modal interno aberto, não fechar o modal principal
+        // O handler do modal interno já fechou ele (com stopPropagation)
+        if (!configModalOpen) {
+          onClose()
+        }
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [isOpen, onClose, configModalOpen])
+
   if (!isOpen || !group) return null
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        // Só fecha o modal principal se não houver modal interno aberto
+        if (!configModalOpen) {
+          onClose()
+        }
+      }}
+    >
+      <div 
+        className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-border">
           <div className="flex justify-between items-start">
@@ -1979,8 +2003,14 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
 
       {/* Modal de Configuração de Redes Permitidas */}
       {configModalOpen === 'networks' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setConfigModalOpen(false)}
+        >
+          <div 
+            className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-6 border-b border-border">
               <div className="flex items-center justify-between">
                 <div>
@@ -2107,8 +2137,14 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
 
       {/* Modal de Configuração de Localização Permitida */}
       {configModalOpen === 'location' && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setConfigModalOpen(null)}
+        >
+          <div 
+            className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="p-6 border-b border-border">
               <div className="flex items-center justify-between">
                 <div>

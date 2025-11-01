@@ -17,6 +17,8 @@ const DeviceGroupModel = require('./database/models/DeviceGroup');
 const AppAccessHistory = require('./database/models/AppAccessHistory');
 const DeviceStatusHistory = require('./database/models/DeviceStatusHistory');
 const { query, transaction } = require('./database/config');
+const BatchQueue = require('./database/batch-queue');
+const LocationCache = require('./database/location-cache');
 
 // Função para obter IP público da rede
 let cachedPublicIp = null;
@@ -689,6 +691,13 @@ const pingThrottler = new PingThrottler(config.MAX_PINGS_PER_MINUTE);
 const adaptiveTimeout = new AdaptiveTimeout();
 const logger = new ConfigurableLogger(config.LOG_LEVEL);
 const healthMonitor = new ConnectionHealthMonitor();
+const locationCache = new LocationCache(
+    parseInt(process.env.LOCATION_CACHE_SIZE) || 1000
+);
+const deviceSaveQueue = new BatchQueue(
+    parseInt(process.env.BATCH_SIZE) || 10,
+    parseInt(process.env.BATCH_INTERVAL) || 1000
+); // Batch configurável via variáveis de ambiente
 
 // Log de inicialização das otimizações
 logger.info('Sistemas de otimização inicializados', {
@@ -696,7 +705,9 @@ logger.info('Sistemas de otimização inicializados', {
     maxPingsPerMinute: config.MAX_PINGS_PER_MINUTE,
     adaptiveTimeoutEnabled: true,
     healthMonitoringEnabled: true,
-    heartbeatInterval: config.HEARTBEAT_INTERVAL
+    heartbeatInterval: config.HEARTBEAT_INTERVAL,
+    batchQueueEnabled: true,
+    locationCacheEnabled: true
 });
 
 // Logging melhorado
@@ -713,70 +724,61 @@ async function loadDevicesFromDatabase() {
     try {
         const devices = await DeviceModel.findAll();
         
+        // Carregar última localização de cada dispositivo para cache
+        const deviceIds = devices.map(d => d.id).filter(Boolean);
+        if (deviceIds.length > 0) {
+            try {
+                const locationResult = await query(`
+                    SELECT DISTINCT ON (device_id) 
+                        device_id, latitude, longitude, created_at
+                    FROM device_locations
+                    WHERE device_id = ANY($1::uuid[])
+                    ORDER BY device_id, created_at DESC
+                `, [deviceIds]);
+                
+                locationResult.rows.forEach(row => {
+                    locationCache.set(row.device_id, row.latitude, row.longitude, row.created_at);
+                });
+                
+                log.debug('Cache de localização inicializado', { 
+                    locationsLoaded: locationResult.rows.length 
+                });
+            } catch (error) {
+                log.warn('Erro ao carregar cache de localização (não crítico)', { error: error.message });
+            }
+        }
+        
         // Converter array para Map para compatibilidade
         devices.forEach(device => {
-            // Debug: verificar deviceId
-            console.log('🔍 Dispositivo carregado:', {
-                id: device.id,
-                deviceId: device.deviceId,
-                name: device.name,
-                model: device.model,
-                deviceIdType: typeof device.deviceId,
-                deviceIdLength: device.deviceId ? device.deviceId.length : 'N/A'
-            });
-            
             if (!device.deviceId || device.deviceId === 'null' || device.deviceId === 'undefined') {
-                console.warn('⚠️ DeviceId inválido encontrado:', device.deviceId);
+                log.warn('DeviceId inválido encontrado', { deviceId: device.deviceId });
                 return; // Pular dispositivos com deviceId inválido
             }
             
             persistentDevices.set(device.deviceId, device);
         });
         
-        log.info(`Dispositivos carregados do PostgreSQL`, { count: devices.length });
+        log.info(`Dispositivos carregados do PostgreSQL`, { 
+            count: devices.length,
+            locationCacheSize: locationCache.getSize()
+        });
     } catch (error) {
         log.error('Erro ao carregar dispositivos do PostgreSQL', error);
     }
 }
 
-async function saveDeviceToDatabase(deviceData) {
+// Função direta de save (usada pelo batch queue)
+async function saveDeviceToDatabaseDirect(deviceData) {
     try {
-        console.log(`💾 Tentando salvar dispositivo ${deviceData.deviceId} no banco...`);
         const result = await DeviceModel.upsert(deviceData);
-        console.log(`✅ Dispositivo ${deviceData.deviceId} salvo no PostgreSQL com sucesso`);
         log.debug(`Dispositivo salvo no PostgreSQL`, { deviceId: deviceData.deviceId });
         
         // ✅ Salvar localização na tabela device_locations se disponível
-        // Salvar apenas se tiver coordenadas válidas e mudou significativamente
+        // Usar cache para evitar query SELECT antes de cada INSERT
         if (deviceData.latitude && deviceData.longitude && result && result.id) {
             try {
-                // Verificar última localização salva para evitar duplicatas muito próximas
-                const lastLocation = await query(`
-                    SELECT latitude, longitude, created_at
-                    FROM device_locations
-                    WHERE device_id = $1
-                    ORDER BY created_at DESC
-                    LIMIT 1
-                `, [result.id]);
-                
-                let shouldSave = true;
-                if (lastLocation.rows.length > 0) {
-                    const last = lastLocation.rows[0];
-                    // Converter para número (pode vir como string do banco)
-                    const lastLat = parseFloat(last.latitude);
-                    const lastLon = parseFloat(last.longitude);
-                    const currentLat = parseFloat(deviceData.latitude);
-                    const currentLon = parseFloat(deviceData.longitude);
-                    
-                    // Calcular distância aproximada (Haversine simplificado)
-                    const latDiff = Math.abs(lastLat - currentLat);
-                    const lonDiff = Math.abs(lastLon - currentLon);
-                    const distance = Math.sqrt(latDiff * latDiff + lonDiff * lonDiff) * 111000; // metros aproximados
-                    
-                    // Salvar apenas se mudou mais de 50 metros ou se passou mais de 5 minutos
-                    const timeDiff = Date.now() - new Date(last.created_at).getTime();
-                    shouldSave = distance > 50 || timeDiff > 5 * 60 * 1000;
-                }
+                // Verificar no cache se deve salvar (evita query SELECT)
+                const shouldSave = locationCache.shouldSave(result.id, deviceData.latitude, deviceData.longitude);
                 
                 if (shouldSave) {
                     await query(`
@@ -797,26 +799,50 @@ async function saveDeviceToDatabase(deviceData) {
                         deviceData.locationProvider || 'unknown',
                         deviceData.address || deviceData.lastKnownLocation || null
                     ]);
-                    console.log(`📍 Localização salva para dispositivo ${deviceData.deviceId}`);
+                    
+                    // Atualizar cache após salvar
+                    locationCache.updateAfterSave(result.id, deviceData.latitude, deviceData.longitude);
+                    log.debug(`Localização salva para dispositivo`, { deviceId: deviceData.deviceId });
                 }
             } catch (locationError) {
                 // Não falhar se houver erro ao salvar localização (não crítico)
-                console.error(`⚠️ Erro ao salvar localização (não crítico):`, locationError.message);
+                log.warn('Erro ao salvar localização (não crítico)', { 
+                    deviceId: deviceData.deviceId,
+                    error: locationError.message 
+                });
             }
         }
         
         return result;
     } catch (error) {
-        console.error(`❌ ERRO ao salvar dispositivo ${deviceData.deviceId} no PostgreSQL:`, error.message);
-        console.error(`   Stack:`, error.stack);
         log.error('Erro ao salvar dispositivo no PostgreSQL', { 
             deviceId: deviceData.deviceId, 
             error: error.message,
             stack: error.stack
         });
-        throw error; // Relançar para que o erro seja tratado pelo chamador
+        throw error;
     }
 }
+
+// Função pública que usa batch queue (otimizada)
+async function saveDeviceToDatabase(deviceData) {
+    try {
+        // Usar batch queue para agrupar saves e reduzir queries
+        return await deviceSaveQueue.add(deviceData.deviceId, deviceData);
+    } catch (error) {
+        // Se batch queue falhar, tentar save direto como fallback
+        log.warn('Erro no batch queue, tentando save direto', { 
+            deviceId: deviceData.deviceId,
+            error: error.message 
+        });
+        return await saveDeviceToDatabaseDirect(deviceData);
+    }
+}
+
+// Configurar função de save no batch queue (após definir as funções)
+deviceSaveQueue.setSaveFunction(async (deviceData) => {
+    return await saveDeviceToDatabaseDirect(deviceData);
+});
 
 function loadAdminPasswordFromFile() {
     try {
@@ -1419,36 +1445,36 @@ async function handleDeviceStatus(ws, data) {
         console.log(`📍 Endereço recebido do dispositivo ${deviceId}: ${deviceData.address.substring(0, 50)}...`);
     }
     
-    console.log('💾 Salvando dados do dispositivo no PostgreSQL...');
-    
     // Verificar se o nome mudou (sempre, não apenas em reconexões)
     const nameChanged = existingDevice && existingDevice.name !== finalName;
     
     if (nameChanged) {
-        console.log('🔔 Nome mudou durante atualização de status!');
-        console.log(`   Nome anterior: "${existingDevice.name}"`);
-        console.log(`   Nome novo: "${finalName}"`);
+        log.info('Nome do dispositivo mudou durante atualização de status', {
+            deviceId,
+            oldName: existingDevice.name,
+            newName: finalName
+        });
     }
     
     // ✅ Log para debug: verificar se individualApps foi preservado
     if (existingDevice && existingDevice.individualApps) {
-        console.log(`✅ Apps individuais preservados na reconexão:`, existingDevice.individualApps);
-        log.info('Apps individuais preservados na reconexão', { 
+        log.debug('Apps individuais preservados na reconexão', { 
             deviceId, 
-            individualAppsCount: existingDevice.individualApps.length,
-            individualApps: existingDevice.individualApps 
+            individualAppsCount: existingDevice.individualApps.length
         });
     }
     
 persistentDevices.set(deviceId, deviceData);
     
-    // ✅ SALVAR NO POSTGRESQL (SEMPRE que o dispositivo conectar/atualizar)
+    // ✅ SALVAR NO POSTGRESQL via batch queue (otimizado)
     try {
         await saveDeviceToDatabase(deviceData);
-        console.log(`✅ Dispositivo ${deviceId} salvo/atualizado no banco de dados`);
+        log.debug('Dispositivo adicionado à fila de save', { deviceId });
     } catch (error) {
-        console.error(`❌ Erro ao salvar dispositivo ${deviceId} no banco:`, error);
-        log.error('Erro ao salvar dispositivo no banco', { deviceId, error: error.message });
+        log.error('Erro ao adicionar dispositivo à fila de save', { 
+            deviceId, 
+            error: error.message 
+        });
     }
     
     // ✅ NOVO: Registrar status online no histórico

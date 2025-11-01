@@ -79,6 +79,36 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  
+  // Fechar TermsModal ao pressionar ESC (prioridade sobre o modal principal)
+  useEffect(() => {
+    if (!showTermsModal) return
+    
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation() // Prevenir que o handler do modal principal também execute
+        setShowTermsModal(false)
+      }
+    }
+    // Usar capture phase para garantir que executa primeiro
+    document.addEventListener('keydown', handleEsc, true)
+    return () => document.removeEventListener('keydown', handleEsc, true)
+  }, [showTermsModal])
+
+  // Fechar ao pressionar ESC (modal principal) - só fecha se não houver modais internos abertos
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Se há um modal interno aberto, não fechar o modal principal
+        if (!showTermsModal) {
+          onClose()
+        }
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [onClose, showTermsModal])
+  
   const [deviceGroups, setDeviceGroups] = useState<Array<{ id: string; name: string; color: string; policies: Array<{ packageName: string; appName: string }> }>>([])
   const [groupPolicyApps, setGroupPolicyApps] = useState<string[]>([]) // Apps que estão em políticas de grupo
   const [messageHistory, setMessageHistory] = useState<Array<{
@@ -357,8 +387,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   ]
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        // Só fecha o modal principal se não houver modal interno aberto
+        if (!showTermsModal) {
+          onClose()
+        }
+      }}
+    >
+      <div 
+        className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-border">
           <div className="flex justify-between items-start">
