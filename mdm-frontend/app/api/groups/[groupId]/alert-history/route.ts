@@ -106,7 +106,7 @@ export async function POST(
     }
 
     console.log('💾 Chamando GroupAlertHistoryModel.create()...')
-    const alert = await GroupAlertHistoryModel.create({
+    const alert = (await GroupAlertHistoryModel.create({
       groupId,
       deviceId,
       deviceName,
@@ -114,7 +114,7 @@ export async function POST(
       alertTitle,
       alertMessage,
       alertData: alertData || {}
-    }) as { id: string; [key: string]: any } | null
+    })) as unknown as { id: string; [key: string]: any } | null
 
     // Se alert for null, significa que já existe um alerta similar (duplicata ignorada)
     if (!alert) {
