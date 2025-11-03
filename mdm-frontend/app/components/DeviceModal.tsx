@@ -193,7 +193,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
       // ✅ Apps individuais têm prioridade: mesclar com apps da política de grupo
       // Quando salvamos individualmente, mantemos os apps da política de grupo também
       // Mas os apps individuais não serão afetados quando a política de grupo for aplicada
-      const finalApps = [...new Set([...selectedApps, ...groupPolicyApps])]
+      const finalApps = Array.from(new Set([...selectedApps, ...groupPolicyApps]))
       
       // Enviar permissões via WebSocket
       // ✅ IMPORTANTE: Marcar como isIndividual=true e enviar selectedApps separadamente
