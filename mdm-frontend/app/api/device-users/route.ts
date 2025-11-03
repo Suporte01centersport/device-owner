@@ -73,7 +73,16 @@ export async function PUT(request: NextRequest) {
         { status: 500 }
       )
     }
-    const organizationId = orgResult.rows[0].id
+    
+    // Garantir que temos um objeto válido com id
+    const orgRow = orgResult.rows[0]
+    if (!orgRow || !orgRow.id) {
+      return NextResponse.json(
+        { success: false, error: 'Organização padrão inválida' },
+        { status: 500 }
+      )
+    }
+    const organizationId = orgRow.id
 
     // Usar transação para garantir consistência
     const results = await transaction(async (client) => {
