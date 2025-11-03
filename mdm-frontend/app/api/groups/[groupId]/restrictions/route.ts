@@ -19,13 +19,16 @@ export async function GET(
       )
     }
 
-    const restrictions = await DeviceGroupModel.getRestrictions(groupId)
+    const restrictions = (await DeviceGroupModel.getRestrictions(groupId)) as unknown as {
+      allowed_networks?: any[]
+      allowed_location?: any
+    }
 
     return NextResponse.json({
       success: true,
       data: {
-        allowedNetworks: restrictions.allowed_networks || [],
-        allowedLocation: restrictions.allowed_location || null
+        allowedNetworks: restrictions?.allowed_networks || [],
+        allowedLocation: restrictions?.allowed_location || null
       }
     })
   } catch (error: any) {
@@ -69,19 +72,22 @@ export async function PUT(
       })
     }
 
-    const updated = await DeviceGroupModel.update(groupId, updateData)
+    const updated = (await DeviceGroupModel.update(groupId, updateData)) as unknown as {
+      allowed_networks?: any[]
+      allowed_location?: any
+    }
     
     console.log('✅ Localização salva no servidor:', {
       groupId,
-      allowedLocation: updated.allowed_location,
+      allowedLocation: updated?.allowed_location,
       success: !!updated
     })
 
     return NextResponse.json({
       success: true,
       data: {
-        allowedNetworks: updated.allowed_networks || [],
-        allowedLocation: updated.allowed_location || null
+        allowedNetworks: updated?.allowed_networks || [],
+        allowedLocation: updated?.allowed_location || null
       }
     })
   } catch (error: any) {
