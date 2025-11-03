@@ -44,17 +44,20 @@ export async function POST(request: NextRequest) {
     }
 
     const created = await DeviceGroupModel.create({ name, description, color })
+    
+    // Garantir que created é um objeto único, não um array
+    const createdGroup = Array.isArray(created) ? created[0] : created
 
     const group = {
-      id: created.id?.toString?.() || created.id,
-      name: created.name,
-      description: created.description || '',
-      color: created.color || '#3B82F6',
+      id: createdGroup.id?.toString?.() || createdGroup.id,
+      name: createdGroup.name,
+      description: createdGroup.description || '',
+      color: createdGroup.color || '#3B82F6',
       deviceCount: 0,
       devices: [],
       appPolicies: [],
-      createdAt: created.created_at || created.createdAt || new Date().toISOString(),
-      updatedAt: created.updated_at || created.updatedAt || new Date().toISOString()
+      createdAt: createdGroup.created_at || createdGroup.createdAt || new Date().toISOString(),
+      updatedAt: createdGroup.updated_at || createdGroup.updatedAt || new Date().toISOString()
     }
 
     return NextResponse.json({ success: true, data: group }, { status: 201 })
