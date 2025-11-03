@@ -9,9 +9,10 @@ interface LocationMapProps {
   longitude: number | null
   radiusKm: number | null
   onLocationChange?: (lat: number, lng: number) => void
+  onManualUpdate?: (callback: () => void) => void // Callback para registrar função de atualização manual
 }
 
-function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: LocationMapProps) {
+function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManualUpdate }: LocationMapProps) {
   const mapRef = useRef<HTMLDivElement>(null)
   const mapInstanceRef = useRef<any>(null)
   const circleRef = useRef<any>(null)
@@ -23,6 +24,21 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
   const isDraggingRef = useRef(false) // Flag para indicar que o marcador está sendo arrastado
   const lastLatRef = useRef<number | null>(null)
   const lastLngRef = useRef<number | null>(null)
+  const isUpdatingFromDragRef = useRef(false) // Flag para indicar que estamos atualizando de um arraste
+  const dragEndTimeRef = useRef<number>(0) // Timestamp do último dragend
+  const manualUpdateRef = useRef(false) // Flag para indicar que a atualização é manual/sugestão (não arraste)
+  
+  // Função para marcar atualização manual - será exposta para o componente pai
+  const markAsManualUpdate = useCallback(() => {
+    manualUpdateRef.current = true
+  }, [])
+  
+  // Registrar função no componente pai quando disponível
+  useEffect(() => {
+    if (onManualUpdate) {
+      onManualUpdate(markAsManualUpdate)
+    }
+  }, [onManualUpdate, markAsManualUpdate])
 
   // Garantir que isMountedRef está true quando o componente monta
   useEffect(() => {
@@ -136,10 +152,20 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
       return
     }
 
-    // IMPORTANTE: Se o marcador está sendo arrastado, não fazer nada
-    // Isso previne recriação do mapa durante o arraste
-    if (isDraggingRef.current) {
-      console.log('⚠️ Marcador está sendo arrastado, ignorando atualização do useEffect')
+    // IMPORTANTE: Se o marcador está sendo arrastado OU acabamos de atualizar de um arraste, não fazer nada
+    // Isso previne recriação do mapa durante o arraste ou logo após
+    // Proteger contra recriação durante arraste
+    const timeSinceDragEnd = Date.now() - dragEndTimeRef.current
+    const recentlyDragged = timeSinceDragEnd < 8000 // 8 segundos após arraste para evitar recriação
+    
+    if (isDraggingRef.current || isUpdatingFromDragRef.current || recentlyDragged) {
+      // Durante arraste ou logo após - NÃO recriar mapa (evita tela cinza)
+      console.log('🛡️ Proteção ativa contra recriação do mapa:', {
+        isDragging: isDraggingRef.current,
+        isUpdatingFromDrag: isUpdatingFromDragRef.current,
+        recentlyDragged,
+        timeSinceDragEnd
+      })
       return
     }
 
@@ -237,12 +263,6 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
       }
     }
 
-    // Se o marcador está sendo arrastado, não recriar o mapa - apenas atualizar posição
-    if (isDraggingRef.current) {
-      console.log('⚠️ Marcador está sendo arrastado, ignorando atualização do mapa')
-      return
-    }
-
     // Verificar se já existe um mapa válido antes de criar um novo
     if (mapInstanceRef.current && mapRef.current) {
       try {
@@ -255,10 +275,17 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
             const lastLatDiff = Math.abs(lastLatRef.current - latitude)
             const lastLngDiff = Math.abs(lastLngRef.current - longitude)
             
-            // Se a diferença for pequena (< 1 grau ≈ 111 km), provavelmente foi um arraste
+            // Se a diferença for pequena (< 0.01 graus ≈ 1.1km), provavelmente foi um arraste
             // Apenas atualizar a posição do marcador, não recriar o mapa
-            if (lastLatDiff < 1 && lastLngDiff < 1) {
-              console.log('✅ Coordenadas próximas das últimas conhecidas (provavelmente arraste), atualizando apenas posição')
+            if (lastLatDiff < 0.01 && lastLngDiff < 0.01) {
+              console.log('✅ Coordenadas próximas das últimas conhecidas (provavelmente arraste), atualizando apenas posição', {
+                lastLat: lastLatRef.current,
+                lastLng: lastLngRef.current,
+                newLat: latitude,
+                newLng: longitude,
+                latDiff: lastLatDiff,
+                lngDiff: lastLngDiff
+              })
               try {
                 if (markerRef.current) {
                   markerRef.current.setLatLng([latitude, longitude])
@@ -291,6 +318,13 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
                 // Atualizar referências
                 lastLatRef.current = latitude
                 lastLngRef.current = longitude
+                
+                // Centralizar mapa na nova posição (sem recriar)
+                try {
+                  existingMap.setView([latitude, longitude], existingMap.getZoom() || 15, { animate: true, duration: 0.3 })
+                } catch (e) {
+                  console.error('Erro ao centralizar mapa:', e)
+                }
               } catch (e) {
                 console.error('Erro ao atualizar marcador:', e)
               }
@@ -327,33 +361,92 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
             const centerLngDiff = Math.abs(mapCenter.lng - longitude)
             
             // Se o centro do mapa está muito diferente (> 0.1 graus), pode ser uma mudança manual significativa
-            // Nesse caso, vamos recriar o mapa
+            // Nesse caso, vamos apenas atualizar a posição do marcador e centralizar, não recriar
             if (centerLatDiff > 0.1 || centerLngDiff > 0.1) {
-              console.log('⚠️ Coordenadas mudaram significativamente, recriando mapa')
-              // Continuar para recriar o mapa
+              console.log('⚠️ Coordenadas mudaram significativamente, atualizando posição do mapa')
+              // Atualizar marcador e círculo se existirem
+              if (markerRef.current) {
+                markerRef.current.setLatLng([latitude, longitude])
+                // Atualizar popup
+                const currentLat = latitude
+                const currentLng = longitude
+                markerRef.current.bindPopup(`
+                  <div style="min-width: 200px;">
+                    <h3 style="margin: 0 0 8px 0; font-size: 14px; font-weight: bold;">
+                      📍 Ponto Escolhido
+                    </h3>
+                    <p style="margin: 4px 0; font-size: 12px; font-family: monospace;">
+                      ${currentLat.toFixed(4)}, ${currentLng.toFixed(4)}
+                    </p>
+                    ${radiusKm ? `<p style="margin: 4px 0; font-size: 12px;">Raio: ${radiusKm} km</p>` : ''}
+                  </div>
+                `)
+              }
+              if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                circleRef.current.setLatLng([latitude, longitude])
+              }
+              // Centralizar mapa na nova posição
+              existingMap.setView([latitude, longitude], existingMap.getZoom() || 15, { animate: true, duration: 0.3 })
+              // Atualizar referências
+              lastLatRef.current = latitude
+              lastLngRef.current = longitude
+              return // Não recriar o mapa
             } else {
               // Coordenadas estão próximas, não recriar - apenas atualizar se necessário
               console.log('✅ Mapa já está nas coordenadas corretas, não precisa recriar')
+              // Atualizar referências mesmo assim
+              lastLatRef.current = latitude
+              lastLngRef.current = longitude
               return
             }
           } catch (e) {
-            // Se não conseguir obter centro, continuar com recriação
-            console.log('⚠️ Erro ao obter centro do mapa, continuando com recriação:', e)
+            // Se não conseguir obter centro, verificar se marcador existe e atualizar
+            console.log('⚠️ Erro ao obter centro do mapa, tentando atualizar marcador:', e)
+            try {
+              if (markerRef.current) {
+                markerRef.current.setLatLng([latitude, longitude])
+                if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                  circleRef.current.setLatLng([latitude, longitude])
+                }
+                existingMap.setView([latitude, longitude], existingMap.getZoom() || 15, { animate: true, duration: 0.3 })
+                lastLatRef.current = latitude
+                lastLngRef.current = longitude
+                return
+              }
+            } catch (e2) {
+              console.error('Erro ao atualizar marcador:', e2)
+            }
+            // Se falhar tudo, continuar com recriação
+            console.log('⚠️ Continuando com recriação após falha')
           }
         }
       } catch (e) {
-        // Mapa inválido, precisa limpar
-        console.log('⚠️ Mapa existente inválido, limpando...')
+        // Mapa inválido, precisa limpar e recriar
+        console.log('⚠️ Mapa existente inválido, limpando e recriando...')
         cleanup()
       }
     }
 
-    // Limpar mapa anterior apenas se já existe um mapa
-    if (mapInstanceRef.current) {
-      cleanup()
+    // Se chegou até aqui e o mapa ainda existe e está válido, não recriar
+    if (mapInstanceRef.current && mapRef.current) {
+      try {
+        // Verificar se o mapa ainda está válido
+        const existingMap = mapInstanceRef.current
+        if (existingMap.getContainer() === mapRef.current && existingMap._loaded) {
+          console.log('✅ Mapa já existe e está válido, não precisa recriar')
+          return
+        }
+      } catch (e) {
+        // Mapa inválido, continuar para recriar
+        console.log('⚠️ Mapa existente inválido, será recriado:', e)
+        cleanup()
+      }
     }
 
-    // Aguardar para garantir que a limpeza terminou completamente e que o container está visível
+    // Limpar mapa anterior se existe (caso tenha sido marcado como inválido)
+    // Mas só se realmente não existe instância válida
+
+    // Aguardar para garantir que o container está visível antes de criar novo mapa
     timeoutId = setTimeout(() => {
       // Verificar novamente se o container está visível antes de criar
       if (!mapRef.current) return
@@ -371,10 +464,35 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
         return
       }
       
-      // Verificar novamente se o mapa já foi criado (evitar race condition)
-      if (mapInstanceRef.current) {
-        console.log('⚠️ Mapa já foi criado por outra execução, cancelando...')
-        return
+      // Verificar novamente se o mapa já foi criado E está válido (evitar race condition e recriação desnecessária)
+      if (mapInstanceRef.current && mapRef.current) {
+        try {
+          const existingMap = mapInstanceRef.current
+          if (existingMap.getContainer() === mapRef.current && existingMap._loaded) {
+            // Mapa válido já existe - NÃO recriar, apenas atualizar posição se necessário
+            console.log('✅ Mapa já existe e está válido - atualizando posição sem recriar')
+            const existingMarkerPos = markerRef.current ? markerRef.current.getLatLng() : null
+            const latDiff = existingMarkerPos ? Math.abs(existingMarkerPos.lat - latitude) : 999
+            const lngDiff = existingMarkerPos ? Math.abs(existingMarkerPos.lng - longitude) : 999
+            
+            // Só atualizar se a diferença for significativa (> 0.0001 graus)
+            if (latDiff > 0.0001 || lngDiff > 0.0001) {
+              if (markerRef.current) {
+                markerRef.current.setLatLng([latitude, longitude])
+              }
+              if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+                circleRef.current.setLatLng([latitude, longitude])
+              }
+              // Atualizar referências
+              lastLatRef.current = latitude
+              lastLngRef.current = longitude
+            }
+            return // Não criar novo mapa
+          }
+        } catch (e) {
+          // Mapa inválido, pode criar novo
+          console.log('⚠️ Mapa existente inválido, será recriado')
+        }
       }
 
       const lat = latitude
@@ -412,7 +530,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
 
         console.log('✅ Container visível:', { width: containerRect.width, height: containerRect.height })
 
-        // Limpar container completamente
+        // Limpar container completamente apenas se realmente for criar novo mapa
         mapRef.current.innerHTML = ''
 
         // Aguardar um frame para garantir que o DOM foi atualizado
@@ -516,6 +634,11 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
 
                     // Event listener para quando o marcador estiver sendo arrastado (em tempo real)
                     marker.on('drag', () => {
+                      // Garantir que a flag de arraste está ativa durante o arraste
+                      if (!isDraggingRef.current) {
+                        isDraggingRef.current = true
+                      }
+                      
                       const newLat = marker.getLatLng().lat
                       const newLng = marker.getLatLng().lng
                       
@@ -536,6 +659,11 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
                       
                       console.log('📍 Marcador arrastado para:', newLat, newLng)
                       
+                      // IMPORTANTE: Setar TODAS as flags de proteção ANTES de fazer qualquer mudança de estado
+                      // Isso previne que o useEffect seja executado durante/logo após o arraste
+                      dragEndTimeRef.current = Date.now()
+                      isUpdatingFromDragRef.current = true
+                      
                       // Atualizar referências das últimas coordenadas PRIMEIRO
                       lastLatRef.current = newLat
                       lastLngRef.current = newLng
@@ -543,29 +671,28 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
                       // Atualizar popup com novas coordenadas
                       updatePopup()
                       
-                      // IMPORTANTE: Manter isDraggingRef como true por um tempo suficiente
-                      // para evitar que o useEffect tente recriar o mapa enquanto estamos centralizando
-                      // O useEffect verifica isDraggingRef no início e ignora se for true
-                      
-                      // Primeiro, centralizar o mapa (isso pode levar alguns milissegundos)
-                      // DEPOIS, resetar a flag e chamar onLocationChange
-                      // Usar timeout maior para garantir que a centralização e todas as operações terminaram
-                      setTimeout(() => {
-                        // Resetar flag ANTES de chamar onLocationChange
-                        // Isso garante que o useEffect vai detectar as coordenadas já atualizadas
-                        // e não vai tentar recriar o mapa porque a diferença será pequena
-                        isDraggingRef.current = false
-                        
-                        // Pequeno delay adicional antes de atualizar coordenadas no componente pai
-                        // para garantir que o estado interno foi processado
+                      // Chamar onLocationChange DEPOIS de setar as flags de proteção
+                      // Isso garante que o useEffect não será executado durante a atualização
+                      if (onLocationChange) {
+                        console.log('🔄 Chamando onLocationChange com proteção ativa')
+                        // Usar setTimeout para garantir que as flags foram processadas
                         setTimeout(() => {
-                          // Agora podemos atualizar as coordenadas no componente pai
-                          // O useEffect vai detectar que é uma mudança pequena e apenas atualizar a posição
-                          if (onLocationChange) {
-                            onLocationChange(newLat, newLng)
-                          }
-                        }, 100)
-                      }, 500) // Aumentar para 500ms para garantir que tudo terminou
+                          onLocationChange(newLat, newLng)
+                        }, 0)
+                      }
+                      
+                      // Resetar flag de arraste após um delay curto
+                      setTimeout(() => {
+                        isDraggingRef.current = false
+                        console.log('🔓 Flag de arraste resetada')
+                      }, 100)
+                      
+                      // Resetar flag de atualização de arraste após um delay maior
+                      // Isso previne que o useEffect recrie o mapa durante/logo após o arraste
+                      setTimeout(() => {
+                        isUpdatingFromDragRef.current = false
+                        console.log('🔓 Flag de atualização de arraste resetada')
+                      }, 8000) // 8 segundos para garantir que tudo foi processado
                       
                       // Garantir que o círculo está na nova posição
                       if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
@@ -580,8 +707,22 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
                         // Usar um timeout maior para garantir que o estado foi atualizado e o useEffect não vai interferir
                         setTimeout(() => {
                           // Verificar se o mapa ainda existe e está válido
-                          if (!mapInstanceRef.current || mapInstanceRef.current !== map) {
+                          // IMPORTANTE: Não verificar apenas mapInstanceRef.current === map, pois pode ter sido recriado
+                          // Verificar se mapInstanceRef.current existe e se o container ainda é o mesmo
+                          if (!mapInstanceRef.current || !mapRef.current) {
                             console.log('⚠️ Mapa não está mais disponível, pulando centralização')
+                            return
+                          }
+                          
+                          // Verificar se o mapa atual ainda está no mesmo container
+                          try {
+                            const currentMapContainer = mapInstanceRef.current.getContainer()
+                            if (currentMapContainer !== mapRef.current) {
+                              console.log('⚠️ Container do mapa mudou, pulando centralização')
+                              return
+                            }
+                          } catch (e) {
+                            console.log('⚠️ Erro ao verificar container do mapa, pulando centralização:', e)
                             return
                           }
                           
@@ -840,9 +981,101 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange }: Locati
       if (timeoutId) {
         clearTimeout(timeoutId)
       }
-      cleanup()
+      // IMPORTANTE: NÃO fazer cleanup se estamos apenas arrastando o marcador
+      // O cleanup só deve acontecer quando o componente realmente desmontar ou quando as props fundamentais mudarem
+      // latitude e longitude mudam durante o arraste, mas não devem causar cleanup
+      if (!isDraggingRef.current && !isUpdatingFromDragRef.current) {
+        cleanup()
+      }
     }
-  }, [isMapLoaded, latitude, longitude, radiusKm])
+  }, [isMapLoaded, radiusKm]) // Removido latitude e longitude das dependências para evitar recriação durante arraste
+
+  // useEffect separado para atualizar o mapa quando as coordenadas mudarem manualmente ou por sugestão
+  // (não durante arraste)
+  useEffect(() => {
+    // Verificar se o mapa existe e está pronto
+    if (!mapInstanceRef.current || !markerRef.current) {
+      return
+    }
+
+    // Se está arrastando AGORA, não atualizar
+    if (isDraggingRef.current) {
+      return
+    }
+
+    // Verificar se as coordenadas são válidas
+    if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+      return
+    }
+
+    // Verificar se há diferença significativa entre as coordenadas atuais e as do marcador
+    try {
+      const currentMarkerPos = markerRef.current.getLatLng()
+      const latDiff = Math.abs(currentMarkerPos.lat - latitude)
+      const lngDiff = Math.abs(currentMarkerPos.lng - longitude)
+      
+      // Se a diferença for significativa (> 0.0001 graus), atualizar o mapa
+      if (latDiff > 0.0001 || lngDiff > 0.0001) {
+        // Se a atualização foi marcada como manual, atualizar imediatamente (ignora proteção)
+        if (manualUpdateRef.current) {
+          console.log('📍 Atualizando mapa para nova localização manual/sugestão (ignorando proteção):', { latitude, longitude })
+          
+          // Resetar flag manual
+          manualUpdateRef.current = false
+          
+          // Atualizar marcador
+          markerRef.current.setLatLng([latitude, longitude])
+          
+          // Atualizar círculo
+          if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+            circleRef.current.setLatLng([latitude, longitude])
+          }
+          
+          // Centralizar o mapa na nova posição
+          if (mapInstanceRef.current) {
+            const currentZoom = mapInstanceRef.current.getZoom() || 15
+            mapInstanceRef.current.setView([latitude, longitude], currentZoom, { animate: true })
+          }
+          
+          // Atualizar referências
+          lastLatRef.current = latitude
+          lastLngRef.current = longitude
+          
+          // Resetar proteção de arraste para permitir futuras atualizações manuais
+          dragEndTimeRef.current = 0
+          isUpdatingFromDragRef.current = false
+        } else if (!isUpdatingFromDragRef.current) {
+          // Se não foi marcado como manual e não está atualizando de arraste, verificar se passou tempo suficiente
+          const timeSinceDragEnd = Date.now() - dragEndTimeRef.current
+          const recentlyDragged = timeSinceDragEnd < 8000
+          
+          if (!recentlyDragged) {
+            console.log('📍 Atualizando mapa para nova localização (proteção expirada):', { latitude, longitude })
+            
+            // Atualizar marcador
+            markerRef.current.setLatLng([latitude, longitude])
+            
+            // Atualizar círculo
+            if (circleRef.current && radiusKm && !isNaN(radiusKm) && radiusKm > 0) {
+              circleRef.current.setLatLng([latitude, longitude])
+            }
+            
+            // Centralizar o mapa na nova posição
+            if (mapInstanceRef.current) {
+              const currentZoom = mapInstanceRef.current.getZoom() || 15
+              mapInstanceRef.current.setView([latitude, longitude], currentZoom, { animate: true })
+            }
+            
+            // Atualizar referências
+            lastLatRef.current = latitude
+            lastLngRef.current = longitude
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao atualizar mapa:', e)
+    }
+  }, [latitude, longitude, radiusKm]) // Dependências: latitude, longitude e radiusKm
 
   if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
     return (
@@ -1168,6 +1401,9 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
   const [allowedNetworks, setAllowedNetworks] = useState<string[]>([])
   const [allowedLocation, setAllowedLocation] = useState<{ latitude: number; longitude: number; radius_km: number } | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState<'networks' | 'location' | null>(null)
+  
+  // Ref para callback do LocationMap para marcar atualizações manuais
+  const manualUpdateCallbackRef = useRef<(() => void) | null>(null)
 
   // Fechar modais internos ao pressionar ESC (prioridade sobre o modal principal)
   useEffect(() => {
@@ -1183,6 +1419,46 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     document.addEventListener('keydown', handleEsc, true)
     return () => document.removeEventListener('keydown', handleEsc, true)
   }, [configModalOpen])
+  
+  // Ref para rastrear o estado anterior do modal de localização
+  const prevLocationModalOpenRef = useRef<boolean>(false)
+  
+  // Quando o modal de localização fecha, descartar mudanças não salvas
+  useEffect(() => {
+    const wasLocationModalOpen = prevLocationModalOpenRef.current
+    const isLocationModalOpen = configModalOpen === 'location'
+    
+    // Atualizar ref para próxima execução
+    prevLocationModalOpenRef.current = isLocationModalOpen
+    
+    // Se o modal estava aberto e agora fechou, descartar mudanças não salvas
+    if (wasLocationModalOpen && !isLocationModalOpen && group?.id) {
+      console.log('🚪 Modal de localização fechou - descartando mudanças não salvas e recarregando do servidor')
+      
+      // Recarregar valores salvos do servidor
+      fetch(`/api/groups/${group.id}/restrictions`).then(res => res.json()).then(r => {
+        if (r.success) {
+          const savedLocation = r.data.allowedLocation || null
+          setAllowedLocation(savedLocation)
+          
+          // Resetar campos para valores salvos do servidor
+          if (savedLocation) {
+            console.log('✅ Restaurando valores salvos:', savedLocation)
+            setLocationLat(savedLocation.latitude.toString())
+            setLocationLon(savedLocation.longitude.toString())
+            setLocationRadius(savedLocation.radius_km.toString())
+          } else {
+            console.log('⚠️ Nenhuma localização salva - limpando campos')
+            setLocationLat('')
+            setLocationLon('')
+            setLocationRadius('5')
+          }
+        }
+      }).catch(err => {
+        console.error('Erro ao recarregar restrições:', err)
+      })
+    }
+  }, [configModalOpen, group?.id])
   const [newNetworkName, setNewNetworkName] = useState('')
   const [locationLat, setLocationLat] = useState('')
   const [locationLon, setLocationLon] = useState('')
@@ -1195,6 +1471,7 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
 
   // Ref para evitar recarregar dados quando salvamos localização
   const isSavingLocationRef = useRef(false)
+  const lastSavedLocationRef = useRef<{ lat: number; lng: number; timestamp: number } | null>(null)
 
   // Cleanup do timeout quando o componente for desmontado ou modal fechar
   useEffect(() => {
@@ -1206,11 +1483,35 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
     }
   }, [])
 
+  // Carregar dados quando o modal abre pela primeira vez
   useEffect(() => {
-    if (!group || !isOpen) return
+    if (!group || !isOpen) {
+      // Modal fechou - limpar TODOS os campos de localização para descartar mudanças não salvas
+      if (group?.id && !isOpen) {
+        console.log('🚪 Modal fechou - limpando campos de localização')
+        setLocationLat('')
+        setLocationLon('')
+        setLocationRadius('5')
+        lastSavedLocationRef.current = null
+        // Não atualizar allowedLocation aqui, será atualizado quando o modal abrir
+      }
+      return
+    }
+    
+    console.log('🚪 Modal abriu - carregando dados do servidor')
     setActiveTab('overview')
+    
+    // Resetar campos ANTES de carregar (garantir que serão sobrescritos)
+    setLocationLat('')
+    setLocationLon('')
+    setLocationRadius('5')
+    
+    // Resetar referência de salvamento (para permitir carregar do servidor)
+    lastSavedLocationRef.current = null
+    
+    // Carregar dados do servidor quando abrir o modal
     loadData(group.id)
-  }, [group, isOpen])
+  }, [group?.id, isOpen])
 
   // Função para recarregar apenas stats e devices (usado para atualizações rápidas)
   const refreshMonitoringData = useCallback(async () => {
@@ -1238,18 +1539,37 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
   }, [group])
 
   // Atualização periódica dos dados (especialmente para monitoramento)
+  // Carregar dados quando o modal abre
   useEffect(() => {
     if (!group || !isOpen) return
     
-    // Recarregar dados a cada 5 segundos quando o modal estiver aberto
+    // Carregar dados apenas uma vez quando o modal abre
+    loadData(group.id)
+  }, [group?.id, isOpen]) // Só recarregar se o grupo mudar ou modal abrir/fechar
+  
+  // Polling periódico para outros dados (mas NUNCA atualizar localização se foi salva recentemente)
+  useEffect(() => {
+    if (!group || !isOpen) return
+    
+    // NÃO fazer polling de localização se o usuário salvou recentemente
+    // Se o usuário arrastou o marcador, manter onde ele colocou - nunca sobrescrever
+    const hasRecentSave = lastSavedLocationRef.current && (Date.now() - lastSavedLocationRef.current.timestamp) < 60000
+    
+    if (hasRecentSave || isSavingLocationRef.current) {
+      // Usuário editou a localização - não fazer polling que pode sobrescrever
+      return
+    }
+    
+    // Recarregar outros dados a cada 10 segundos (mas não localização)
     const interval = setInterval(() => {
       if (group.id) {
-        loadData(group.id, true) // skipLoadingState = true para evitar flicker
+        // Recarregar tudo EXCETO localização (que já foi simplificado no loadData)
+        refreshMonitoringData()
       }
-    }, 5000)
+    }, 10000)
 
     return () => clearInterval(interval)
-  }, [group, isOpen])
+  }, [group?.id, isOpen, refreshMonitoringData])
 
   // Listener para atualizações de dispositivos via eventos customizados
   useEffect(() => {
@@ -1444,11 +1764,58 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
         if (r.success) {
           setAllowedNetworks(r.data.allowedNetworks || [])
           setAllowedLocation(r.data.allowedLocation || null)
-          // Só atualizar campos de localização se não estivermos salvando (evitar sobrescrever durante arraste)
-          if (r.data.allowedLocation && !isSavingLocationRef.current) {
-            setLocationLat(r.data.allowedLocation.latitude?.toString() || '')
-            setLocationLon(r.data.allowedLocation.longitude?.toString() || '')
-            setLocationRadius(r.data.allowedLocation.radius_km?.toString() || '5')
+          
+            // LÓGICA SIMPLIFICADA: Só atualizar localização se não salvamos recentemente
+            // Se o usuário arrastou o marcador, manter onde ele colocou - não sobrescrever do servidor
+            if (r.data.allowedLocation) {
+              const serverLat = r.data.allowedLocation.latitude?.toString() || ''
+              const serverLon = r.data.allowedLocation.longitude?.toString() || ''
+              const serverRadius = r.data.allowedLocation.radius_km?.toString() || '5'
+              
+              // IMPORTANTE: Quando o modal abre, SEMPRE carregar do servidor (valores salvos)
+              // A única exceção é se acabamos de salvar AGORA (durante a mesma sessão do modal)
+              // Mas quando o modal fecha e reabre, lastSavedLocationRef será null, então sempre carrega
+              const hasRecentSave = lastSavedLocationRef.current && 
+                                 (Date.now() - lastSavedLocationRef.current.timestamp) < 10000
+              
+              // IMPORTANTE: Sempre atualizar com valores do servidor quando o modal abre
+              // Isso descarta qualquer mudança não salva
+              // A única exceção é se estamos salvando AGORA (isSavingLocationRef.current === true)
+              if (isSavingLocationRef.current) {
+                // Estamos salvando agora - não sobrescrever durante o salvamento
+                console.log('⏳ Salvamento em andamento - aguardando...')
+                return
+              }
+              
+              // SEMPRE atualizar com valores do servidor (descartar mudanças locais não salvas)
+              const serverLatNum = parseFloat(serverLat)
+              const serverLonNum = parseFloat(serverLon)
+              
+              console.log('✅ Carregando localização do servidor (descartando mudanças locais):', { 
+                serverLat, 
+                serverLon, 
+                serverRadius,
+                currentLat: locationLat,
+                currentLon: locationLon
+              })
+              
+              if (!isNaN(serverLatNum) && !isNaN(serverLonNum)) {
+                // FORÇAR atualização mesmo se os campos já tiverem valores diferentes
+                // Usar setTimeout 0 para garantir que a atualização acontece depois do estado atual
+                setTimeout(() => {
+                  setLocationLat(serverLat)
+                  setLocationLon(serverLon)
+                  setLocationRadius(serverRadius)
+                }, 0)
+              } else {
+                // Se não há localização salva no servidor, limpar campos
+                console.log('⚠️ Nenhuma localização salva no servidor - limpando campos')
+                setTimeout(() => {
+                  setLocationLat('')
+                  setLocationLon('')
+                  setLocationRadius('5')
+                }, 0)
+              }
           }
         }
       }
@@ -1801,6 +2168,10 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
         throw new Error('Coordenadas inválidas retornadas')
       }
 
+      // Notificar LocationMap que é uma atualização manual (busca de endereço)
+      if (manualUpdateCallbackRef.current) {
+        manualUpdateCallbackRef.current()
+      }
       // Atualizar os campos de latitude e longitude
       setLocationLat(lat.toString())
       setLocationLon(lon.toString())
@@ -1821,6 +2192,8 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
 
   const handleSaveLocation = async () => {
     try {
+      if (!group?.id) return
+      
       const lat = parseFloat(locationLat)
       const lon = parseFloat(locationLon)
       const radius = parseFloat(locationRadius)
@@ -1830,23 +2203,43 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
         return
       }
 
+      isSavingLocationRef.current = true
       const location = { latitude: lat, longitude: lon, radius_km: radius }
+      
+      console.log('💾 Salvando localização:', location)
       
       const res = await fetch(`/api/groups/${group.id}/restrictions`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allowedLocation: location })
       })
+      
       if (res.ok) {
-        setAllowedLocation(location)
-        alert('Área permitida atualizada com sucesso!')
-        setConfigModalOpen(null)
+        const result = await res.json()
+        if (result.success) {
+          // Marcar que salvamos - isso previne que loadData sobrescreva
+          lastSavedLocationRef.current = {
+            lat,
+            lng: lon,
+            timestamp: Date.now()
+          }
+          
+          setAllowedLocation(result.data?.allowedLocation || location)
+          alert('Área permitida atualizada com sucesso!')
+          setConfigModalOpen(null)
+        } else {
+          alert('Erro ao salvar área permitida')
+        }
       } else {
         alert('Erro ao salvar área permitida')
       }
     } catch (error) {
       console.error('Erro ao salvar localização:', error)
       alert('Erro ao salvar área permitida')
+    } finally {
+      setTimeout(() => {
+        isSavingLocationRef.current = false
+      }, 2000)
     }
   }
 
@@ -3059,7 +3452,13 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                       step="any"
                       placeholder="Ex: -23.5505"
                       value={locationLat}
-                      onChange={(e) => setLocationLat(e.target.value)}
+                      onChange={(e) => {
+                        setLocationLat(e.target.value)
+                        // Notificar LocationMap que é uma atualização manual
+                        if (manualUpdateCallbackRef.current) {
+                          manualUpdateCallbackRef.current()
+                        }
+                      }}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                   </div>
@@ -3073,7 +3472,13 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                       step="any"
                       placeholder="Ex: -46.6333"
                       value={locationLon}
-                      onChange={(e) => setLocationLon(e.target.value)}
+                      onChange={(e) => {
+                        setLocationLon(e.target.value)
+                        // Notificar LocationMap que é uma atualização manual
+                        if (manualUpdateCallbackRef.current) {
+                          manualUpdateCallbackRef.current()
+                        }
+                      }}
                       className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                   </div>
@@ -3108,57 +3513,14 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                       longitude={locationLon ? parseFloat(locationLon) : null}
                       radiusKm={locationRadius ? parseFloat(locationRadius) : null}
                       onLocationChange={(lat, lng) => {
-                        // Atualizar campos de latitude e longitude quando o marcador for arrastado
+                        // Apenas atualizar campos de latitude e longitude quando o marcador for arrastado
+                        // NÃO salvar automaticamente - só salvar quando o usuário clicar em "Salvar"
                         setLocationLat(lat.toString())
                         setLocationLon(lng.toString())
-                        
-                        // Limpar timeout anterior se existir (debounce)
-                        if (saveLocationTimeoutRef.current) {
-                          clearTimeout(saveLocationTimeoutRef.current)
-                        }
-                        
-                        // Salvar automaticamente no servidor após 500ms sem arrastar (debounce)
-                        saveLocationTimeoutRef.current = setTimeout(() => {
-                          isSavingLocationRef.current = true // Marcar que estamos salvando
-                          
-                          const radius = parseFloat(locationRadius) || 5
-                          const location = {
-                            latitude: lat,
-                            longitude: lng,
-                            radius_km: radius
-                          }
-                          
-                          console.log('💾 Salvando localização automaticamente:', { lat, lng, radius })
-                          
-                          // Salvar de forma assíncrona sem bloquear a UI
-                          fetch(`/api/groups/${group.id}/restrictions`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ allowedLocation: location })
-                          }).then(async (res) => {
-                            if (res.ok) {
-                              const result = await res.json()
-                              if (result.success && result.data) {
-                                // Atualizar estado sem disparar reload dos dados
-                                setAllowedLocation(result.data.allowedLocation || location)
-                                console.log('✅ Localização salva automaticamente com sucesso:', { lat, lng, radius })
-                              } else {
-                                console.error('❌ Resposta do servidor sem sucesso:', result)
-                              }
-                            } else {
-                              const errorText = await res.text()
-                              console.error('❌ Erro ao salvar localização automaticamente:', res.status, errorText)
-                            }
-                          }).catch((error) => {
-                            console.error('❌ Erro ao salvar localização automaticamente:', error)
-                          }).finally(() => {
-                            // Resetar flag após um pequeno delay para evitar reload
-                            setTimeout(() => {
-                              isSavingLocationRef.current = false
-                            }, 1000)
-                            saveLocationTimeoutRef.current = null
-                          })
-                        }, 500) // Aguardar 500ms após parar de arrastar
+                      }}
+                      onManualUpdate={(callback) => {
+                        // Armazenar callback para poder chamá-lo quando houver atualização manual
+                        manualUpdateCallbackRef.current = callback
                       }}
                     />
                   </div>
@@ -3183,6 +3545,10 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                           key={idx}
                           onClick={() => {
                             if (typeof device.latitude === 'number' && typeof device.longitude === 'number') {
+                              // Notificar LocationMap que é uma atualização manual (sugestão)
+                              if (manualUpdateCallbackRef.current) {
+                                manualUpdateCallbackRef.current()
+                              }
                               setLocationLat(device.latitude.toString())
                               setLocationLon(device.longitude.toString())
                             }
@@ -3233,15 +3599,24 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
               <button
                 onClick={() => {
                   setConfigModalOpen(null)
-                  // Recarregar restrições do servidor
+                  // Descartar mudanças e recarregar do servidor (valores salvos)
                   if (group?.id) {
+                    lastSavedLocationRef.current = null // Permitir recarregar do servidor
                     fetch(`/api/groups/${group.id}/restrictions`).then(res => res.json()).then(r => {
                       if (r.success) {
-                        setAllowedLocation(r.data.allowedLocation || null)
-                        if (r.data.allowedLocation) {
-                          setLocationLat(r.data.allowedLocation.latitude?.toString() || '')
-                          setLocationLon(r.data.allowedLocation.longitude?.toString() || '')
-                          setLocationRadius(r.data.allowedLocation.radius_km?.toString() || '5')
+                        const savedLocation = r.data.allowedLocation || null
+                        setAllowedLocation(savedLocation)
+                        
+                        // Sempre atualizar campos com valores do servidor (descartar mudanças locais)
+                        if (savedLocation) {
+                          setLocationLat(savedLocation.latitude?.toString() || '')
+                          setLocationLon(savedLocation.longitude?.toString() || '')
+                          setLocationRadius(savedLocation.radius_km?.toString() || '5')
+                        } else {
+                          // Se não há localização salva, limpar campos
+                          setLocationLat('')
+                          setLocationLon('')
+                          setLocationRadius('5')
                         }
                       }
                     })

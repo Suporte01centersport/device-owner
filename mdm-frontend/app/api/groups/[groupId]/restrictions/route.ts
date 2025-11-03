@@ -62,9 +62,20 @@ export async function PUT(
 
     if (allowedLocation !== undefined) {
       updateData.allowed_location = allowedLocation || null
+      console.log('📝 Salvando localização no servidor:', {
+        groupId,
+        allowedLocation,
+        updateData
+      })
     }
 
     const updated = await DeviceGroupModel.update(groupId, updateData)
+    
+    console.log('✅ Localização salva no servidor:', {
+      groupId,
+      allowedLocation: updated.allowed_location,
+      success: !!updated
+    })
 
     return NextResponse.json({
       success: true,

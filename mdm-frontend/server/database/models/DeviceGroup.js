@@ -132,8 +132,50 @@ class DeviceGroupModel {
             }
             if (updateData.allowed_location !== undefined) {
                 paramCount++;
-                updates.push(`allowed_location = $${paramCount}`);
-                params.push(JSON.stringify(updateData.allowed_location));
+                // Para JSONB, podemos usar ::jsonb no SQL ou passar como JSON string
+                // Vamos usar ::jsonb para garantir a conversão correta
+                updates.push(`allowed_location = $${paramCount}::jsonb`);
+                // Se for null, passar null diretamente, senão serializar como JSON
+                if (updateData.allowed_location === null) {
+                    params.push(null);
+                    console.log('💾 Atualizando allowed_location para NULL no banco');
+                } else {
+                    // Garantir que está como objeto válido e serializar corretamente
+                    let locationData;
+                    if (typeof updateData.allowed_location === 'string') {
+                        try {
+                            locationData = JSON.parse(updateData.allowed_location);
+                        } catch (e) {
+                            console.error('❌ Erro ao fazer parse do allowed_location:', e);
+                            locationData = updateData.allowed_location;
+                        }
+                    } else {
+                        locationData = updateData.allowed_location;
+                    }
+                    
+                    // Validar estrutura mínima
+                    if (!locationData || typeof locationData !== 'object') {
+                        throw new Error('allowed_location deve ser um objeto válido com latitude, longitude e radius_km');
+                    }
+                    
+                    if (typeof locationData.latitude !== 'number' || typeof locationData.longitude !== 'number') {
+                        throw new Error('allowed_location deve conter latitude e longitude como números');
+                    }
+                    
+                    // Serializar como JSON string (PostgreSQL converterá para JSONB automaticamente com ::jsonb)
+                    const jsonString = JSON.stringify(locationData);
+                    params.push(jsonString);
+                    
+                    console.log('💾 Atualizando allowed_location no banco:', {
+                        groupId,
+                        allowed_location: locationData,
+                        type: typeof locationData,
+                        serialized: jsonString,
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude,
+                        radius_km: locationData.radius_km
+                    });
+                }
             }
 
             if (updates.length === 0) {
@@ -156,7 +198,22 @@ class DeviceGroupModel {
 
             queryText += ' RETURNING *';
 
+            console.log('🔍 Executando UPDATE no banco:', {
+                query: queryText.substring(0, 200) + '...',
+                paramsCount: params.length,
+                hasAllowedLocation: updateData.allowed_location !== undefined,
+                lastParam: params.length > 0 ? (typeof params[params.length - 1] === 'string' ? params[params.length - 1].substring(0, 100) : params[params.length - 1]) : null
+            });
+
             const result = await query(queryText, params);
+            
+            console.log('✅ UPDATE executado com sucesso:', {
+                groupId,
+                rowsAffected: result.rowCount,
+                returnedAllowedLocation: result.rows[0]?.allowed_location,
+                allowedLocationType: typeof result.rows[0]?.allowed_location
+            });
+            
             return result.rows[0];
         } catch (error) {
             console.error('Erro ao atualizar grupo:', error);
