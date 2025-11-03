@@ -74,7 +74,7 @@ vim .env
 # Banco de Dados
 DB_HOST=localhost
 DB_PORT=5432
-DB_NAME=mdm_owner              # Nome do seu banco
+DB_NAME=mdm_database           # Nome do seu banco
 DB_USER=mdm_user               # Usuário do PostgreSQL
 DB_PASSWORD=SUA_SENHA_FORTE    # ⚠️ ALTERE ISSO!
 
@@ -106,7 +106,7 @@ openssl rand -base64 32
 sudo -u postgres psql
 
 # 3.2. Criar banco de dados (dentro do psql)
-CREATE DATABASE mdm_owner;
+CREATE DATABASE mdm_database;
 
 # 3.3. Criar usuário (substitua 'senha_forte' pela senha que você escolheu)
 CREATE USER mdm_user WITH PASSWORD 'senha_forte';
@@ -115,7 +115,7 @@ CREATE USER mdm_user WITH PASSWORD 'senha_forte';
 GRANT ALL PRIVILEGES ON DATABASE mdm_owner TO mdm_user;
 
 # 3.5. Para PostgreSQL 15+, dar permissão no schema público
-\c mdm_owner
+\c mdm_database
 GRANT ALL ON SCHEMA public TO mdm_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO mdm_user;
 
@@ -368,7 +368,7 @@ sudo kill -9 $(sudo lsof -t -i:3002)
 sudo systemctl status postgresql
 
 # Testar conexão
-psql -U mdm_user -d mdm_owner -h localhost
+psql -U mdm_user -d mdm_database -h localhost
 
 # Verificar configurações no .env
 cat .env | grep DB_
