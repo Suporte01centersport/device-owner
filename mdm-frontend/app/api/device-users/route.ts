@@ -74,15 +74,15 @@ export async function PUT(request: NextRequest) {
       )
     }
     
-    // Garantir que temos um objeto válido com id
-    const orgRow = orgResult.rows[0]
-    if (!orgRow || !orgRow.id) {
+    // Garantir que temos um objeto válido com id (type assertion para resolver inferência do TypeScript)
+    const firstRow = orgResult.rows[0] as any
+    if (!firstRow || !firstRow.id) {
       return NextResponse.json(
         { success: false, error: 'Organização padrão inválida' },
         { status: 500 }
       )
     }
-    const organizationId = orgRow.id
+    const organizationId = firstRow.id
 
     // Usar transação para garantir consistência
     const results = await transaction(async (client) => {
