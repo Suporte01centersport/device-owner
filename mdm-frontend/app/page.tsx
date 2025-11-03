@@ -48,9 +48,15 @@ export default function Home() {
     const loadUsersCount = async () => {
       try {
         const response = await fetch('/api/device-users?active=true')
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+        
         const result = await response.json()
         if (result.success) {
-          setUsersCount(result.count)
+          // Contar usuários na lista retornada
+          const usersList = result.users || result.data || []
+          setUsersCount(usersList.length)
         }
       } catch (e) {
         console.error('Erro ao carregar contagem de usuários:', e)

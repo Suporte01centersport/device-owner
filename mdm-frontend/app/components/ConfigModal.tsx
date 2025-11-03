@@ -33,11 +33,18 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
     setIsLoading(true)
     try {
       const response = await fetch('/api/device-users?active=true')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const result = await response.json()
       
-      if (result.success && result.users.length > 0) {
-        const loadedUsers = result.users.map((u: any) => ({
-          id: u.user_id,
+      // Suporta tanto 'users' quanto 'data' para compatibilidade
+      const usersList = result.users || result.data || []
+      
+      if (result.success && Array.isArray(usersList) && usersList.length > 0) {
+        const loadedUsers = usersList.map((u: any) => ({
+          id: u.user_id || u.id,
           name: u.name,
           cpf: u.cpf
         }))
@@ -48,6 +55,7 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
       }
     } catch (error) {
       console.error('Erro ao carregar usuários:', error)
+      alert('Erro ao carregar usuários. Verifique o console para mais detalhes.')
     } finally {
       setIsLoading(false)
     }
