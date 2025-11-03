@@ -9,9 +9,10 @@ const dbConfig = {
     password: process.env.DB_PASSWORD, // Deve ser definido no .env - não usar string vazia
     port: parseInt(process.env.DB_PORT) || 5432,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
-    max: 20, // Máximo de conexões no pool
+    max: parseInt(process.env.DB_POOL_MAX) || 35, // Máximo de conexões no pool (padrão: 35, ajustável via env)
     idleTimeoutMillis: 30000, // Tempo para fechar conexões inativas
     connectionTimeoutMillis: 2000, // Tempo limite para conexão
+    allowExitOnIdle: false, // Não encerrar processo quando pool está idle
 };
 
 // Pool de conexões
@@ -33,10 +34,13 @@ const query = async (text, params) => {
     try {
         const res = await pool.query(text, params);
         const duration = Date.now() - start;
-        console.log('Query executada', { text, duration, rows: res.rowCount });
+        // Log apenas queries lentas (>100ms) ou em modo debug
+        if (duration > 100 || process.env.LOG_LEVEL === 'debug') {
+            console.log('Query executada', { text: text.substring(0, 100), duration, rows: res.rowCount });
+        }
         return res;
     } catch (error) {
-        console.error('Erro na query:', { text, error: error.message });
+        console.error('Erro na query:', { text: text.substring(0, 100), error: error.message });
         throw error;
     }
 };

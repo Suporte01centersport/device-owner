@@ -29,6 +29,19 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onConfirm }:
     }
   }, [isOpen])
 
+  // Fechar ao pressionar ESC
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen && !isLoading) {
+        onClose()
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEsc)
+      return () => document.removeEventListener('keydown', handleEsc)
+    }
+  }, [isOpen, isLoading, onClose])
+
   if (!isOpen) return null
 
   const handleToggleDevice = (deviceId: string) => {

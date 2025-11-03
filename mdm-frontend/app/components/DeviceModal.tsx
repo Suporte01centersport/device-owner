@@ -79,6 +79,38 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   const [isSendingMessage, setIsSendingMessage] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
+  
+  // Fechar TermsModal ao pressionar ESC (prioridade sobre o modal principal)
+  useEffect(() => {
+    if (!showTermsModal) return
+    
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation() // Prevenir que o handler do modal principal também execute
+        setShowTermsModal(false)
+      }
+    }
+    // Usar capture phase para garantir que executa primeiro
+    document.addEventListener('keydown', handleEsc, true)
+    return () => document.removeEventListener('keydown', handleEsc, true)
+  }, [showTermsModal])
+
+  // Fechar ao pressionar ESC (modal principal) - só fecha se não houver modais internos abertos
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        // Se há um modal interno aberto, não fechar o modal principal
+        if (!showTermsModal) {
+          onClose()
+        }
+      }
+    }
+    document.addEventListener('keydown', handleEsc)
+    return () => document.removeEventListener('keydown', handleEsc)
+  }, [onClose, showTermsModal])
+  
+  const [deviceGroups, setDeviceGroups] = useState<Array<{ id: string; name: string; color: string; policies: Array<{ packageName: string; appName: string }> }>>([])
+  const [groupPolicyApps, setGroupPolicyApps] = useState<string[]>([]) // Apps que estão em políticas de grupo
   const [messageHistory, setMessageHistory] = useState<Array<{
     id: string
     message: string
@@ -87,12 +119,34 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
     deviceName: string
   }>>([])
 
+  // Buscar grupos do dispositivo e suas políticas
+  useEffect(() => {
+    const loadDeviceGroups = async () => {
+      try {
+        const res = await fetch(`/api/devices/${device.deviceId}/groups`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.success) {
+            setDeviceGroups(data.data.groups || [])
+            setGroupPolicyApps(data.data.groupPolicyApps || [])
+          }
+        }
+      } catch (error) {
+        console.error('Erro ao buscar grupos do dispositivo:', error)
+      }
+    }
+    loadDeviceGroups()
+  }, [device.deviceId])
+
   // Sincronizar selectedApps com allowedApps do dispositivo
   useEffect(() => {
     if (device.allowedApps) {
-      setSelectedApps(device.allowedApps)
+      // selectedApps representa apenas apps individuais (sem os da política de grupo)
+      // Se device.allowedApps contém apps da política de grupo, precisamos filtrar
+      const individualApps = device.allowedApps.filter(app => !groupPolicyApps.includes(app))
+      setSelectedApps(individualApps)
     }
-  }, [device.allowedApps])
+  }, [device.allowedApps, groupPolicyApps])
 
   const formatStorage = (bytes: number) => {
     if (bytes === 0) return '0 B'
@@ -136,15 +190,24 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   const handleSavePermissions = async () => {
     setIsSaving(true)
     try {
+      // ✅ Apps individuais têm prioridade: mesclar com apps da política de grupo
+      // Quando salvamos individualmente, mantemos os apps da política de grupo também
+      // Mas os apps individuais não serão afetados quando a política de grupo for aplicada
+      const finalApps = [...new Set([...selectedApps, ...groupPolicyApps])]
+      
       // Enviar permissões via WebSocket
+      // ✅ IMPORTANTE: Marcar como isIndividual=true e enviar selectedApps separadamente
+      // para que o servidor possa marcar apenas esses como individuais
       sendMessage({
         type: 'update_app_permissions',
         deviceId: device.deviceId,
-        allowedApps: selectedApps,
+        allowedApps: finalApps, // Apps individuais (prioritários) + apps da política de grupo
+        individualApps: selectedApps, // Lista separada de apps individuais (apenas os selecionados no modal)
+        isIndividual: true, // Marcar como apps individuais para preservação
         timestamp: Date.now()
       })
       
-      alert('Permissões salvas com sucesso!')
+      alert(`Permissões salvas com sucesso!\n\nApps individuais: ${selectedApps.length}\nApps de política de grupo: ${groupPolicyApps.length}\nTotal: ${finalApps.length}\n\nℹ️ Apps individuais têm prioridade e não serão afetados pela política de grupo.`)
     } catch (error) {
       console.error('Erro ao salvar permissões:', error)
       alert('Erro ao salvar permissões')
@@ -324,8 +387,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   ]
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      onClick={(e) => {
+        // Só fecha o modal principal se não houver modal interno aberto
+        if (!showTermsModal) {
+          onClose()
+        }
+      }}
+    >
+      <div 
+        className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[90vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-6 border-b border-border">
           <div className="flex justify-between items-start">
@@ -830,18 +904,23 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                         </p>
                       </div>
                     ) : (
-                      getFilteredApps().map((app, index) => (
+                      getFilteredApps().map((app, index) => {
+                        const isInGroupPolicy = groupPolicyApps.includes(app.packageName)
+                        const isIndividuallySelected = isAppAllowed(app.packageName)
+                        return (
                         <div key={app.packageName} className={`card p-4 hover:shadow-lg transition-all duration-200 ${
-                          isAppAllowed(app.packageName) ? 'ring-2 ring-primary bg-blue-50' : 
+                          isIndividuallySelected ? 'ring-2 ring-primary bg-blue-50' : 
                           'hover:bg-gray-50'
                         }`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <input
                                 type="checkbox"
-                                checked={isAppAllowed(app.packageName)}
+                                checked={isIndividuallySelected}
                                 onChange={() => handleAppToggle(app.packageName)}
                                 className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                                disabled={isInGroupPolicy}
+                                title={isInGroupPolicy ? 'Este app já está sendo exibido por política de grupo' : ''}
                               />
                               <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center overflow-hidden shadow-md">
                                 {app.iconBase64 ? (
@@ -862,9 +941,11 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                                 </div>
                               </div>
                               <div className="flex-1">
-                                <h4 className="font-semibold text-primary text-lg">{app.appName || 'Nome não disponível'}</h4>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="font-semibold text-primary text-lg">{app.appName || 'Nome não disponível'}</h4>
+                                </div>
                                 <p className="text-sm text-secondary font-mono">{app.packageName || 'Package não disponível'}</p>
-                                <div className="flex items-center gap-2 mt-2">
+                                <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v{app.versionName || 'N/A'}</span>
                                   {app.isSystemApp && (
                                     <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">Sistema</span>
@@ -888,7 +969,8 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                             </div>
                           </div>
                         </div>
-                      ))
+                        )
+                      })
                     )}
                   </div>
 

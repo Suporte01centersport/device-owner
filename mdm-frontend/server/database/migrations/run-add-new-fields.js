@@ -5,6 +5,7 @@
  * Adiciona os campos osType, meid e complianceStatus à tabela devices
  */
 
+require('dotenv').config();
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');

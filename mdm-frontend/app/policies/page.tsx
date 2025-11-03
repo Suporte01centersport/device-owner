@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { DeviceGroup, Device, AppPolicy } from '../types/device'
 import AppPolicyModal from '../components/AppPolicyModal'
 import DeviceAssignmentModal from '../components/DeviceAssignmentModal'
+import GroupModal from '../components/GroupModal'
 
 export default function PoliciesPage() {
   const [groups, setGroups] = useState<DeviceGroup[]>([])
@@ -13,7 +14,9 @@ export default function PoliciesPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [isAppPolicyModalOpen, setIsAppPolicyModalOpen] = useState(false)
   const [isDeviceAssignmentModalOpen, setIsDeviceAssignmentModalOpen] = useState(false)
+  const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [groupStats, setGroupStats] = useState<Record<string, any>>({})
 
   // Estados para formulários
   const [newGroup, setNewGroup] = useState({
@@ -44,65 +47,31 @@ export default function PoliciesPage() {
         const groupsData = await groupsResponse.json()
         if (groupsData.success) {
           setGroups(groupsData.data)
+          // Buscar estatísticas por grupo em paralelo
+          const statsEntries = await Promise.all(
+            (groupsData.data as DeviceGroup[]).map(async (g: any) => {
+              try {
+                const res = await fetch(`/api/groups/${g.id}/stats`)
+                if (!res.ok) return [g.id, null]
+                const json = await res.json()
+                return [g.id, json.data]
+              } catch {
+                return [g.id, null]
+              }
+            })
+          )
+          setGroupStats(Object.fromEntries(statsEntries))
         }
       }
       
-      // Dados mock para dispositivos - em produção seria uma chamada API
-      const mockDevices: Device[] = [
-        {
-          id: '1',
-          deviceId: 'DEV001',
-          name: 'Samsung Galaxy S21',
-          status: 'online',
-          lastSeen: Date.now(),
-          androidVersion: '11',
-          model: 'SM-G991B',
-          manufacturer: 'Samsung',
-          apiLevel: 30,
-          batteryLevel: 85,
-          batteryStatus: 'Not charging',
-          isCharging: false,
-          storageTotal: 128000000000,
-          storageUsed: 64000000000,
-          memoryTotal: 8000000000,
-          memoryUsed: 4000000000,
-          cpuArchitecture: 'arm64-v8a',
-          screenResolution: '1080x2400',
-          screenDensity: 420,
-          networkType: 'WiFi',
-          isWifiEnabled: true,
-          isBluetoothEnabled: true,
-          isLocationEnabled: true,
-          isDeveloperOptionsEnabled: false,
-          isAdbEnabled: false,
-          isUnknownSourcesEnabled: false,
-          installedAppsCount: 25,
-          isDeviceOwner: true,
-          isProfileOwner: false,
-          appVersion: '1.0.0',
-          timezone: 'America/Sao_Paulo',
-          language: 'pt',
-          country: 'BR',
-          restrictions: {
-            wifiDisabled: false,
-            bluetoothDisabled: false,
-            cameraDisabled: false,
-            statusBarDisabled: false,
-            installAppsDisabled: false,
-            uninstallAppsDisabled: false,
-            settingsDisabled: false,
-            systemNotificationsDisabled: false,
-            screenCaptureDisabled: false,
-            sharingDisabled: false,
-            outgoingCallsDisabled: false,
-            smsDisabled: false,
-            userCreationDisabled: false,
-            userRemovalDisabled: false
-          }
+      // Carregar dispositivos reais
+      const devicesResponse = await fetch('/api/devices')
+      if (devicesResponse.ok) {
+        const devicesData = await devicesResponse.json()
+        if (devicesData.success) {
+          setDevices(devicesData.data)
         }
-      ]
-
-      setDevices(mockDevices)
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     } finally {
@@ -143,9 +112,19 @@ export default function PoliciesPage() {
     setIsEditModalOpen(true)
   }
 
-  const handleDeleteGroup = (groupId: string) => {
-    if (window.confirm('Tem certeza que deseja deletar este grupo? Todos os dispositivos serão removidos do grupo.')) {
+  const handleDeleteGroup = async (groupId: string) => {
+    if (!window.confirm('Tem certeza que deseja deletar este grupo? Todos os dispositivos serão removidos do grupo.')) return
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        alert(`Erro ao deletar grupo${data?.detail ? `: ${data.detail}` : ''}`)
+        return
+      }
       setGroups(groups.filter(g => g.id !== groupId))
+    } catch (e) {
+      console.error('Erro ao deletar grupo:', e)
+      alert('Erro ao deletar grupo')
     }
   }
 
@@ -200,35 +179,58 @@ export default function PoliciesPage() {
     }))
   }
 
-  const handleAssignDevice = (deviceId: string, groupId: string) => {
-    setGroups(groups.map(group => {
-      if (group.id === groupId) {
-        const device = devices.find(d => d.id === deviceId)
-        if (device && !group.devices.find(d => d.id === deviceId)) {
+  const handleAssignDevice = async (deviceId: string, groupId: string) => {
+    try {
+      const device = devices.find(d => d.id === deviceId)
+      if (!device) return
+      const response = await fetch(`/api/groups/${groupId}/devices`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: device.deviceId })
+      })
+      if (!response.ok) return
+      // sucesso: atualizar estado local
+      setGroups(groups.map(group => {
+        if (group.id === groupId) {
+          if (!group.devices.find(d => d.id === deviceId)) {
+            return {
+              ...group,
+              devices: [...group.devices, device],
+              deviceCount: group.deviceCount + 1,
+              updatedAt: new Date().toISOString()
+            }
+          }
+        }
+        return group
+      }))
+    } catch (e) {
+      console.error('Erro ao atribuir dispositivo ao grupo:', e)
+    }
+  }
+
+  const handleRemoveDevice = async (deviceId: string, groupId: string) => {
+    try {
+      const device = devices.find(d => d.id === deviceId)
+      if (!device) return
+      const response = await fetch(`/api/groups/${groupId}/devices?deviceId=${encodeURIComponent(device.deviceId)}`, {
+        method: 'DELETE'
+      })
+      if (!response.ok) return
+      // sucesso: atualizar estado local
+      setGroups(groups.map(group => {
+        if (group.id === groupId) {
           return {
             ...group,
-            devices: [...group.devices, device],
-            deviceCount: group.deviceCount + 1,
+            devices: group.devices.filter(d => d.id !== deviceId),
+            deviceCount: group.deviceCount - 1,
             updatedAt: new Date().toISOString()
           }
         }
-      }
-      return group
-    }))
-  }
-
-  const handleRemoveDevice = (deviceId: string, groupId: string) => {
-    setGroups(groups.map(group => {
-      if (group.id === groupId) {
-        return {
-          ...group,
-          devices: group.devices.filter(d => d.id !== deviceId),
-          deviceCount: group.deviceCount - 1,
-          updatedAt: new Date().toISOString()
-        }
-      }
-      return group
-    }))
+        return group
+      }))
+    } catch (e) {
+      console.error('Erro ao remover dispositivo do grupo:', e)
+    }
   }
 
   if (loading) {
@@ -316,12 +318,18 @@ export default function PoliciesPage() {
         </div>
       </div>
 
-      {/* Lista de Grupos */}
-      <div className="space-y-6">
+      {/* Lista de Grupos - layout em cubos, 4 colunas */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {groups.map((group) => (
-          <div key={group.id} className="card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center">
+          <div
+            key={group.id}
+            className="card p-6 aspect-square flex flex-col justify-between hover:shadow cursor-pointer"
+            onClick={() => { setSelectedGroup(group); setIsGroupModalOpen(true) }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex items-start">
                 <div 
                   className="w-4 h-4 rounded-full mr-3"
                   style={{ backgroundColor: group.color }}
@@ -331,30 +339,9 @@ export default function PoliciesPage() {
                   <p className="text-sm text-secondary">{group.description}</p>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handleAssignDevices(group.id)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  <span>📱</span>
-                  Dispositivos ({group.deviceCount})
-                </button>
-                <button 
-                  onClick={() => handleAddAppPolicy(group.id)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  <span>📋</span>
-                  Políticas ({group.appPolicies.length})
-                </button>
-                <button 
-                  onClick={() => handleEditGroup(group)}
-                  className="btn btn-secondary btn-sm"
-                >
-                  <span>✏️</span>
-                  Editar
-                </button>
-                <button 
-                  onClick={() => handleDeleteGroup(group.id)}
+              <div>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id) }}
                   className="btn btn-error btn-sm"
                 >
                   <span>🗑️</span>
@@ -363,36 +350,32 @@ export default function PoliciesPage() {
               </div>
             </div>
 
-            {/* Políticas de Aplicativos */}
-            {group.appPolicies.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-secondary mb-2">Políticas de Aplicativos:</h4>
-                <div className="flex flex-wrap gap-2">
-                  {group.appPolicies.map((policy) => (
-                    <span 
-                      key={policy.id}
-                      className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
-                        policy.policyType === 'block' 
-                          ? 'bg-red-100 text-red-800' 
-                          : policy.policyType === 'require'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-blue-100 text-blue-800'
-                      }`}
-                    >
-                      <span className="mr-1">
-                        {policy.policyType === 'block' ? '🚫' : policy.policyType === 'require' ? '✅' : '✓'}
-                      </span>
-                      {policy.appName}
-                    </span>
-                  ))}
+            {/* Info do grupo */}
+            <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-secondary">Dispositivos</div>
+                <div className="text-lg font-semibold text-primary">{group.deviceCount}</div>
+              </div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-secondary">Políticas</div>
+                <div className="text-lg font-semibold text-primary">{group.appPolicies.length}</div>
+              </div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-secondary">Média Bateria</div>
+                <div className="text-lg font-semibold text-primary">{Math.round(Number(groupStats[group.id]?.avg_battery_level || 0))}%</div>
+              </div>
+              <div className="p-3 rounded bg-gray-50">
+                <div className="text-secondary">Total / Online</div>
+                <div className="text-lg font-semibold text-primary">
+                  {Number(groupStats[group.id]?.total_devices || group.deviceCount)} / {Number(groupStats[group.id]?.online_devices || 0)}
                 </div>
               </div>
-            )}
+            </div>
           </div>
         ))}
 
         {groups.length === 0 && (
-          <div className="text-center py-12">
+          <div className="col-span-full text-center py-12">
             <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4 shadow">
               <span className="text-3xl">📋</span>
             </div>
@@ -410,6 +393,13 @@ export default function PoliciesPage() {
           </div>
         )}
       </div>
+
+      {/* Modal do Grupo */}
+      <GroupModal
+        group={selectedGroup}
+        isOpen={isGroupModalOpen}
+        onClose={() => setIsGroupModalOpen(false)}
+      />
 
       {/* Modal de Criação de Grupo */}
       {isCreateModalOpen && (

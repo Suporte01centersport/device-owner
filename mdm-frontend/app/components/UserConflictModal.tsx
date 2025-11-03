@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 interface UserConflictModalProps {
   isOpen: boolean
   onClose: () => void
@@ -15,11 +17,30 @@ interface UserConflictModalProps {
 }
 
 export default function UserConflictModal({ isOpen, onClose, conflict }: UserConflictModalProps) {
+  // Fechar ao pressionar ESC
+  useEffect(() => {
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose()
+      }
+    }
+    if (isOpen) {
+      document.addEventListener('keydown', handleEsc)
+      return () => document.removeEventListener('keydown', handleEsc)
+    }
+  }, [isOpen, onClose])
+
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6">
+    <div 
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-yellow-100 flex items-center justify-center">
             <span className="text-2xl">⚠️</span>
