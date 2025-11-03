@@ -1752,7 +1752,9 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
       }
       if (usersRes.ok) {
         const u = await usersRes.json()
-        setUsers(u.data || [])
+        // Suporta tanto 'users' quanto 'data' para compatibilidade
+        const usersList = u.users || u.data || []
+        setUsers(usersList)
       }
       if (policiesRes.ok) {
         const p = await policiesRes.json()

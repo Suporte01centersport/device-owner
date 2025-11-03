@@ -35,11 +35,18 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
     
     try {
       const response = await fetch('/api/device-users?active=true')
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+      
       const result = await response.json()
       
       if (result.success) {
+        // Suporta tanto 'users' quanto 'data' para compatibilidade
+        const usersList = result.users || result.data || []
+        
         // Mapear para o formato esperado
-        const mappedUsers = result.users.map((u: any) => ({
+        const mappedUsers = usersList.map((u: any) => ({
           id: u.id, // UUID do banco
           userId: u.user_id, // ID customizado
           name: u.name,
