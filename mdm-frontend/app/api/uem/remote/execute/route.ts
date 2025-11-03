@@ -1,15 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Tipos de ações remotas suportadas
+// Tipos de ações remotas suportadas para computadores (UEM)
 type RemoteAction = 
   | 'lock_device'
   | 'reboot_device'
+  | 'shutdown_device'
   | 'wipe_device'
-  | 'clear_app_cache'
   | 'disable_camera'
-  | 'set_kiosk_mode'
-  | 'install_app'
-  | 'uninstall_app'
+  | 'disable_usb'
+  | 'run_script'
+  | 'install_software'
+  | 'uninstall_software'
 
 interface ExecuteActionRequest {
   deviceId: string
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     // Aqui você pode adicionar validação adicional baseada no tipo de ação
     // Por exemplo, wipe_device requer confirmCode
 
-    console.log(`📱 UEM Action solicitada: ${action} para dispositivo ${deviceId}`)
+    console.log(`💻 UEM Action solicitada: ${action} para computador ${deviceId}`)
 
     // Retornar sucesso - o comando será enviado via WebSocket
     return NextResponse.json({

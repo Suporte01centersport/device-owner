@@ -13,6 +13,7 @@ import UserSelectionModal from './components/UserSelectionModal'
 import UserConflictModal from './components/UserConflictModal'
 import ConfigModal from './components/ConfigModal'
 import PoliciesPage from './policies/page'
+import UEMPage from './uem/page'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
 
@@ -863,6 +864,8 @@ export default function Home() {
         return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} />
       case 'policies':
         return <PoliciesPage />
+      case 'uem':
+        return <UEMPage />
       case 'devices':
         return (
           <div className="p-6">

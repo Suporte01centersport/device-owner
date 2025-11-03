@@ -22,6 +22,12 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Gerenciar dispositivos'
     },
     {
+      id: 'uem',
+      label: 'UEM',
+      icon: '💻',
+      description: 'Gerenciar computadores'
+    },
+    {
       id: 'policies',
       label: 'Políticas',
       icon: '📋',
