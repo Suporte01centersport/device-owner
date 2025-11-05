@@ -167,9 +167,17 @@ export default function Home() {
         console.log('Lista de dispositivos recebida:', message.devices)
         const newDevices = message.devices || []
         
+        // Filtrar apenas dispositivos móveis (Android) - excluir computadores
+        const mobileDevices = newDevices.filter((d: Device) => 
+          d.deviceType !== 'computer' && 
+          d.osType !== 'Windows' && 
+          d.osType !== 'Linux' && 
+          d.osType !== 'macOS'
+        )
+        
         // Debug: verificar dados específicos
-        if (newDevices.length > 0) {
-          const firstDevice = newDevices[0]
+        if (mobileDevices.length > 0) {
+          const firstDevice = mobileDevices[0]
           console.log('Primeiro dispositivo da lista:', {
             deviceId: firstDevice.deviceId,
             name: firstDevice.name,
@@ -181,15 +189,23 @@ export default function Home() {
           })
         }
         
-        syncWithServer(newDevices, message.adminPassword)
+        syncWithServer(mobileDevices, message.adminPassword)
         break
       case 'devices_status':
         console.log('Status dos dispositivos atualizado:', message.devices)
         const updatedDevices = message.devices || []
         
+        // Filtrar apenas dispositivos móveis (Android) - excluir computadores
+        const mobileUpdatedDevices = updatedDevices.filter((d: Device) => 
+          d.deviceType !== 'computer' && 
+          d.osType !== 'Windows' && 
+          d.osType !== 'Linux' && 
+          d.osType !== 'macOS'
+        )
+        
         // Debug: verificar dados específicos
-        if (updatedDevices.length > 0) {
-          const firstDevice = updatedDevices[0]
+        if (mobileUpdatedDevices.length > 0) {
+          const firstDevice = mobileUpdatedDevices[0]
           console.log('Primeiro dispositivo do status:', {
             deviceId: firstDevice.deviceId,
             name: firstDevice.name,
@@ -201,10 +217,21 @@ export default function Home() {
           })
         }
         
-        syncWithServer(updatedDevices)
+        syncWithServer(mobileUpdatedDevices)
         break
       case 'device_status':
         console.log('Status do dispositivo atualizado:', message.device)
+        
+        // Ignorar computadores - apenas processar dispositivos móveis
+        if (message.device && (
+          message.device.deviceType === 'computer' ||
+          message.device.osType === 'Windows' ||
+          message.device.osType === 'Linux' ||
+          message.device.osType === 'macOS'
+        )) {
+          console.log('💻 Computador ignorado na página de dispositivos:', message.device.deviceId)
+          break
+        }
         
         // Debug: verificar dados específicos
         if (message.device) {
@@ -245,6 +272,17 @@ export default function Home() {
         break
       case 'device_connected':
         console.log('🔌 === MENSAGEM DEVICE_CONNECTED RECEBIDA ===')
+        
+        // Ignorar computadores - apenas processar dispositivos móveis
+        if (message.device && (
+          message.device.deviceType === 'computer' ||
+          message.device.osType === 'Windows' ||
+          message.device.osType === 'Linux' ||
+          message.device.osType === 'macOS'
+        )) {
+          console.log('💻 Computador ignorado na página de dispositivos:', message.device.deviceId)
+          break
+        }
         
         // Debug: verificar dados específicos
         if (message.device) {

@@ -4,8 +4,9 @@ export interface Device {
   deviceId: string
   status: 'online' | 'offline'
   lastSeen: number
-  androidVersion: string
+  androidVersion?: string
   osType?: string
+  deviceType?: 'mobile' | 'computer' // Tipo de dispositivo: mobile (Android) ou computer (Windows/Linux/Mac)
   model: string
   manufacturer: string
   apiLevel: number

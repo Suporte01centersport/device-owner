@@ -16,6 +16,7 @@ const DeviceModel = require('./database/models/Device');
 const DeviceGroupModel = require('./database/models/DeviceGroup');
 const AppAccessHistory = require('./database/models/AppAccessHistory');
 const DeviceStatusHistory = require('./database/models/DeviceStatusHistory');
+const ComputerModel = require('./database/models/Computer');
 const { query, transaction } = require('./database/config');
 const BatchQueue = require('./database/batch-queue');
 const LocationCache = require('./database/location-cache');
@@ -997,9 +998,28 @@ wss.on('connection', ws => {
             activeConnections: serverStats.activeConnections
         });
         
-        // Remover dispositivo se for um dispositivo Android
+        // Remover computador se for um computador (UEM)
+        if (ws.isComputer && ws.computerId) {
+            connectedComputers.delete(ws.computerId);
+            log.info('Computador desconectado', { computerId: ws.computerId });
+            
+            // Atualizar status no banco
+            ComputerModel.updateStatus(ws.computerId, 'offline').catch(err => {
+                console.error('Erro ao atualizar status do computador:', err);
+            });
+            
+            // Notificar clientes web sobre desconexão do computador
+            notifyWebClients({
+                type: 'computer_disconnected',
+                computerId: ws.computerId,
+                reason: 'Connection closed',
+                timestamp: Date.now()
+            });
+        }
+        
+        // Remover dispositivo se for um dispositivo Android (não computador)
         for (const [deviceId, deviceWs] of connectedDevices.entries()) {
-            if (deviceWs === ws) {
+            if (deviceWs === ws && !ws.isComputer) {
                 connectedDevices.delete(deviceId);
                 
                 // Atualizar status para offline no armazenamento persistente
@@ -1103,6 +1123,7 @@ wss.on('connection', ws => {
     // Identificar tipo de cliente
     ws.isDevice = false;
     ws.isWebClient = false;
+    ws.isComputer = false;
     
     // Configurar timeout para conexões inativas - mais longo para dispositivos
     ws.inactivityTimeout = setTimeout(() => {
@@ -1189,6 +1210,13 @@ async function handleMessage(ws, data) {
             break;
         case 'support_message':
             handleSupportMessage(ws, data);
+            break;
+        case 'computer_status':
+            console.log('📥 Mensagem computer_status recebida:', JSON.stringify(data, null, 2));
+            handleComputerStatus(ws, data);
+            break;
+        case 'uem_remote_action':
+            handleUEMRemoteAction(ws, data);
             break;
         default:
             console.log('Unknown message type:', data.type);
@@ -1927,6 +1955,7 @@ async function handleWebClient(ws, data) {
     console.log('📊 === CARREGANDO DISPOSITIVOS DO BANCO DE DADOS ===');
     
     // ✅ BUSCAR TODOS OS DISPOSITIVOS DO BANCO DE DADOS (FONTE DE VERDADE)
+    // IMPORTANTE: Apenas dispositivos móveis (Android), não computadores
     let dbDevices = [];
     try {
         const dbResult = await query(`
@@ -1939,6 +1968,7 @@ async function handleWebClient(ws, data) {
             FROM devices d
             LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
             WHERE d.deleted_at IS NULL
+            AND (d.os_type = 'Android' OR d.os_type IS NULL)
             ORDER BY d.last_seen DESC
         `);
         
@@ -2171,41 +2201,36 @@ async function handleDeleteDevice(ws, data) {
         // Obter dados do dispositivo antes de deletar (para logs)
         const deviceData = persistentDevices.get(deviceId);
         
-        // ✅ DESVINCULAR USUÁRIO NO BANCO DE DADOS ao deletar
+        // ✅ DELETAR PERMANENTEMENTE DO BANCO DE DADOS
         try {
-            await query(
-                `UPDATE devices 
-                 SET assigned_device_user_id = NULL, deleted_at = NOW(), updated_at = NOW()
-                 WHERE device_id = $1`,
-                [deviceId]
-            );
-            console.log(`✅ Vínculo de usuário removido do banco para dispositivo ${deviceId}`);
-            log.info(`Vínculo de usuário removido ao deletar dispositivo`, {
+            // Usar o modelo Device para deletar (que remove todas as relações)
+            await DeviceModel.delete(deviceId);
+            console.log(`✅ Dispositivo ${deviceId} deletado permanentemente do banco de dados`);
+            log.info(`Dispositivo deletado permanentemente`, {
                 deviceId: deviceId,
                 deviceName: deviceData?.name || 'desconhecido'
             });
         } catch (dbError) {
-            console.error(`❌ Erro ao remover vínculo de usuário do banco:`, dbError);
-            log.error(`Erro ao remover vínculo de usuário`, {
+            console.error(`❌ Erro ao deletar dispositivo do banco:`, dbError);
+            log.error(`Erro ao deletar dispositivo`, {
                 deviceId: deviceId,
                 error: dbError.message
             });
-            // Continuar mesmo se falhar (não bloquear a deleção)
+            // Continuar mesmo se falhar (não bloquear a deleção da memória)
         }
         
-        // Remover apenas das listas em memória (mantém registro no banco para reconexão)
+        // Remover das listas em memória
         persistentDevices.delete(deviceId);
-        // Marcar como deletado para não ser reenviado em listas até reconexão
         deletedDeviceIds.add(deviceId);
         connectedDevices.delete(deviceId);
         
-        console.log(`🗑️ Dispositivo ${deviceId} removido da memória e vínculo de usuário zerado no banco`);
+        console.log(`🗑️ Dispositivo ${deviceId} removido permanentemente da memória e do banco de dados`);
         
-        log.info(`Dispositivo removido da memória e vínculo zerado`, {
+        log.info(`Dispositivo deletado permanentemente`, {
             deviceId: deviceId,
             deviceName: deviceData?.name || 'desconhecido',
             connectionId: ws.connectionId,
-            note: 'Vínculo de usuário removido; registro mantido no banco para reconexão'
+            note: 'Dispositivo deletado permanentemente do banco de dados e da memória'
         });
         
         // Enviar confirmação para o cliente que solicitou a deleção
@@ -3557,7 +3582,248 @@ function handleGeofenceEvent(ws, data) {
     }
 }
 
-// Exportar connectedDevices para uso em API routes
+// Map separado para computadores (UEM)
+const connectedComputers = new Map(); // computerId -> WebSocket
+
+// Handlers para computadores (UEM)
+async function handleComputerStatus(ws, data) {
+    const computerData = data.data;
+    
+    // Debug: verificar estrutura dos dados recebidos
+    console.log('🔍 DEBUG - Tipo de data:', typeof data.data);
+    console.log('🔍 DEBUG - Keys do computerData:', Object.keys(computerData || {}));
+    console.log('🔍 DEBUG - computerData.computerId:', computerData?.computerId);
+    console.log('🔍 DEBUG - computerData.ComputerId:', computerData?.ComputerId);
+    
+    // Suportar tanto PascalCase (C#) quanto camelCase (JavaScript)
+    const computerId = computerData?.computerId || computerData?.ComputerId;
+    const name = computerData.name || computerData.Name;
+    const osType = computerData.osType || computerData.OsType;
+    const osVersion = computerData.osVersion || computerData.OsVersion;
+    const osBuild = computerData.osBuild || computerData.OsBuild;
+    const architecture = computerData.architecture || computerData.Architecture;
+    const hostname = computerData.hostname || computerData.Hostname;
+    const domain = computerData.domain || computerData.Domain;
+    const loggedInUser = computerData.loggedInUser || computerData.LoggedInUser;
+    const cpuModel = computerData.cpuModel || computerData.CpuModel;
+    const cpuCores = computerData.cpuCores || computerData.CpuCores;
+    const cpuThreads = computerData.cpuThreads || computerData.CpuThreads;
+    const memoryTotal = computerData.memoryTotal || computerData.MemoryTotal || 0;
+    const memoryUsed = computerData.memoryUsed || computerData.MemoryUsed || 0;
+    const storageTotal = computerData.storageTotal || computerData.StorageTotal || 0;
+    const storageUsed = computerData.storageUsed || computerData.StorageUsed || 0;
+    const storageDrives = computerData.storageDrives || computerData.StorageDrives || [];
+    const ipAddress = computerData.ipAddress || computerData.IpAddress;
+    const macAddress = computerData.macAddress || computerData.MacAddress;
+    const networkType = computerData.networkType || computerData.NetworkType;
+    const wifiSSID = computerData.wifiSSID || computerData.WifiSSID;
+    const isWifiEnabled = computerData.isWifiEnabled !== undefined ? computerData.isWifiEnabled : (computerData.IsWifiEnabled || false);
+    const isBluetoothEnabled = computerData.isBluetoothEnabled !== undefined ? computerData.isBluetoothEnabled : (computerData.IsBluetoothEnabled || false);
+    const agentVersion = computerData.agentVersion || computerData.AgentVersion;
+    const agentInstalledAt = computerData.agentInstalledAt || computerData.AgentInstalledAt;
+    const complianceStatus = computerData.complianceStatus || computerData.ComplianceStatus || 'unknown';
+    const antivirusInstalled = computerData.antivirusInstalled !== undefined ? computerData.antivirusInstalled : (computerData.AntivirusInstalled || false);
+    const antivirusEnabled = computerData.antivirusEnabled !== undefined ? computerData.antivirusEnabled : (computerData.AntivirusEnabled || false);
+    const antivirusName = computerData.antivirusName || computerData.AntivirusName;
+    const firewallEnabled = computerData.firewallEnabled !== undefined ? computerData.firewallEnabled : (computerData.FirewallEnabled || false);
+    const encryptionEnabled = computerData.encryptionEnabled !== undefined ? computerData.encryptionEnabled : (computerData.EncryptionEnabled || false);
+    const latitude = computerData.latitude !== undefined ? computerData.latitude : (computerData.Latitude !== null ? computerData.Latitude : undefined);
+    const longitude = computerData.longitude !== undefined ? computerData.longitude : (computerData.Longitude !== null ? computerData.Longitude : undefined);
+    const locationAccuracy = computerData.locationAccuracy !== undefined ? computerData.locationAccuracy : (computerData.LocationAccuracy !== null ? computerData.LocationAccuracy : undefined);
+    const lastLocationUpdate = computerData.lastLocationUpdate || computerData.LastLocationUpdate;
+    const installedPrograms = computerData.installedPrograms || computerData.InstalledPrograms || [];
+    
+    const now = Date.now();
+    
+    console.log('💻 Computer status received', { computerId, name });
+    
+    if (!computerId || computerId === 'null' || computerId === 'undefined') {
+        console.error('❌ ComputerId inválido:', computerId);
+        console.error('Dados recebidos:', JSON.stringify(computerData, null, 2));
+        return;
+    }
+    
+    // Marcar como computador
+    ws.isComputer = true;
+    ws.computerId = computerId;
+    
+    // Salvar conexão do computador (separado de dispositivos móveis)
+    connectedComputers.set(computerId, ws);
+    
+    // Preparar dados para salvar no banco (usando valores mapeados)
+    const computerToSave = {
+        computerId: computerId,
+        name: name || hostname || 'Computador',
+        status: 'online',
+        lastSeen: now,
+        osType: osType || 'unknown',
+        osVersion: osVersion || '',
+        osBuild: osBuild,
+        architecture: architecture || 'unknown',
+        hostname: hostname,
+        domain: domain,
+        cpuModel: cpuModel,
+        cpuCores: cpuCores,
+        cpuThreads: cpuThreads,
+        memoryTotal: memoryTotal,
+        memoryUsed: memoryUsed,
+        storageTotal: storageTotal,
+        storageUsed: storageUsed,
+        ipAddress: ipAddress,
+        macAddress: macAddress,
+        networkType: networkType,
+        wifiSSID: wifiSSID,
+        isWifiEnabled: isWifiEnabled,
+        isBluetoothEnabled: isBluetoothEnabled,
+        agentVersion: agentVersion,
+        agentInstalledAt: agentInstalledAt,
+        lastHeartbeat: now,
+        loggedInUser: loggedInUser,
+        assignedDeviceUserId: computerData.assignedDeviceUserId || null,
+        complianceStatus: complianceStatus,
+        antivirusInstalled: antivirusInstalled,
+        antivirusEnabled: antivirusEnabled,
+        antivirusName: antivirusName,
+        firewallEnabled: firewallEnabled,
+        encryptionEnabled: encryptionEnabled,
+        latitude: latitude,
+        longitude: longitude,
+        locationAccuracy: locationAccuracy,
+        lastLocationUpdate: lastLocationUpdate,
+        storageDrives: storageDrives.map(drive => ({
+            drive: drive.drive || drive.Drive,
+            label: drive.label || drive.Label,
+            fileSystem: drive.fileSystem || drive.FileSystem,
+            total: drive.total || drive.Total || 0,
+            used: drive.used || drive.Used || 0,
+            free: drive.free || drive.Free || 0
+        })),
+        installedPrograms: installedPrograms.map(prog => ({
+            name: prog.name || prog.Name,
+            version: prog.version || prog.Version,
+            publisher: prog.publisher || prog.Publisher,
+            installDate: prog.installDate || prog.InstallDate,
+            installLocation: prog.installLocation || prog.InstallLocation,
+            size: prog.size || prog.Size
+        })),
+        restrictions: computerData.restrictions || {}
+    };
+    
+    try {
+        // Salvar no banco de dados
+        await ComputerModel.upsert(computerToSave);
+        
+        // Formatar computador para enviar aos clientes web (usando formato do frontend)
+        const computerForClient = {
+            id: computerToSave.computerId, // Usar computerId como ID temporário
+            name: computerToSave.name,
+            computerId: computerId,
+            status: 'online',
+            lastSeen: now,
+            osType: computerToSave.osType,
+            osVersion: computerToSave.osVersion,
+            osBuild: computerToSave.osBuild,
+            architecture: computerToSave.architecture,
+            hostname: computerToSave.hostname,
+            domain: computerToSave.domain,
+            cpuModel: computerToSave.cpuModel,
+            cpuCores: computerToSave.cpuCores,
+            cpuThreads: computerToSave.cpuThreads,
+            memoryTotal: computerToSave.memoryTotal,
+            memoryUsed: computerToSave.memoryUsed,
+            storageTotal: computerToSave.storageTotal,
+            storageUsed: computerToSave.storageUsed,
+            storageDrives: computerToSave.storageDrives,
+            ipAddress: computerToSave.ipAddress,
+            macAddress: computerToSave.macAddress,
+            networkType: computerToSave.networkType,
+            wifiSSID: computerToSave.wifiSSID,
+            isWifiEnabled: computerToSave.isWifiEnabled,
+            isBluetoothEnabled: computerToSave.isBluetoothEnabled,
+            agentVersion: computerToSave.agentVersion,
+            agentInstalledAt: computerToSave.agentInstalledAt,
+            lastHeartbeat: now,
+            loggedInUser: computerToSave.loggedInUser,
+            assignedDeviceUserId: computerToSave.assignedDeviceUserId,
+            complianceStatus: computerToSave.complianceStatus,
+            antivirusInstalled: computerToSave.antivirusInstalled,
+            antivirusEnabled: computerToSave.antivirusEnabled,
+            antivirusName: computerToSave.antivirusName,
+            firewallEnabled: computerToSave.firewallEnabled,
+            encryptionEnabled: computerToSave.encryptionEnabled,
+            latitude: computerToSave.latitude,
+            longitude: computerToSave.longitude,
+            locationAccuracy: computerToSave.locationAccuracy,
+            lastLocationUpdate: computerToSave.lastLocationUpdate,
+            restrictions: computerToSave.restrictions,
+            installedPrograms: computerToSave.installedPrograms,
+            installedProgramsCount: computerToSave.installedPrograms?.length || 0
+        };
+        
+        // Notificar clientes web
+        notifyWebClients({
+            type: 'computer_status_update',
+            computerId: computerId,
+            computer: computerForClient,
+            timestamp: now
+        });
+        
+        // Enviar confirmação para o computador
+        ws.send(JSON.stringify({
+            type: 'computer_status_ack',
+            computerId: computerId,
+            timestamp: now
+        }));
+        
+    } catch (error) {
+        console.error('Erro ao processar status do computador:', error);
+    }
+}
+
+async function handleUEMRemoteAction(ws, data) {
+    const { computerId, action, params } = data;
+    
+    console.log('⚡ UEM Remote Action:', { computerId, action, params });
+    
+    if (!computerId || !action) {
+        console.error('❌ ComputerId ou action inválidos');
+        return;
+    }
+    
+    // Buscar WebSocket do computador (usar connectedComputers, não connectedDevices)
+    const computerWs = connectedComputers.get(computerId);
+    
+    if (!computerWs || computerWs.readyState !== WebSocket.OPEN) {
+        console.warn('⚠️ Computador não está online:', computerId);
+        // Notificar cliente web que o computador está offline
+        broadcastToWebClients({
+            type: 'uem_remote_action_failed',
+            computerId: computerId,
+            action: action,
+            reason: 'Computador offline'
+        });
+        return;
+    }
+    
+    // Enviar comando para o computador
+    computerWs.send(JSON.stringify({
+        type: 'uem_remote_action',
+        action: action,
+        params: params || {},
+        timestamp: Date.now()
+    }));
+    
+    // Notificar clientes web que o comando foi enviado
+    broadcastToWebClients({
+        type: 'uem_remote_action_sent',
+        computerId: computerId,
+        action: action,
+        timestamp: Date.now()
+    });
+}
+
+// Exportar connectedDevices e connectedComputers para uso em API routes
 module.exports = {
-    connectedDevices
+    connectedDevices,
+    connectedComputers
 };

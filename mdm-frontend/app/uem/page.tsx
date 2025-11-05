@@ -11,14 +11,18 @@ export default function UEMPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Carregar computadores (mockado por enquanto)
+  // Carregar computadores
   useEffect(() => {
     const loadComputers = async () => {
       setLoading(true)
       try {
-        // TODO: Substituir por chamada real à API
-        // Por enquanto, retornar array vazio ou dados mockados
-        setComputers([])
+        const response = await fetch('/api/uem/computers')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setComputers(data.computers || [])
+          }
+        }
       } catch (error) {
         console.error('Erro ao carregar computadores:', error)
       } finally {
@@ -26,6 +30,105 @@ export default function UEMPage() {
       }
     }
     loadComputers()
+    
+    // Atualizar a cada 30 segundos
+    const interval = setInterval(loadComputers, 30000)
+    
+    // Conectar ao WebSocket para receber atualizações em tempo real
+    const hostname = window.location.hostname
+    const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
+      ? 'localhost' 
+      : hostname
+    const wsUrl = `ws://${wsHost}:3002`
+    const websocket = new WebSocket(wsUrl)
+    
+    websocket.onopen = () => {
+      websocket.send(JSON.stringify({
+        type: 'web_client',
+        timestamp: Date.now()
+      }))
+    }
+    
+    websocket.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data)
+        if (message.type === 'computer_status_update') {
+          console.log('💻 Atualização de computador recebida:', message.computerId, message.computer)
+          // Atualizar computador na lista
+          setComputers(prev => {
+            const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
+            if (existingIndex >= 0) {
+              const updated = [...prev]
+              updated[existingIndex] = { ...updated[existingIndex], ...message.computer }
+              console.log('✅ Computador atualizado na lista')
+              return updated
+            } else {
+              // Novo computador - adicionar à lista
+              console.log('🆕 Novo computador adicionado à lista:', message.computer)
+              const computer = message.computer
+              return [...prev, {
+                id: computer.id || computer.computerId,
+                name: computer.name || 'Computador',
+                computerId: computer.computerId || message.computerId,
+                status: computer.status || 'online',
+                lastSeen: computer.lastSeen || Date.now(),
+                osType: computer.osType || 'unknown',
+                osVersion: computer.osVersion || '',
+                osBuild: computer.osBuild,
+                architecture: computer.architecture || 'unknown',
+                hostname: computer.hostname,
+                domain: computer.domain,
+                cpuModel: computer.cpuModel,
+                cpuCores: computer.cpuCores,
+                cpuThreads: computer.cpuThreads,
+                memoryTotal: computer.memoryTotal || 0,
+                memoryUsed: computer.memoryUsed || 0,
+                storageTotal: computer.storageTotal || 0,
+                storageUsed: computer.storageUsed || 0,
+                storageDrives: computer.storageDrives || [],
+                ipAddress: computer.ipAddress,
+                macAddress: computer.macAddress,
+                networkType: computer.networkType,
+                wifiSSID: computer.wifiSSID,
+                isWifiEnabled: computer.isWifiEnabled !== undefined ? computer.isWifiEnabled : false,
+                isBluetoothEnabled: computer.isBluetoothEnabled !== undefined ? computer.isBluetoothEnabled : false,
+                agentVersion: computer.agentVersion,
+                agentInstalledAt: computer.agentInstalledAt,
+                lastHeartbeat: computer.lastHeartbeat,
+                loggedInUser: computer.loggedInUser,
+                assignedDeviceUserId: computer.assignedDeviceUserId,
+                assignedUserId: computer.assignedUserId,
+                assignedUserName: computer.assignedUserName,
+                complianceStatus: computer.complianceStatus || 'unknown',
+                antivirusInstalled: computer.antivirusInstalled !== undefined ? computer.antivirusInstalled : false,
+                antivirusEnabled: computer.antivirusEnabled !== undefined ? computer.antivirusEnabled : false,
+                antivirusName: computer.antivirusName,
+                firewallEnabled: computer.firewallEnabled !== undefined ? computer.firewallEnabled : false,
+                encryptionEnabled: computer.encryptionEnabled !== undefined ? computer.encryptionEnabled : false,
+                latitude: computer.latitude,
+                longitude: computer.longitude,
+                locationAccuracy: computer.locationAccuracy,
+                lastLocationUpdate: computer.lastLocationUpdate,
+                restrictions: computer.restrictions || {},
+                installedPrograms: computer.installedPrograms || [],
+                installedProgramsCount: computer.installedPrograms?.length || computer.installedProgramsCount || 0
+              }]
+            }
+          })
+        }
+      } catch (error) {
+        console.error('Erro ao processar mensagem WebSocket:', error)
+      }
+    }
+    
+    websocket.onerror = (error) => {
+      console.error('Erro WebSocket:', error)
+    }
+    
+    return () => {
+      clearInterval(interval)
+      websocket.close()
+    }
   }, [])
 
   const handleComputerClick = (computer: Computer) => {
@@ -38,12 +141,24 @@ export default function UEMPage() {
     setSelectedComputer(null)
   }
 
-  const handleDeleteComputer = (computerId: string) => {
+  const handleDeleteComputer = async (computerId: string) => {
     if (window.confirm('Tem certeza que deseja deletar este computador? Esta ação não pode ser desfeita.')) {
-      // TODO: Implementar deleção
-      console.log('Deletar computador:', computerId)
-      setComputers(prev => prev.filter(c => c.computerId !== computerId))
-      handleCloseModal()
+      try {
+        const response = await fetch(`/api/uem/computers?computerId=${computerId}`, {
+          method: 'DELETE'
+        })
+        
+        if (response.ok) {
+          setComputers(prev => prev.filter(c => c.computerId !== computerId))
+          handleCloseModal()
+        } else {
+          const error = await response.json()
+          alert(`Erro ao deletar: ${error.error}`)
+        }
+      } catch (error) {
+        console.error('Erro ao deletar computador:', error)
+        alert('Erro ao deletar computador')
+      }
     }
   }
 

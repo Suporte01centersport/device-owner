@@ -42,12 +42,33 @@ export async function POST(request: NextRequest) {
 
     console.log(`💻 UEM Action solicitada: ${action} para computador ${deviceId}`)
 
-    // Retornar sucesso - o comando será enviado via WebSocket
+    // Enviar comando via WebSocket (usar connectedComputers, não connectedDevices)
+    const { connectedComputers } = require('../../../../server/websocket')
+    const computerWs = connectedComputers.get(deviceId)
+    
+    if (!computerWs || computerWs.readyState !== 1) { // 1 = OPEN
+      return NextResponse.json({
+        success: false,
+        error: 'Computador não está online',
+        deviceId,
+        action
+      }, { status: 400 })
+    }
+
+    // Enviar comando para o computador
+    computerWs.send(JSON.stringify({
+      type: 'uem_remote_action',
+      action: action,
+      params: params || {},
+      timestamp: Date.now()
+    }))
+
+    // Retornar sucesso
     return NextResponse.json({
       success: true,
       deviceId,
       action,
-      message: `Comando ${action} será enviado para o dispositivo`,
+      message: `Comando ${action} enviado para o computador`,
       timestamp: Date.now()
     })
 
