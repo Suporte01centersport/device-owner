@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
+using System.Drawing;
+using System.Threading.Tasks;
 
 namespace UEMAgent;
 
@@ -22,24 +24,32 @@ public partial class MainForm : Form
 
     private void InitializeComponent()
     {
-        this.Text = "UEM Agent";
-        this.Size = new Size(400, 200);
+        this.Text = "UEM Agent - Gerenciamento de Endpoints";
+        this.Size = new Size(450, 280);
         this.FormBorderStyle = FormBorderStyle.FixedDialog;
         this.MaximizeBox = false;
         this.MinimizeBox = true;
         this.StartPosition = FormStartPosition.CenterScreen;
         this.ShowInTaskbar = true;
         this.WindowState = FormWindowState.Normal;
+        this.MinimumSize = new Size(450, 280);
         
         // Evento para quando o formulário é minimizado
         this.Resize += MainForm_Resize;
+        
+        // Garantir que a janela apareça quando criada
+        this.Load += (s, e) => {
+            this.Show();
+            this.Activate();
+            this.BringToFront();
+        };
 
         _statusLabel = new Label
         {
             Text = "Status: Inicializando...",
             Location = new Point(20, 20),
-            Size = new Size(360, 30),
-            Font = new Font("Segoe UI", 10)
+            Size = new Size(400, 30),
+            Font = new Font("Segoe UI", 10, FontStyle.Bold)
         };
         this.Controls.Add(_statusLabel);
 
@@ -47,19 +57,45 @@ public partial class MainForm : Form
         {
             Text = "Conexão: Desconectado",
             Location = new Point(20, 60),
-            Size = new Size(360, 30),
+            Size = new Size(400, 30),
             Font = new Font("Segoe UI", 10)
         };
         this.Controls.Add(_connectionLabel);
+        
+        var infoLabel = new Label
+        {
+            Text = "O agente continuará rodando em segundo plano na bandeja do sistema quando você fechar esta janela.",
+            Location = new Point(20, 100),
+            Size = new Size(400, 50),
+            Font = new Font("Segoe UI", 9),
+            ForeColor = Color.Gray
+        };
+        this.Controls.Add(infoLabel);
 
         _exitButton = new Button
         {
-            Text = "Sair",
-            Location = new Point(150, 120),
-            Size = new Size(100, 30)
+            Text = "Minimizar para Bandeja",
+            Location = new Point(120, 160),
+            Size = new Size(200, 35),
+            Font = new Font("Segoe UI", 9)
         };
-        _exitButton.Click += (s, e) => ExitApplication();
+        _exitButton.Click += (s, e) => {
+            this.WindowState = FormWindowState.Minimized;
+            this.Hide();
+            this.ShowInTaskbar = false;
+        };
         this.Controls.Add(_exitButton);
+        
+        var exitButton = new Button
+        {
+            Text = "Sair Completamente",
+            Location = new Point(120, 200),
+            Size = new Size(200, 30),
+            Font = new Font("Segoe UI", 9),
+            ForeColor = Color.DarkRed
+        };
+        exitButton.Click += (s, e) => ExitApplication();
+        this.Controls.Add(exitButton);
 
         // Timer para atualizar status
         _updateTimer = new System.Windows.Forms.Timer
@@ -69,8 +105,26 @@ public partial class MainForm : Form
         _updateTimer.Tick += UpdateStatus;
         _updateTimer.Start();
 
-        // Iniciar serviços
-        _host.Start();
+        // Iniciar serviços de forma assíncrona para não bloquear a UI
+        Task.Run(async () =>
+        {
+            try
+            {
+                await _host.StartAsync();
+            }
+            catch (Exception ex)
+            {
+                // Se houver erro ao iniciar, mostrar na UI
+                if (_statusLabel != null)
+                {
+                    this.Invoke((MethodInvoker)delegate
+                    {
+                        _statusLabel.Text = $"Erro: {ex.Message}";
+                        _statusLabel.ForeColor = Color.Red;
+                    });
+                }
+            }
+        });
     }
 
     private void InitializeSystemTray()
@@ -183,7 +237,8 @@ public partial class MainForm : Form
     {
         if (_statusLabel != null)
         {
-            _statusLabel.Text = "Status: Ativo";
+            _statusLabel.Text = "Status: Ativo e rodando";
+            _statusLabel.ForeColor = Color.Green;
         }
 
         // Atualizar status de conexão via WebSocket
@@ -192,9 +247,11 @@ public partial class MainForm : Form
             var webSocketService = _host.Services.GetService(typeof(Services.WebSocketService)) as Services.WebSocketService;
             if (_connectionLabel != null && webSocketService != null)
             {
-                _connectionLabel.Text = webSocketService.IsConnected 
-                    ? "Conexão: Conectado" 
+                var isConnected = webSocketService.IsConnected;
+                _connectionLabel.Text = isConnected 
+                    ? "Conexão: Conectado ao servidor" 
                     : "Conexão: Desconectado";
+                _connectionLabel.ForeColor = isConnected ? Color.Green : Color.Orange;
             }
         }
         catch

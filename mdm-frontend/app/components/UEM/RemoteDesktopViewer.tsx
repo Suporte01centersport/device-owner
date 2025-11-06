@@ -1,13 +1,12 @@
 'use client'
 
 /**
- * RemoteDesktopViewer baseado na arquitetura RustDesk
+ * RemoteDesktopViewer - Visualização de tela remota em tempo real
  * 
- * Arquitetura RustDesk:
- * - WebRTC para comunicação em tempo real (vídeo e dados)
- * - RTCDataChannel para comandos de input (mouse/teclado)
- * - WebSocket apenas para sinalização (offer/answer/ICE candidates)
- * - Protocolo de mensagens binário/JSON eficiente
+ * Funcionalidades:
+ * - Visualização da tela do usuário em tempo real
+ * - WebSocket para recebimento de frames
+ * - Zoom e ajuste de escala
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -18,23 +17,6 @@ interface RemoteDesktopViewerProps {
   sessionId: string
   onClose: () => void
   websocket?: WebSocket
-}
-
-// Protocolo de mensagens baseado no RustDesk
-interface InputMessage {
-  type: 'mouse_move' | 'mouse_down' | 'mouse_up' | 'mouse_scroll' | 'key_down' | 'key_up' | 'text'
-  x?: number
-  y?: number
-  button?: 'left' | 'right' | 'middle'
-  delta?: number
-  keyCode?: number
-  text?: string
-  modifiers?: {
-    ctrl?: boolean
-    alt?: boolean
-    shift?: boolean
-    meta?: boolean
-  }
 }
 
 export default function RemoteDesktopViewer({ 
@@ -56,37 +38,17 @@ export default function RemoteDesktopViewer({
   const [error, setError] = useState<string | null>(null)
   const [sessionActive, setSessionActive] = useState(false)
   const [hasReceivedFrame, setHasReceivedFrame] = useState(false)
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 })
-  const [isDragging, setIsDragging] = useState(false)
   const [remoteScreenSize, setRemoteScreenSize] = useState<{ width: number; height: number } | null>(null)
-  const canvasFocusRef = useRef(false)
   
-  // Refs para WebRTC (arquitetura RustDesk)
-  const wsRef = useRef<WebSocket | null>(null) // Apenas para sinalização
+  // Refs para WebSocket
+  const wsRef = useRef<WebSocket | null>(null)
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null)
-  const dataChannelRef = useRef<RTCDataChannel | null>(null) // Para comandos de input
   const videoTrackRef = useRef<MediaStreamTrack | null>(null) // Para vídeo (futuro)
   
   // Refs auxiliares
   const imageRef = useRef<HTMLImageElement | null>(null)
-  const lastMouseMoveTimeRef = useRef(0)
-  const lastMouseDownRef = useRef<{ x: number; y: number; button: string } | null>(null)
   const hasAutoAdjustedRef = useRef(false)
   const remoteScreenSizeRef = useRef<{ width: number; height: number } | null>(null)
-
-  // Mapeamento de teclas (baseado no RustDesk)
-  const keyCodeMap: Record<string, number> = {
-    'Enter': 0x0D, 'Escape': 0x1B, 'Backspace': 0x08, 'Tab': 0x09,
-    'Shift': 0x10, 'Control': 0x11, 'Alt': 0x12, 'Meta': 0x5B,
-    'Space': 0x20,
-    'ArrowUp': 0x26, 'ArrowDown': 0x28, 'ArrowLeft': 0x25, 'ArrowRight': 0x27,
-    'Delete': 0x2E, 'Insert': 0x2D, 'Home': 0x24, 'End': 0x23,
-    'PageUp': 0x21, 'PageDown': 0x22,
-    'CapsLock': 0x14, 'NumLock': 0x90, 'ScrollLock': 0x91,
-    'F1': 0x70, 'F2': 0x71, 'F3': 0x72, 'F4': 0x73,
-    'F5': 0x74, 'F6': 0x75, 'F7': 0x76, 'F8': 0x77,
-    'F9': 0x78, 'F10': 0x79, 'F11': 0x7A, 'F12': 0x7B
-  }
 
   // Inicializar WebRTC seguindo arquitetura RustDesk
   useEffect(() => {
@@ -134,26 +96,6 @@ export default function RemoteDesktopViewer({
     const pc = new RTCPeerConnection(configuration)
     peerConnectionRef.current = pc
 
-    // 3. Criar RTCDataChannel para comandos de input (como RustDesk)
-    const dataChannel = pc.createDataChannel('input', {
-      ordered: true, // Garantir ordem (importante para comandos)
-      maxRetransmits: 3 // Retransmitir até 3 vezes
-    })
-    dataChannelRef.current = dataChannel
-
-    dataChannel.onopen = () => {
-      console.log('✅ RTCDataChannel aberto (arquitetura RustDesk)')
-      setSessionActive(true)
-    }
-
-    dataChannel.onerror = (error) => {
-      console.error('❌ Erro no RTCDataChannel:', error)
-    }
-
-    dataChannel.onclose = () => {
-      console.log('⚠️ RTCDataChannel fechado')
-      setSessionActive(false)
-    }
 
     // 4. Configurar handlers WebRTC (sinalização)
     pc.onicecandidate = (event) => {
@@ -305,7 +247,16 @@ export default function RemoteDesktopViewer({
     
     // Função para registrar sessões e criar offer
     const registerSessions = () => {
-      if (ws.readyState !== WebSocket.OPEN) return
+      if (ws.readyState !== WebSocket.OPEN) {
+        console.warn('⚠️ WebSocket não está aberto, não é possível registrar sessões')
+        return
+      }
+      
+      console.log('📤 Registrando sessões:', {
+        sessionId: sessionId,
+        computerId: computer.computerId,
+        wsReadyState: ws.readyState
+      })
       
       // Registrar sessão WebRTC
       ws.send(JSON.stringify({
@@ -313,6 +264,7 @@ export default function RemoteDesktopViewer({
         sessionId: sessionId,
         computerId: computer.computerId
       }))
+      console.log('✅ register_webrtc_session enviado')
       
       // Também registrar sessão normal para receber frames via WebSocket
       ws.send(JSON.stringify({
@@ -320,6 +272,7 @@ export default function RemoteDesktopViewer({
         sessionId: sessionId,
         computerId: computer.computerId
       }))
+      console.log('✅ register_desktop_session enviado')
       
       // Criar offer WebRTC (como RustDesk)
       setTimeout(async () => {
@@ -385,10 +338,6 @@ export default function RemoteDesktopViewer({
     // Cleanup
     return () => {
       isMounted = false
-      if (dataChannelRef.current) {
-        try { dataChannelRef.current.close() } catch {}
-        dataChannelRef.current = null
-      }
       if (peerConnectionRef.current) {
         try { peerConnectionRef.current.close() } catch {}
         peerConnectionRef.current = null
@@ -408,48 +357,6 @@ export default function RemoteDesktopViewer({
     }
   }, [sessionId, computer.computerId, websocket, autoFit])
 
-  // Enviar comando via RTCDataChannel (arquitetura RustDesk)
-  const sendInputCommand = useCallback((message: InputMessage) => {
-    const dataChannel = dataChannelRef.current
-    
-    // Priorizar RTCDataChannel (como RustDesk)
-    if (dataChannel && dataChannel.readyState === 'open') {
-      try {
-        const json = JSON.stringify(message)
-        dataChannel.send(json)
-        return true
-      } catch (error) {
-        console.error('❌ Erro ao enviar via RTCDataChannel:', error)
-      }
-    }
-    
-    // Fallback: WebSocket (temporário até RTCDataChannel estar pronto)
-    const ws = wsRef.current
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({
-          type: 'uem_remote_action',
-          computerId: computer.computerId,
-          action: `remote_${message.type}`,
-          params: {
-            x: message.x,
-            y: message.y,
-            button: message.button,
-            delta: message.delta,
-            keyCode: message.keyCode,
-            text: message.text,
-            modifiers: message.modifiers
-          },
-          timestamp: Date.now()
-        }))
-        return true
-      } catch (error) {
-        console.error('❌ Erro ao enviar via WebSocket:', error)
-      }
-    }
-    
-    return false
-  }, [computer.computerId])
 
   // Função para exibir frames (atualmente via WebSocket, futuro via WebRTC)
   const displayFrame = useCallback((base64Frame: string) => {
@@ -522,189 +429,6 @@ export default function RemoteDesktopViewer({
     }
   }, [autoFit])
 
-  // Handlers de mouse (seguindo protocolo RustDesk)
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    
-    const rect = canvas.getBoundingClientRect()
-    const x = e.clientX - rect.left
-    const y = e.clientY - rect.top
-    setMousePosition({ x, y })
-    
-    // Throttling (20 FPS como RustDesk)
-    const now = Date.now()
-    if (now - lastMouseMoveTimeRef.current >= 50) {
-      lastMouseMoveTimeRef.current = now
-      
-      const scaleX = canvas.width / rect.width
-      const scaleY = canvas.height / rect.height
-      const realX = Math.round((x / scale) * scaleX)
-      const realY = Math.round((y / scale) * scaleY)
-      
-      sendInputCommand({
-        type: 'mouse_move',
-        x: Math.max(0, Math.min(realX, canvas.width - 1)),
-        y: Math.max(0, Math.min(realY, canvas.height - 1))
-      })
-    }
-  }
-
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(true)
-    
-    const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle'
-    const canvas = canvasRef.current
-    const image = imageRef.current
-    if (!canvas || !image) return
-
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = image.width / (rect.width / scale)
-    const scaleY = image.height / (rect.height / scale)
-    const canvasX = (e.clientX - rect.left) / scale
-    const canvasY = (e.clientY - rect.top) / scale
-    const realX = Math.round(canvasX * scaleX)
-    const realY = Math.round(canvasY * scaleY)
-    const finalX = Math.max(0, Math.min(realX, image.width - 1))
-    const finalY = Math.max(0, Math.min(realY, image.height - 1))
-    
-    lastMouseDownRef.current = { x: finalX, y: finalY, button }
-    
-    sendInputCommand({
-      type: 'mouse_down',
-      x: finalX,
-      y: finalY,
-      button: button as 'left' | 'right' | 'middle',
-      modifiers: {
-        ctrl: e.ctrlKey,
-        alt: e.altKey,
-        shift: e.shiftKey,
-        meta: e.metaKey
-      }
-    })
-  }
-
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    e.stopPropagation()
-    setIsDragging(false)
-    
-    const button = e.button === 0 ? 'left' : e.button === 2 ? 'right' : 'middle'
-    
-    // Usar coordenadas do mouse down para garantir precisão
-    if (lastMouseDownRef.current && lastMouseDownRef.current.button === button) {
-      sendInputCommand({
-        type: 'mouse_up',
-        x: lastMouseDownRef.current.x,
-        y: lastMouseDownRef.current.y,
-        button: button as 'left' | 'right' | 'middle',
-        modifiers: {
-          ctrl: e.ctrlKey,
-          alt: e.altKey,
-          shift: e.shiftKey,
-          meta: e.metaKey
-        }
-      })
-      lastMouseDownRef.current = null
-      return
-    }
-    
-    // Fallback: usar coordenadas atuais
-    const canvas = canvasRef.current
-    const image = imageRef.current
-    if (canvas && image) {
-      const rect = canvas.getBoundingClientRect()
-      const scaleX = image.width / (rect.width / scale)
-      const scaleY = image.height / (rect.height / scale)
-      const canvasX = (e.clientX - rect.left) / scale
-      const canvasY = (e.clientY - rect.top) / scale
-      const realX = Math.round(canvasX * scaleX)
-      const realY = Math.round(canvasY * scaleY)
-      const finalX = Math.max(0, Math.min(realX, image.width - 1))
-      const finalY = Math.max(0, Math.min(realY, image.height - 1))
-      
-      sendInputCommand({
-        type: 'mouse_up',
-        x: finalX,
-        y: finalY,
-        button: button as 'left' | 'right' | 'middle',
-        modifiers: {
-          ctrl: e.ctrlKey,
-          alt: e.altKey,
-          shift: e.shiftKey,
-          meta: e.metaKey
-        }
-      })
-    }
-    lastMouseDownRef.current = null
-  }
-
-  const handleMouseWheel = (e: React.WheelEvent<HTMLCanvasElement>) => {
-    e.preventDefault()
-    const canvas = canvasRef.current
-    const image = imageRef.current
-    if (!canvas || !image) return
-
-    const rect = canvas.getBoundingClientRect()
-    const scaleX = image.width / (rect.width / scale)
-    const scaleY = image.height / (rect.height / scale)
-    const canvasX = (e.clientX - rect.left) / scale
-    const canvasY = (e.clientY - rect.top) / scale
-    const realX = Math.round(canvasX * scaleX)
-    const realY = Math.round(canvasY * scaleY)
-    
-    sendInputCommand({
-      type: 'mouse_scroll',
-      x: Math.max(0, Math.min(realX, image.width - 1)),
-      y: Math.max(0, Math.min(realY, image.height - 1)),
-      delta: e.deltaY > 0 ? -3 : 3 // Padrão RustDesk
-    })
-  }
-
-  // Handlers de teclado (seguindo protocolo RustDesk)
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const keyCode = keyCodeMap[e.key] || e.keyCode
-    
-    sendInputCommand({
-      type: 'key_down',
-      keyCode: keyCode,
-      modifiers: {
-        ctrl: e.ctrlKey,
-        alt: e.altKey,
-        shift: e.shiftKey,
-        meta: e.metaKey
-      }
-    })
-  }
-
-  const handleKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    const keyCode = keyCodeMap[e.key] || e.keyCode
-    
-    sendInputCommand({
-      type: 'key_up',
-      keyCode: keyCode,
-      modifiers: {
-        ctrl: e.ctrlKey,
-        alt: e.altKey,
-        shift: e.shiftKey,
-        meta: e.metaKey
-      }
-    })
-  }
-
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    e.preventDefault()
-    if (e.key.length === 1 && !e.ctrlKey && !e.altKey && !e.metaKey) {
-      sendInputCommand({
-        type: 'text',
-        text: e.key
-      })
-    }
-  }
 
   // Funções de UI (zoom, fullscreen, etc.)
   const toggleFullscreen = () => {
@@ -791,10 +515,11 @@ export default function RemoteDesktopViewer({
     <div 
       className="fixed inset-0 bg-black bg-opacity-90 flex flex-col z-50"
       onClick={(e) => {
-        if (e.target === e.currentTarget) {
-          e.stopPropagation()
-        }
+        // Não fechar ao clicar - apenas com ESC ou botão fechar
+        e.stopPropagation()
       }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onMouseUp={(e) => e.stopPropagation()}
     >
       {/* Header */}
       <div 
@@ -870,26 +595,9 @@ export default function RemoteDesktopViewer({
       <div 
         ref={containerRef}
         className="flex-1 overflow-hidden bg-black flex items-center justify-center relative outline-none"
-        tabIndex={0}
-        onKeyDown={handleKeyDown}
-        onKeyUp={handleKeyUp}
-        onKeyPress={handleKeyPress}
-        onClick={(e) => {
-          e.stopPropagation()
-          if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.focus()
-            canvasFocusRef.current = true
-          }
-        }}
-        onMouseEnter={(e) => {
-          if (e.currentTarget instanceof HTMLElement) {
-            e.currentTarget.focus()
-            canvasFocusRef.current = true
-          }
-        }}
-        onMouseLeave={() => {
-          canvasFocusRef.current = false
-        }}
+        onClick={(e) => e.stopPropagation()}
+        onMouseDown={(e) => e.stopPropagation()}
+        onMouseUp={(e) => e.stopPropagation()}
       >
         {error && (
           <div className="bg-red-900 bg-opacity-90 text-white p-6 rounded-lg max-w-2xl mx-auto">
@@ -942,7 +650,7 @@ export default function RemoteDesktopViewer({
 
         <canvas
           ref={canvasRef}
-          className={`cursor-crosshair border border-gray-700 shadow-2xl ${hasReceivedFrame ? 'block' : 'hidden'}`}
+          className={`border border-gray-700 shadow-2xl ${hasReceivedFrame ? 'block' : 'hidden'}`}
           style={{ 
             transform: `scale(${scale})`,
             transformOrigin: 'center center',
@@ -951,45 +659,9 @@ export default function RemoteDesktopViewer({
             maxHeight: '100%',
             objectFit: 'contain'
           }}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          onContextMenu={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-          }}
-          onWheel={handleMouseWheel}
-          onMouseEnter={(e) => e.stopPropagation()}
-          onMouseLeave={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => {
-            e.preventDefault()
-            e.stopPropagation()
-            const button = 'left'
-            const canvas = canvasRef.current
-            const image = imageRef.current
-            if (canvas && image) {
-              const rect = canvas.getBoundingClientRect()
-              const scaleX = image.width / (rect.width / scale)
-              const scaleY = image.height / (rect.height / scale)
-              const canvasX = (e.clientX - rect.left) / scale
-              const canvasY = (e.clientY - rect.top) / scale
-              const realX = Math.round(canvasX * scaleX)
-              const realY = Math.round(canvasY * scaleY)
-              const finalX = Math.max(0, Math.min(realX, image.width - 1))
-              const finalY = Math.max(0, Math.min(realY, image.height - 1))
-              
-              sendInputCommand({ type: 'mouse_down', x: finalX, y: finalY, button: 'left' })
-              sendInputCommand({ type: 'mouse_up', x: finalX, y: finalY, button: 'left' })
-              setTimeout(() => {
-                sendInputCommand({ type: 'mouse_down', x: finalX, y: finalY, button: 'left' })
-                sendInputCommand({ type: 'mouse_up', x: finalX, y: finalY, button: 'left' })
-              }, 50)
-            }
-          }}
+          onClick={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onMouseUp={(e) => e.stopPropagation()}
         />
         
         {/* Vídeo WebRTC (futuro, quando agente suportar) */}

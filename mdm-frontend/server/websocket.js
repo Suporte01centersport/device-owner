@@ -1147,6 +1147,16 @@ async function handleMessage(ws, data) {
                 connectionId: ws.connectionId
             });
         }
+        // Log para register_desktop_session para debug
+        if (data.type === 'register_desktop_session') {
+            console.log(`📥 Mensagem register_desktop_session recebida no handleMessage:`, {
+                sessionId: data.sessionId,
+                computerId: data.computerId,
+                isWebClient: ws.isWebClient,
+                isComputer: ws.isComputer,
+                connectionId: ws.connectionId
+            });
+        }
     }
     
     // Atualizar lastSeen para dispositivos Android
@@ -3756,11 +3766,6 @@ async function handleUEMRemoteAction(ws, data) {
         return;
     }
     
-    // Log apenas para ações de controle remoto (para debug)
-    if (action.startsWith('remote_')) {
-        console.log(`📥 Comando de controle remoto recebido: ${action} para computador ${computerId}`);
-    }
-    
     // Buscar WebSocket do computador (usar connectedComputers, não connectedDevices)
     const computerWs = connectedComputers.get(computerId);
     
@@ -3769,11 +3774,6 @@ async function handleUEMRemoteAction(ws, data) {
         const connectedIds = Array.from(connectedComputers.keys());
         console.warn(`   Computadores conectados (${connectedIds.length}):`, connectedIds.join(', ') || 'nenhum');
         return;
-    }
-    
-    // Log de debug para verificar se encontrou o computador
-    if (action.startsWith('remote_')) {
-        console.log(`✅ Computador ${computerId} encontrado na lista. Enviando comando...`);
     }
     
     if (computerWs.readyState !== WebSocket.OPEN) {
@@ -3791,16 +3791,6 @@ async function handleUEMRemoteAction(ws, data) {
         };
         const messageStr = JSON.stringify(message);
         computerWs.send(messageStr);
-        
-        // Log apenas para ações de controle remoto (com detalhes)
-        if (action.startsWith('remote_')) {
-            console.log(`📤 Comando ${action} enviado para computador ${computerId}`, {
-                params: params,
-                messageSize: messageStr.length,
-                wsReadyState: computerWs.readyState,
-                wsConnectionId: computerWs.connectionId
-            });
-        }
     } catch (error) {
         console.error(`❌ Erro ao enviar comando ${action} para computador ${computerId}:`, error);
     }
@@ -3880,20 +3870,36 @@ async function handleDesktopFrame(ws, data) {
 function handleRegisterDesktopSession(ws, data) {
     const { sessionId, computerId } = data;
     
+    console.log(`📥 register_desktop_session recebido:`, {
+        sessionId: sessionId,
+        computerId: computerId,
+        connectedComputersCount: connectedComputers.size,
+        connectedComputerIds: Array.from(connectedComputers.keys())
+    });
+    
     if (!sessionId || !computerId) {
+        console.warn(`⚠️ register_desktop_session inválido: sessionId=${sessionId}, computerId=${computerId}`);
         return;
     }
 
     // Registrar cliente web na sessão
     const session = desktopSessions.get(sessionId);
     if (session) {
+        console.log(`📝 Sessão ${sessionId} já existe, atualizando cliente web`);
         session.clientWs = ws;
     } else {
+        console.log(`🆕 Criando nova sessão: ${sessionId} para computador ${computerId}`);
         // Criar nova sessão se não existir
         startDesktopSession(sessionId, computerId, ws);
         
         // Iniciar sessão no agente (computador)
         const computerWs = connectedComputers.get(computerId);
+        
+        console.log(`🔍 Procurando computador ${computerId} na lista de conectados...`, {
+            computerWsExists: !!computerWs,
+            wsReadyState: computerWs?.readyState,
+            wsConnectionId: computerWs?.connectionId
+        });
         
         if (computerWs && computerWs.readyState === WebSocket.OPEN) {
             const command = {
@@ -3914,7 +3920,8 @@ function handleRegisterDesktopSession(ws, data) {
             console.warn(`⚠️ Não foi possível iniciar acesso remoto - Computer: ${computerId}`, {
                 computerWsExists: !!computerWs,
                 wsReadyState: computerWs?.readyState,
-                sessionId: sessionId
+                sessionId: sessionId,
+                availableComputerIds: Array.from(connectedComputers.keys())
             });
             
             // Enviar erro para o cliente web

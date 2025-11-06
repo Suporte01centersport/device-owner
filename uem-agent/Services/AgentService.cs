@@ -131,6 +131,15 @@ public class AgentService : BackgroundService
 
     private void OnRemoteActionReceived(object? sender, RemoteAction action)
     {
+        Console.WriteLine($"🔔 OnRemoteActionReceived chamado - Action: {action.Action}");
+        Console.WriteLine($"   Params count: {action.Params?.Count ?? 0}");
+        if (action.Params != null && action.Params.Count > 0)
+        {
+            foreach (var param in action.Params)
+            {
+                Console.WriteLine($"   Param: {param.Key} = {param.Value}");
+            }
+        }
         _ = Task.Run(async () => await ExecuteRemoteActionAsync(action));
     }
 
@@ -140,24 +149,6 @@ public class AgentService : BackgroundService
 
             try
             {
-                // Verificar se é uma ação de controle remoto e se a sessão está ativa
-                var isRemoteControlAction = action.Action.StartsWith("remote_");
-                if (isRemoteControlAction)
-                {
-                    Console.WriteLine($"🔍 Verificando sessão de acesso remoto...");
-                    Console.WriteLine($"   IsSessionActive: {_remoteDesktopService.IsSessionActive}");
-                    Console.WriteLine($"   CurrentSessionId: {_remoteDesktopService.CurrentSessionId ?? "null"}");
-                    
-                    if (!_remoteDesktopService.IsSessionActive)
-                    {
-                        Console.WriteLine($"❌ ERRO: Tentativa de controle remoto sem sessão ativa: {action.Action}");
-                        Console.WriteLine($"   Sessão ativa: {_remoteDesktopService.IsSessionActive}");
-                        Console.WriteLine($"   SessionId: {_remoteDesktopService.CurrentSessionId ?? "null"}");
-                        return;
-                    }
-                    Console.WriteLine($"✅ Sessão de acesso remoto está ativa - processando {action.Action}");
-                }
-            
             switch (action.Action)
             {
                 case "lock_device":
@@ -207,121 +198,6 @@ public class AgentService : BackgroundService
                     break;
                 case "stop_remote_desktop":
                     _remoteDesktopService.StopSession();
-                    break;
-                case "remote_mouse_move":
-                    if (action.Params.TryGetValue("x", out var x) && action.Params.TryGetValue("y", out var y))
-                    {
-                        var mouseX = Convert.ToInt32(x);
-                        var mouseY = Convert.ToInt32(y);
-                        Console.WriteLine($"🖱️ Movendo mouse para: ({mouseX}, {mouseY})");
-                        _remoteDesktopService.SendMouseMove(mouseX, mouseY);
-                    }
-                    break;
-                case "remote_mouse_click":
-                    if (action.Params.TryGetValue("x", out var clickX) && action.Params.TryGetValue("y", out var clickY))
-                    {
-                        var button = RemoteDesktopService.MouseButton.Left;
-                        if (action.Params.TryGetValue("button", out var btn))
-                        {
-                            var btnStr = btn?.ToString()?.ToLower() ?? "left";
-                            button = btnStr switch
-                            {
-                                "left" => RemoteDesktopService.MouseButton.Left,
-                                "right" => RemoteDesktopService.MouseButton.Right,
-                                "middle" => RemoteDesktopService.MouseButton.Middle,
-                                _ => RemoteDesktopService.MouseButton.Left
-                            };
-                        }
-                        var clickXInt = Convert.ToInt32(clickX);
-                        var clickYInt = Convert.ToInt32(clickY);
-                        Console.WriteLine($"🖱️ Clicando em: ({clickXInt}, {clickYInt}) com botão: {button}");
-                        _remoteDesktopService.SendMouseClick(clickXInt, clickYInt, button);
-                    }
-                    break;
-                case "remote_mouse_down":
-                    if (action.Params.TryGetValue("x", out var downX) && action.Params.TryGetValue("y", out var downY))
-                    {
-                        var downButton = RemoteDesktopService.MouseButton.Left;
-                        if (action.Params.TryGetValue("button", out var downBtn))
-                        {
-                            var btnStr = downBtn?.ToString()?.ToLower() ?? "left";
-                            downButton = btnStr switch
-                            {
-                                "left" => RemoteDesktopService.MouseButton.Left,
-                                "right" => RemoteDesktopService.MouseButton.Right,
-                                "middle" => RemoteDesktopService.MouseButton.Middle,
-                                _ => RemoteDesktopService.MouseButton.Left
-                            };
-                        }
-                        var downXInt = Convert.ToInt32(downX);
-                        var downYInt = Convert.ToInt32(downY);
-                        Console.WriteLine($"🖱️ Mouse DOWN em: ({downXInt}, {downYInt}) com botão: {downButton}");
-                        _remoteDesktopService.SendMouseDown(downXInt, downYInt, downButton);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"⚠️ Parâmetros x ou y não encontrados para remote_mouse_down");
-                    }
-                    break;
-                case "remote_mouse_up":
-                    if (action.Params.TryGetValue("x", out var upX) && action.Params.TryGetValue("y", out var upY))
-                    {
-                        var upButton = RemoteDesktopService.MouseButton.Left;
-                        if (action.Params.TryGetValue("button", out var upBtn))
-                        {
-                            var btnStr = upBtn?.ToString()?.ToLower() ?? "left";
-                            upButton = btnStr switch
-                            {
-                                "left" => RemoteDesktopService.MouseButton.Left,
-                                "right" => RemoteDesktopService.MouseButton.Right,
-                                "middle" => RemoteDesktopService.MouseButton.Middle,
-                                _ => RemoteDesktopService.MouseButton.Left
-                            };
-                        }
-                        var upXInt = Convert.ToInt32(upX);
-                        var upYInt = Convert.ToInt32(upY);
-                        Console.WriteLine($"🖱️ Mouse UP em: ({upXInt}, {upYInt}) com botão: {upButton}");
-                        _remoteDesktopService.SendMouseUp(upXInt, upYInt, upButton);
-                    }
-                    else
-                    {
-                        Console.WriteLine($"⚠️ Parâmetros x ou y não encontrados para remote_mouse_up");
-                    }
-                    break;
-                case "remote_mouse_wheel":
-                    if (action.Params.TryGetValue("delta", out var delta))
-                    {
-                        _remoteDesktopService.SendMouseWheel(Convert.ToInt32(delta));
-                    }
-                    break;
-                case "remote_key_press":
-                    if (action.Params.TryGetValue("keyCode", out var pressKeyCode))
-                    {
-                        _remoteDesktopService.SendKeyPress(Convert.ToUInt16(pressKeyCode));
-                    }
-                    break;
-                case "remote_key_down":
-                    if (action.Params.TryGetValue("keyCode", out var downKeyCode))
-                    {
-                        var virtualKey = Convert.ToUInt16(downKeyCode);
-                        Console.WriteLine($"⌨️ Tecla pressionada: {virtualKey}");
-                        _remoteDesktopService.SendKeyDown(virtualKey);
-                    }
-                    break;
-                case "remote_key_up":
-                    if (action.Params.TryGetValue("keyCode", out var upKeyCode))
-                    {
-                        var virtualKey = Convert.ToUInt16(upKeyCode);
-                        _remoteDesktopService.SendKeyUp(virtualKey);
-                    }
-                    break;
-                case "remote_text":
-                    if (action.Params.TryGetValue("text", out var text))
-                    {
-                        var textStr = text.ToString() ?? "";
-                        Console.WriteLine($"⌨️ Texto digitado: \"{textStr}\"");
-                        _remoteDesktopService.SendText(textStr);
-                    }
                     break;
                 default:
                     Console.WriteLine($"⚠️ Ação desconhecida: {action.Action}");

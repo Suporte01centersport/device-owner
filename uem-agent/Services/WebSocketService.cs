@@ -274,14 +274,21 @@ public class WebSocketService : IDisposable
                 var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 if (!string.IsNullOrEmpty(message))
                 {
+                    // Log geral - verificar se QUALQUER mensagem está chegando
+                    Console.WriteLine($"📥 Mensagem recebida no agente (tamanho: {message.Length} bytes)");
+                    
                     // Log para debug - verificar se mensagens estão chegando
                     try
                     {
                         using var doc = JsonDocument.Parse(message);
                         var root = doc.RootElement;
+                        
+                        // Log do tipo da mensagem
                         if (root.TryGetProperty("type", out var typeProp))
                         {
                             var msgType = typeProp.GetString();
+                            Console.WriteLine($"   Tipo da mensagem: {msgType}");
+                            
                             if (msgType == "uem_remote_action")
                             {
                                 if (root.TryGetProperty("action", out var actionProp))
@@ -295,10 +302,15 @@ public class WebSocketService : IDisposable
                                 }
                             }
                         }
+                        else
+                        {
+                            Console.WriteLine($"   ⚠️ Mensagem sem campo 'type': {message.Substring(0, Math.Min(200, message.Length))}");
+                        }
                     }
                     catch (Exception ex)
                     {
                         Console.WriteLine($"❌ Erro ao parsear mensagem para log: {ex.Message}");
+                        Console.WriteLine($"   Mensagem recebida (primeiros 200 chars): {message.Substring(0, Math.Min(200, message.Length))}");
                     }
                     
                     _ = Task.Run(async () => await ProcessMessageAsync(message));

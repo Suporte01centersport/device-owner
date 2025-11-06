@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+  
+  <?define ProductName = "UEM Agent" ?>
+  <?define ProductVersion = "1.0.0" ?>
+  <?define Manufacturer = "MDM Owner" ?>
+  <?define UpgradeCode = "B8E5F5F5-5F5F-5F5F-5F5F-5F5F5F5F5F5F" ?>
+  <?define ServiceName = "UEMAgent" ?>
+  <?define ServiceDisplayName = "UEM Agent - Gerenciamento de Endpoints" ?>
+  <?define ServiceDescription = "Agente de gerenciamento unificado de endpoints (UEM) para controle remoto" ?>
+
+  <Product Id="*" 
+           Name="$(var.ProductName)" 
+           Language="1046" 
+           Version="$(var.ProductVersion)" 
+           Manufacturer="$(var.Manufacturer)" 
+           UpgradeCode="$(var.UpgradeCode)">
+    
+    <Package InstallerVersion="200" 
+             Compressed="yes" 
+             InstallScope="perMachine"
+             Description="$(var.ProductName) - Instalador"
+             Comments="Instala o agente UEM como Windows Service" />
+    
+    <!-- Requer privilégios de administrador -->
+    <Property Id="MSIUSEREALADMINDETECTION" Value="1" />
+    
+    <!-- Upgrade: Remover versões antigas -->
+    <MajorUpgrade DowngradeErrorMessage="Uma versão mais recente do $(var.ProductName) já está instalada." 
+                  AllowSameVersionUpgrades="yes"
+                  Schedule="afterInstallInitialize" />
+    
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- Diretório de instalação -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="ManufacturerFolder" Name="$(var.Manufacturer)">
+          <Directory Id="INSTALLFOLDER" Name="$(var.ProductName)">
+            <!-- Componentes do agente -->
+            <Component Id="AgentExecutable" Guid="A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D">
+              <File Id="AgentExe" 
+                    Source="$(var.UEMAgent.TargetPath)" 
+                    KeyPath="yes" />
+              <File Id="AgentConfig" 
+                    Source="$(var.UEMAgent.TargetDir)appsettings.json" />
+              <File Id="AgentDeps" 
+                    Source="$(var.UEMAgent.TargetDir)UEMAgent.deps.json" />
+              <File Id="AgentRuntimeConfig" 
+                    Source="$(var.UEMAgent.TargetDir)UEMAgent.runtimeconfig.json" />
+              
+              <!-- Instalar e configurar Windows Service -->
+              <ServiceInstall Id="ServiceInstall"
+                              Type="ownProcess"
+                              Name="$(var.ServiceName)"
+                              DisplayName="$(var.ServiceDisplayName)"
+                              Description="$(var.ServiceDescription)"
+                              Start="auto"
+                              Account="LocalSystem"
+                              ErrorControl="normal"
+                              Interactive="no">
+                <ServiceDependency Id="Tcpip" />
+              </ServiceInstall>
+              
+              <ServiceControl Id="ServiceControl"
+                              Stop="both"
+                              Remove="uninstall"
+                              Name="$(var.ServiceName)"
+                              Wait="yes" />
+            </Component>
+            
+            <!-- DLLs e dependências -->
+            <Component Id="AgentDependencies" Guid="B2C3D4E5-F6A7-5B6C-9D0E-1F2A3B4C5D6E">
+              <CreateFolder />
+              <!-- Copiar todas as DLLs da pasta publish -->
+              <File Source="$(var.UEMAgent.TargetDir)UEMAgent.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.Binder.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.CommandLine.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.EnvironmentVariables.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.FileExtensions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.Json.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Configuration.UserSecrets.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.DependencyInjection.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.DependencyInjection.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Diagnostics.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Diagnostics.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.FileProviders.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.FileProviders.Physical.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.FileSystemGlobbing.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Hosting.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Hosting.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Hosting.WindowsServices.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.Abstractions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.Configuration.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.Console.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.Debug.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.EventLog.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Logging.EventSource.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Options.ConfigurationExtensions.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Options.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Microsoft.Extensions.Primitives.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)Newtonsoft.Json.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)System.Management.dll" />
+              <File Source="$(var.UEMAgent.TargetDir)System.ServiceProcess.ServiceController.dll" />
+              <util:RemoveFolderEx On="uninstall" Property="INSTALLFOLDER" />
+            </Component>
+          </Directory>
+        </Directory>
+      </Directory>
+      
+      <!-- Menu Iniciar -->
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="$(var.ProductName)">
+          <Component Id="ApplicationShortcut" Guid="C3D4E5F6-A7B8-6C9D-0E1F-2A3B4C5D6E7F">
+            <Shortcut Id="ApplicationStartMenuShortcut"
+                      Name="$(var.ProductName)"
+                      Description="$(var.ServiceDescription)"
+                      Target="[INSTALLFOLDER]UEMAgent.exe"
+                      WorkingDirectory="INSTALLFOLDER" />
+            <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+            <RegistryValue Root="HKCU" 
+                          Key="Software\$(var.Manufacturer)\$(var.ProductName)" 
+                          Name="Installed" 
+                          Type="integer" 
+                          Value="1" 
+                          KeyPath="yes" />
+          </Component>
+        </Directory>
+      </Directory>
+    </Directory>
+
+    <!-- Features -->
+    <Feature Id="ProductFeature" Title="$(var.ProductName)" Level="1">
+      <ComponentRef Id="AgentExecutable" />
+      <ComponentRef Id="AgentDependencies" />
+      <ComponentRef Id="ApplicationShortcut" />
+    </Feature>
+
+    <!-- UI básica -->
+    <UIRef Id="WixUI_Minimal" />
+  </Product>
+</Wix>
+
