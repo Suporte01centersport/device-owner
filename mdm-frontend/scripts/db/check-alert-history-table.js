@@ -1,6 +1,6 @@
 // Script para verificar se a tabela group_alert_history existe
 require('dotenv').config();
-const { query } = require('./server/database/config');
+const { query } = require('../../server/database/config');
 
 async function checkTable() {
     try {

@@ -1,6 +1,6 @@
 // Script para verificar se todas as tabelas necessárias existem no banco de dados
 require('dotenv').config();
-const { query } = require('./server/database/config');
+const { query } = require('../../server/database/config');
 
 // Lista completa de tabelas esperadas (do schema.sql e migrations)
 const expectedTables = [
@@ -88,8 +88,8 @@ async function checkAllTables() {
             });
             
             console.log('\n💡 Para criar as tabelas faltantes:');
-            console.log('   1. Execute o schema.sql: psql -d seu_banco -f server/database/schema.sql');
-            console.log('   2. Execute as migrations: node server/database/migrations/run-migration.js');
+            console.log('   1. Execute o schema.sql: psql -d seu_banco -f ../../server/database/schema.sql');
+            console.log('   2. Execute as migrations: node ../../server/database/migrations/run-migration.js');
         }
         
         // Estatísticas gerais

@@ -5,7 +5,7 @@
  */
 
 require('dotenv').config();
-const { query } = require('./database/config');
+const { query } = require('../database/config');
 
 async function fixNullDeviceIds() {
     try {

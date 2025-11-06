@@ -6,8 +6,8 @@
  */
 
 require('dotenv').config();
-const DeviceModel = require('./database/models/Device');
-const { query } = require('./database/config');
+const DeviceModel = require('../database/models/Device');
+const { query } = require('../database/config');
 
 async function cleanupOrphanedDevices() {
     try {

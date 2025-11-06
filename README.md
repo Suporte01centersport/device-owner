@@ -8,10 +8,16 @@ Sistema completo de MDM (Mobile Device Management) com Device Owner, launcher cu
 
 ## 📚 Documentação
 
-- **[DEPLOY-GUIDE.md](DEPLOY-GUIDE.md)** - Guia completo de deploy para produção e desenvolvimento
-- **[CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md)** - Configuração detalhada do servidor Linux
-- **[ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização remota de APK
-- **[QRCODE-README.md](mdm-owner/QRCODE-README.md)** - Gerador de QR Code para instalação
+Toda a documentação está organizada na pasta [`docs/`](./docs/):
+
+- **[📖 Documentação Completa](./docs/README.md)** - Índice de toda a documentação
+- **[🚀 Configuração e Deploy](./docs/CONFIGURACAO_E_DEPLOY.md)** - Guia completo de configuração e deploy
+- **[🐧 Deploy Linux](./docs/GUIA_COMPLETO_DEPLOY_LINUX.md)** - Guia detalhado para servidor Linux
+- **[⚡ Performance](./docs/PERFORMANCE_E_ESCALABILIDADE.md)** - Otimizações de performance e escalabilidade
+- **[🔄 Atualização Automática](./docs/ATUALIZACAO-AUTOMATICA.md)** - Sistema de atualização remota de APK
+- **[💻 UEM Agent](./docs/UEM_IMPLEMENTACAO.md)** - Documentação do agente UEM Windows
+- **[📦 Instalador MSI](./docs/UEM_INSTALADOR-MSI.md)** - Guia de instalação do agente UEM
+- **[📱 QR Code](./mdm-owner/QRCODE-README.md)** - Gerador de QR Code para instalação
 
 ## 🚀 Início Rápido
 
@@ -86,6 +92,11 @@ adb install app/build/outputs/apk/debug/app-debug.apk
 ### **Banco de Dados PostgreSQL**
 ```bash
 cd mdm-frontend
+
+# Verificar banco de dados
+npm run db:check              # Verifica dados no banco
+npm run db:check-all          # Verifica todas as tabelas
+npm run db:check-alert-history # Verifica tabela específica
 
 # Configurar banco existente
 npm run configure-existing
@@ -291,43 +302,74 @@ adb logcat -c
 
 ```
 device-owner/
-├── mdm-frontend/              # Painel Web + Servidor
-│   ├── app/                   # Next.js 14
-│   │   ├── api/               # API Routes
-│   │   ├── components/        # React Components
-│   │   ├── lib/               # WebSocket client, etc
-│   │   └── types/             # TypeScript types
-│   ├── server/                # Backend Node.js
-│   │   ├── websocket.js       # Servidor WebSocket (porta 3002)
-│   │   ├── discovery-server.js # Discovery UDP (porta 3003)
-│   │   ├── config.js          # Configurações
-│   │   └── database/          # PostgreSQL models
-│   ├── package.json
-│   └── start-dev.bat          # Iniciar desenvolvimento
+├── docs/                       # 📚 Documentação completa
+│   ├── README.md               # Índice da documentação
+│   ├── CONFIGURACAO_E_DEPLOY.md
+│   ├── GUIA_COMPLETO_DEPLOY_LINUX.md
+│   ├── PERFORMANCE_E_ESCALABILIDADE.md
+│   ├── ATUALIZACAO-AUTOMATICA.md
+│   ├── UEM_IMPLEMENTACAO.md
+│   └── UEM_INSTALADOR-MSI.md
 │
-└── mdm-owner/                 # App Android
-    ├── app/src/main/
-    │   ├── AndroidManifest.xml
-    │   ├── java/com/mdm/launcher/
-    │   │   ├── MainActivity.kt
-    │   │   ├── DeviceAdminReceiver.kt
-    │   │   ├── network/
-    │   │   │   └── WebSocketClient.kt
-    │   │   ├── service/
-    │   │   │   ├── WebSocketService.kt
-    │   │   │   └── LocationService.kt
-    │   │   ├── utils/
-    │   │   │   ├── ServerDiscovery.kt      # Descoberta automática
-    │   │   │   ├── NetworkMonitor.kt       # Monitor de rede
-    │   │   │   ├── DeviceIdManager.kt
-    │   │   │   └── DeviceInfoCollector.kt
-    │   │   └── receivers/
-    │   │       └── SystemBootReceiver.kt
-    │   └── res/                # Layouts, recursos
-    ├── build.gradle
-    ├── gradlew.bat
-    ├── package.json            # Para QR Code
-    └── gerar-qrcode.js         # Gerar QR para download
+├── mdm-frontend/               # 🌐 Painel Web + Servidor
+│   ├── app/                    # Next.js 14
+│   │   ├── api/                # API Routes
+│   │   ├── components/         # React Components
+│   │   ├── lib/                # WebSocket client, etc
+│   │   └── types/              # TypeScript types
+│   ├── server/                 # Backend Node.js
+│   │   ├── websocket.js        # Servidor WebSocket (porta 3002)
+│   │   ├── discovery-server.js # Discovery UDP (porta 3003)
+│   │   ├── config.js           # Configurações
+│   │   ├── database/           # PostgreSQL models e migrations
+│   │   └── scripts/            # Scripts utilitários do servidor
+│   │       ├── cleanup-orphaned-devices.js
+│   │       ├── configure-existing-db.js
+│   │       ├── delete-devices.js
+│   │       ├── fix-null-device-ids.js
+│   │       ├── remove-duplicate-devices.js
+│   │       └── validate-production.js
+│   ├── scripts/                # Scripts de desenvolvimento
+│   │   ├── db/                 # Scripts de verificação do banco
+│   │   │   ├── check-db.js
+│   │   │   ├── check-all-tables.js
+│   │   │   ├── check-alert-history-table.js
+│   │   │   └── check-tables.sql
+│   │   └── deploy/             # Scripts de deploy
+│   │       ├── run-migration.sh
+│   │       └── deploy-production.sh
+│   ├── package.json
+│   └── start-dev.bat           # Iniciar desenvolvimento
+│
+├── mdm-owner/                  # 📱 App Android (Kotlin)
+│   ├── app/src/main/
+│   │   ├── AndroidManifest.xml
+│   │   ├── java/com/mdm/launcher/
+│   │   │   ├── MainActivity.kt
+│   │   │   ├── DeviceAdminReceiver.kt
+│   │   │   ├── network/
+│   │   │   │   └── WebSocketClient.kt
+│   │   │   ├── service/
+│   │   │   │   ├── WebSocketService.kt
+│   │   │   │   └── LocationService.kt
+│   │   │   ├── utils/
+│   │   │   │   ├── ServerDiscovery.kt      # Descoberta automática
+│   │   │   │   ├── NetworkMonitor.kt       # Monitor de rede
+│   │   │   │   ├── DeviceIdManager.kt
+│   │   │   │   └── DeviceInfoCollector.kt
+│   │   │   └── receivers/
+│   │   │       └── SystemBootReceiver.kt
+│   │   └── res/                # Layouts, recursos
+│   ├── build.gradle
+│   ├── gradlew.bat
+│   ├── package.json            # Para QR Code
+│   └── gerar-qrcode.js         # Gerar QR para download
+│
+└── uem-agent/                  # 💻 Agente UEM Windows (C#)
+    ├── Services/               # Serviços do agente
+    ├── Models/                 # Modelos de dados
+    ├── Program.cs
+    └── UEMAgent.csproj
 ```
 
 ## 🔐 Segurança e Permissões
@@ -417,6 +459,19 @@ node mdm-frontend/server/websocket.js
 adb logcat -s MDM:* WebSocketClient:* WebSocketService:* ServerDiscovery:* -v time
 ```
 
+**Scripts úteis:**
+```bash
+# Verificar banco de dados
+npm run db:check
+npm run db:check-all
+
+# Limpar dispositivos órfãos
+npm run cleanup-devices:confirm
+
+# Remover duplicatas
+npm run remove-duplicates:confirm
+```
+
 ---
 
 ## 📱 Instalação em Dispositivos Realme/ColorOS
@@ -470,10 +525,12 @@ Após instalação, configure **manualmente** no dispositivo:
 
 ## 📞 Suporte e Contribuição
 
-**Problemas?** Consulte a documentação completa:
-- [DEPLOY-GUIDE.md](DEPLOY-GUIDE.md) para configuração
-- [CONFIGURACAO-SERVIDOR-LINUX.md](CONFIGURACAO-SERVIDOR-LINUX.md) para servidor
-- [ATUALIZACAO-AUTOMATICA.md](ATUALIZACAO-AUTOMATICA.md) para atualizações
+**Problemas?** Consulte a [documentação completa](./docs/README.md):
+- [📖 Índice da Documentação](./docs/README.md)
+- [🚀 Configuração e Deploy](./docs/CONFIGURACAO_E_DEPLOY.md)
+- [🐧 Deploy Linux](./docs/GUIA_COMPLETO_DEPLOY_LINUX.md)
+- [⚡ Performance](./docs/PERFORMANCE_E_ESCALABILIDADE.md)
+- [🔄 Atualização Automática](./docs/ATUALIZACAO-AUTOMATICA.md)
 
 ---
 
