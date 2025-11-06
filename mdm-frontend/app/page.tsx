@@ -509,8 +509,14 @@ export default function Home() {
           )
         }
         break
+      case 'computer_status_update':
+        // Mensagens de atualização de computadores são tratadas em /uem/page.tsx
+        // Ignorar silenciosamente aqui
+        break
       default:
-        console.log('Mensagem WebSocket não reconhecida:', message)
+        // Ignorar mensagens desconhecidas silenciosamente (evitar spam de logs)
+        // console.log('Mensagem WebSocket não reconhecida:', message)
+        break
     }
   }, [updateDevices, updateAdminPassword, syncWithServer])
 

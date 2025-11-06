@@ -63,32 +63,55 @@ public class ScreenCaptureService : IDisposable
 
     private async Task CaptureLoopAsync(int fps, int? targetWidth, int? targetHeight, CancellationToken cancellationToken)
     {
-        var delay = 1000 / fps;
+        // Usar Stopwatch para timing mais preciso
+        var frameTime = TimeSpan.FromMilliseconds(1000.0 / fps);
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        var nextFrameTime = sw.Elapsed;
 
         while (!cancellationToken.IsCancellationRequested && _isCapturing)
         {
             try
             {
+                var frameStart = sw.Elapsed;
+                
                 var frame = CaptureScreen(targetWidth, targetHeight);
                 if (frame != null)
                 {
+                    // Converter para JPEG com qualidade adaptativa
+                    // Qualidade baseada no tamanho: imagens menores podem ter qualidade maior
+                    var quality = CalculateOptimalQuality(frame.Width, frame.Height);
+                    var jpegBytes = BitmapToJpeg(frame, quality);
+                    
+                    // Atualizar frame atual (para possível uso futuro)
                     lock (_lockObject)
                     {
                         _currentFrame?.Dispose();
-                        _currentFrame = frame;
+                        _currentFrame = frame; // Manter referência (não liberar ainda)
                     }
-
-                    // Converter para JPEG
-                    var jpegBytes = BitmapToJpeg(frame, 70); // 70% qualidade
+                    
+                    // Disparar evento (usa os bytes JPEG, não o bitmap)
                     FrameCaptured?.Invoke(this, jpegBytes);
                 }
+                
+                // Calcular tempo até próximo frame (compensar tempo de processamento)
+                nextFrameTime += frameTime;
+                var delay = nextFrameTime - sw.Elapsed;
+                
+                if (delay > TimeSpan.Zero)
+                {
+                    await Task.Delay(delay, cancellationToken);
+                }
+                else
+                {
+                    // Se estamos atrasados, pular para próximo frame imediatamente
+                    nextFrameTime = sw.Elapsed;
+                    await Task.Yield(); // Dar chance para outras tarefas
+                }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                Console.WriteLine($"❌ Erro ao capturar tela: {ex.Message}");
+                // Silenciosamente ignorar erros de captura (evitar spam de logs)
             }
-
-            await Task.Delay(delay, cancellationToken);
         }
     }
 
@@ -111,11 +134,13 @@ public class ScreenCaptureService : IDisposable
             var screenX = screenBounds.X;
             var screenY = screenBounds.Y;
 
-            Console.WriteLine($"📺 Capturando monitor principal: {screenWidth}x{screenHeight} @ ({screenX}, {screenY})");
-
             // Calcular tamanho de saída (usar resolução real se não especificado)
             var outputWidth = targetWidth ?? screenWidth;
             var outputHeight = targetHeight ?? screenHeight;
+            
+            // Garantir que seja múltiplo de 2 (melhor para compressão JPEG)
+            outputWidth = (outputWidth / 2) * 2;
+            outputHeight = (outputHeight / 2) * 2;
 
             // Criar bitmap
             var bitmap = new Bitmap(outputWidth, outputHeight, PixelFormat.Format24bppRgb);
@@ -129,13 +154,19 @@ public class ScreenCaptureService : IDisposable
                 // Redimensionar se necessário (mantendo proporção)
                 if (outputWidth != screenWidth || outputHeight != screenHeight)
                 {
-                    var resized = new Bitmap(outputWidth, outputHeight);
+                    var resized = new Bitmap(outputWidth, outputHeight, PixelFormat.Format24bppRgb);
                     using (var g = Graphics.FromImage(resized))
                     {
+                        // Configurações otimizadas para melhor qualidade e performance
                         g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
                         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
                         g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
-                        g.DrawImage(bitmap, 0, 0, outputWidth, outputHeight);
+                        g.CompositingQuality = System.Drawing.Drawing2D.CompositingQuality.HighQuality;
+                        
+                        // Usar Rectangle para melhor qualidade
+                        var destRect = new Rectangle(0, 0, outputWidth, outputHeight);
+                        var srcRect = new Rectangle(0, 0, screenWidth, screenHeight);
+                        g.DrawImage(bitmap, destRect, srcRect, GraphicsUnit.Pixel);
                     }
                     bitmap.Dispose();
                     return resized;
@@ -152,6 +183,29 @@ public class ScreenCaptureService : IDisposable
         }
     }
 
+    private int CalculateOptimalQuality(int width, int height)
+    {
+        // Calcular qualidade baseada na resolução
+        // Resoluções menores podem ter qualidade maior (menos dados para comprimir)
+        // Resoluções maiores precisam de qualidade menor para manter tamanho do arquivo razoável
+        
+        var totalPixels = width * height;
+        
+        // Qualidade adaptativa:
+        // - Até 1MP (1.000.000 pixels): 85% qualidade
+        // - 1MP a 2MP: 80% qualidade
+        // - 2MP a 3MP: 75% qualidade
+        // - Acima de 3MP: 70% qualidade
+        if (totalPixels <= 1_000_000)
+            return 85;
+        else if (totalPixels <= 2_000_000)
+            return 80;
+        else if (totalPixels <= 3_000_000)
+            return 75;
+        else
+            return 70;
+    }
+
     private byte[] BitmapToJpeg(Bitmap bitmap, int quality)
     {
         using (var ms = new MemoryStream())
@@ -161,11 +215,26 @@ public class ScreenCaptureService : IDisposable
             
             if (encoder != null)
             {
-                var encoderParams = new EncoderParameters(1);
-                encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, quality);
+                // Usar múltiplos parâmetros para melhor compressão
+                var encoderParams = new EncoderParameters(2);
+                encoderParams.Param[0] = new EncoderParameter(Encoder.Quality, (long)quality);
                 
+                // Habilitar otimização de cor (melhor compressão)
+                encoderParams.Param[1] = new EncoderParameter(
+                    Encoder.ColorDepth, 
+                    (long)ColorDepth.Depth24Bit
+                );
+                
+                // Configurar opções de compressão
                 bitmap.Save(ms, encoder, encoderParams);
+                encoderParams.Dispose();
             }
+            else
+            {
+                // Fallback: salvar sem encoder específico
+                bitmap.Save(ms, ImageFormat.Jpeg);
+            }
+            
             return ms.ToArray();
         }
     }

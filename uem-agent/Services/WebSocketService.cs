@@ -161,7 +161,7 @@ public class WebSocketService : IDisposable
                 CancellationToken.None
             );
         }
-        catch (WebSocketException wsEx)
+        catch (WebSocketException)
         {
             // Erro de WebSocket - marcar como desconectado
             _isConnected = false;
@@ -170,7 +170,7 @@ public class WebSocketService : IDisposable
                 _ = Task.Run(() => ConnectAsync());
             }
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             // Outros erros - silenciosamente ignorar para frames
         }
@@ -274,6 +274,33 @@ public class WebSocketService : IDisposable
                 var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 if (!string.IsNullOrEmpty(message))
                 {
+                    // Log para debug - verificar se mensagens estão chegando
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(message);
+                        var root = doc.RootElement;
+                        if (root.TryGetProperty("type", out var typeProp))
+                        {
+                            var msgType = typeProp.GetString();
+                            if (msgType == "uem_remote_action")
+                            {
+                                if (root.TryGetProperty("action", out var actionProp))
+                                {
+                                    var action = actionProp.GetString();
+                                    Console.WriteLine($"📨 Mensagem uem_remote_action recebida no agente - Action: {action}");
+                                    if (root.TryGetProperty("params", out var paramsProp))
+                                    {
+                                        Console.WriteLine($"   Params: {paramsProp.GetRawText()}");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"❌ Erro ao parsear mensagem para log: {ex.Message}");
+                    }
+                    
                     _ = Task.Run(async () => await ProcessMessageAsync(message));
                 }
             }
@@ -416,21 +443,23 @@ public class WebSocketService : IDisposable
                     OnStatusUpdateRequested?.Invoke(this, new ComputerInfo());
                     break;
                     
-                case "uem_remote_action":
-                    var action = root.GetProperty("action").GetString();
-                    var paramsElement = root.TryGetProperty("params", out var p) ? p : default;
-                    Console.WriteLine($"📥 Mensagem uem_remote_action recebida - Action: {action}");
-                    var remoteAction = new RemoteAction
-                    {
-                        Action = action ?? "",
-                        Params = paramsElement.ValueKind == JsonValueKind.Object ? 
-                                JsonSerializer.Deserialize<Dictionary<string, object>>(paramsElement.GetRawText()) ?? 
-                                new Dictionary<string, object>() : 
-                                new Dictionary<string, object>()
-                    };
-                    Console.WriteLine($"📦 Params recebidos: {JsonSerializer.Serialize(remoteAction.Params)}");
-                    OnRemoteActionReceived?.Invoke(this, remoteAction);
-                    break;
+                       case "uem_remote_action":
+                           var action = root.GetProperty("action").GetString();
+                           var paramsElement = root.TryGetProperty("params", out var p) ? p : default;
+                           Console.WriteLine($"📥 Processando uem_remote_action - Action: {action}");
+                           var remoteAction = new RemoteAction
+                           {
+                               Action = action ?? "",
+                               Params = paramsElement.ValueKind == JsonValueKind.Object ? 
+                                       JsonSerializer.Deserialize<Dictionary<string, object>>(paramsElement.GetRawText()) ?? 
+                                       new Dictionary<string, object>() : 
+                                       new Dictionary<string, object>()
+                           };
+                           Console.WriteLine($"📦 Params recebidos: {JsonSerializer.Serialize(remoteAction.Params)}");
+                           Console.WriteLine($"📤 Disparando evento OnRemoteActionReceived...");
+                           OnRemoteActionReceived?.Invoke(this, remoteAction);
+                           Console.WriteLine($"✅ Evento OnRemoteActionReceived disparado");
+                           break;
                     
                 case "get_remote_access_info":
                     // Responder com informações de acesso remoto

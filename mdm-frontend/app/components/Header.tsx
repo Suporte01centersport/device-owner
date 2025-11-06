@@ -53,7 +53,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
           setShowSupportDropdown(false)
         } else {
           // Comportamento normal: fechar ao clicar fora
-          setShowSupportDropdown(false)
+        setShowSupportDropdown(false)
         }
       }
     }

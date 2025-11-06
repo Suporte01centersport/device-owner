@@ -11,7 +11,9 @@ export default function UEMPage() {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Carregar computadores
+  const [websocket, setWebsocket] = useState<WebSocket | null>(null)
+
+  // Carregar computadores e conectar ao WebSocket (consolidado em um único useEffect)
   useEffect(() => {
     const loadComputers = async () => {
       setLoading(true)
@@ -34,46 +36,51 @@ export default function UEMPage() {
     // Atualizar a cada 30 segundos
     const interval = setInterval(loadComputers, 30000)
     
-    // Conectar ao WebSocket para receber atualizações em tempo real
+    // Conectar ao WebSocket para receber atualizações em tempo real e acesso remoto
     const hostname = window.location.hostname
     const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
       ? 'localhost' 
       : hostname
     const wsUrl = `ws://${wsHost}:3002`
     const websocket = new WebSocket(wsUrl)
-    let websocketRef: WebSocket | null = null
     
     websocket.onopen = () => {
+      console.log('✅ WebSocket conectado para UEM')
       websocket.send(JSON.stringify({
         type: 'web_client',
         timestamp: Date.now()
       }))
-      websocketRef = websocket
       setWebsocket(websocket) // Atualizar estado com o websocket conectado
     }
     
-    websocket.onmessage = (event) => {
+    // Usar addEventListener ao invés de onmessage para permitir múltiplos handlers
+    const messageHandler = (event: MessageEvent) => {
       try {
         const message = JSON.parse(event.data)
         
+        // Ignorar mensagens de desktop_frame (são tratadas pelo RemoteDesktopViewer)
+        if (message.type === 'desktop_frame') {
+          return
+        }
+        
         // Logar todas as mensagens recebidas para debug
         if (message.type !== 'desktop_frame') { // Não logar frames (são muitos)
-          console.log('📥 Mensagem WebSocket recebida no page.tsx:', message.type)
+          // console.log('📥 Mensagem WebSocket recebida no page.tsx:', message.type) // Removido para reduzir logs
         }
         
         if (message.type === 'computer_status_update') {
-          console.log('💻 Atualização de computador recebida:', message.computerId, message.computer)
+          // console.log('💻 Atualização de computador recebida:', message.computerId, message.computer) // Removido para reduzir logs
           // Atualizar computador na lista
           setComputers(prev => {
             const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
             if (existingIndex >= 0) {
               const updated = [...prev]
               updated[existingIndex] = { ...updated[existingIndex], ...message.computer }
-              console.log('✅ Computador atualizado na lista')
+              // console.log('✅ Computador atualizado na lista') // Removido para reduzir logs
               return updated
             } else {
               // Novo computador - adicionar à lista
-              console.log('🆕 Novo computador adicionado à lista:', message.computer)
+              // console.log('🆕 Novo computador adicionado à lista:', message.computer) // Removido para reduzir logs
               const computer = message.computer
               return [...prev, {
                 id: computer.id || computer.computerId,
@@ -130,46 +137,23 @@ export default function UEMPage() {
       }
     }
     
+    websocket.addEventListener('message', messageHandler)
+    
     websocket.onerror = (error) => {
       console.error('Erro WebSocket:', error)
     }
     
-    return () => {
-      clearInterval(interval)
-      if (websocketRef) {
-        websocketRef.close()
-      }
-    }
-  }, [])
-
-  const [websocket, setWebsocket] = useState<WebSocket | null>(null)
-
-  useEffect(() => {
-    // Conectar ao WebSocket do servidor para acesso remoto
-    const hostname = window.location.hostname
-    const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname
-    const wsUrl = `ws://${wsHost}:3002`
-    const ws = new WebSocket(wsUrl)
-    
-    ws.onopen = () => {
-      console.log('✅ WebSocket conectado para UEM')
-      ws.send(JSON.stringify({ type: 'web_client' }))
-      setWebsocket(ws)
-    }
-
-    ws.onerror = (error) => {
-      console.error('Erro WebSocket:', error)
-    }
-
-    ws.onclose = () => {
+    websocket.onclose = () => {
       console.log('WebSocket desconectado')
       setWebsocket(null)
     }
-
+    
     return () => {
-      ws.close()
+      clearInterval(interval)
+      websocket.removeEventListener('message', messageHandler)
+      if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
+        websocket.close()
+      }
     }
   }, [])
 

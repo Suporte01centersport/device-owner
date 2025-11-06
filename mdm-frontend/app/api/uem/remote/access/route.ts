@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest): Promise<Response> {
   try {
     const { searchParams } = new URL(request.url)
     const computerId = searchParams.get('computerId')
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Buscar informações do computador no banco
-    const ComputerModel = require('../../../../server/database/models/Computer')
+    const ComputerModel = require('../../../../../server/database/models/Computer')
     const computer = await ComputerModel.findById(computerId)
 
     if (!computer) {
@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Solicitar informações de acesso remoto do agente via WebSocket
-    const { connectedComputers } = require('../../../../server/websocket')
+    const { connectedComputers } = require('../../../../../server/websocket')
     const computerWs = connectedComputers.get(computerId)
 
     if (!computerWs || computerWs.readyState !== 1) {
@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Enviar comando para obter informações de acesso remoto
-    return new Promise((resolve) => {
+    return new Promise<Response>((resolve) => {
       const timeout = setTimeout(() => {
         resolve(NextResponse.json({
           success: true,
@@ -92,4 +92,5 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
 

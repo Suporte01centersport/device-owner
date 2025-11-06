@@ -1137,6 +1137,16 @@ async function handleMessage(ws, data) {
     // Não logar mensagens desktop_frame (são muitas e poluem o log)
     if (data.type !== 'desktop_frame') {
         // Log apenas para tipos de mensagem importantes (não frames)
+        // Log especial para uem_remote_action para debug
+        if (data.type === 'uem_remote_action') {
+            console.log(`📨 Mensagem uem_remote_action recebida no servidor:`, {
+                action: data.action,
+                computerId: data.computerId,
+                isWebClient: ws.isWebClient,
+                isComputer: ws.isComputer,
+                connectionId: ws.connectionId
+            });
+        }
     }
     
     // Atualizar lastSeen para dispositivos Android
@@ -3741,36 +3751,59 @@ async function handleComputerStatus(ws, data) {
 async function handleUEMRemoteAction(ws, data) {
     const { computerId, action, params } = data;
     
-    console.log('⚡ UEM Remote Action:', { computerId, action, params });
-    
     if (!computerId || !action) {
-        console.error('❌ ComputerId ou action inválidos');
+        console.warn('⚠️ handleUEMRemoteAction: computerId ou action ausente', { computerId, action });
         return;
+    }
+    
+    // Log apenas para ações de controle remoto (para debug)
+    if (action.startsWith('remote_')) {
+        console.log(`📥 Comando de controle remoto recebido: ${action} para computador ${computerId}`);
     }
     
     // Buscar WebSocket do computador (usar connectedComputers, não connectedDevices)
     const computerWs = connectedComputers.get(computerId);
     
-    if (!computerWs || computerWs.readyState !== WebSocket.OPEN) {
-        console.warn('⚠️ Computador não está online:', computerId);
-        // Notificar cliente web que o computador está offline
-        notifyWebClients({
-            type: 'uem_remote_action_failed',
-            computerId: computerId,
-            action: action,
-            reason: 'Computador offline'
-        });
+    if (!computerWs) {
+        console.warn(`⚠️ Computador ${computerId} não encontrado na lista de computadores conectados`);
+        const connectedIds = Array.from(connectedComputers.keys());
+        console.warn(`   Computadores conectados (${connectedIds.length}):`, connectedIds.join(', ') || 'nenhum');
+        return;
+    }
+    
+    // Log de debug para verificar se encontrou o computador
+    if (action.startsWith('remote_')) {
+        console.log(`✅ Computador ${computerId} encontrado na lista. Enviando comando...`);
+    }
+    
+    if (computerWs.readyState !== WebSocket.OPEN) {
+        console.warn(`⚠️ Computador ${computerId} WebSocket não está aberto. Estado: ${computerWs.readyState}`);
         return;
     }
     
     // Enviar comando para o computador
-    computerWs.send(JSON.stringify({
-        type: 'uem_remote_action',
-        action: action,
-        params: params || {},
-        timestamp: Date.now()
-    }));
-    console.log(`📤 Comando ${action} enviado para computador ${computerId}`);
+    try {
+        const message = {
+            type: 'uem_remote_action',
+            action: action,
+            params: params || {},
+            timestamp: Date.now()
+        };
+        const messageStr = JSON.stringify(message);
+        computerWs.send(messageStr);
+        
+        // Log apenas para ações de controle remoto (com detalhes)
+        if (action.startsWith('remote_')) {
+            console.log(`📤 Comando ${action} enviado para computador ${computerId}`, {
+                params: params,
+                messageSize: messageStr.length,
+                wsReadyState: computerWs.readyState,
+                wsConnectionId: computerWs.connectionId
+            });
+        }
+    } catch (error) {
+        console.error(`❌ Erro ao enviar comando ${action} para computador ${computerId}:`, error);
+    }
     
     // Notificar clientes web que o comando foi enviado (opcional, pode ser removido se não for necessário)
     // notifyWebClients({
@@ -3812,6 +3845,17 @@ async function handleDesktopFrame(ws, data) {
     
     // Enviar frame para o cliente web que está visualizando
     if (session.clientWs && session.clientWs.readyState === WebSocket.OPEN) {
+        // Se é o primeiro frame, enviar confirmação de que a sessão está ativa
+        if (!session.firstFrameSent) {
+            session.firstFrameSent = true;
+            session.clientWs.send(JSON.stringify({
+                type: 'session_active',
+                sessionId: sessionId,
+                message: 'Sessão de desktop remoto ativa'
+            }));
+            console.log(`✅ Sessão ${sessionId} confirmada como ativa (primeiro frame enviado)`);
+        }
+        
         session.clientWs.send(JSON.stringify({
             type: 'desktop_frame',
             sessionId: sessionId,
@@ -3858,8 +3902,30 @@ function handleRegisterDesktopSession(ws, data) {
                 params: { sessionId: sessionId },
                 timestamp: Date.now()
             };
-            computerWs.send(JSON.stringify(command));
-            console.log(`🖥️ Acesso remoto iniciado - Computer: ${computerId}`);
+            const commandStr = JSON.stringify(command);
+            computerWs.send(commandStr);
+            console.log(`🖥️ Acesso remoto iniciado - Computer: ${computerId}`, {
+                sessionId: sessionId,
+                commandSize: commandStr.length,
+                wsReadyState: computerWs.readyState,
+                wsConnectionId: computerWs.connectionId
+            });
+        } else {
+            console.warn(`⚠️ Não foi possível iniciar acesso remoto - Computer: ${computerId}`, {
+                computerWsExists: !!computerWs,
+                wsReadyState: computerWs?.readyState,
+                sessionId: sessionId
+            });
+            
+            // Enviar erro para o cliente web
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'desktop_session_error',
+                    sessionId: sessionId,
+                    error: 'Computador não está online. Verifique se o agente está rodando e conectado ao servidor.',
+                    computerId: computerId
+                }));
+            }
         }
     }
 }
@@ -3868,7 +3934,8 @@ function startDesktopSession(sessionId, computerId, clientWs) {
     desktopSessions.set(sessionId, {
         computerId: computerId,
         clientWs: clientWs,
-        startedAt: Date.now()
+        startedAt: Date.now(),
+        firstFrameSent: false // Flag para enviar confirmação apenas uma vez
     });
     // Log apenas quando sessão é criada (já logado em handleRegisterDesktopSession)
 }
