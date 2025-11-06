@@ -985,6 +985,10 @@ wss.on('connection', ws => {
         }
     });
 
+    // Detectar quando um computador conecta (antes de receber mensagens)
+    // Isso será atualizado quando recebermos a primeira mensagem 'computer_status'
+    // Mas podemos marcar como online quando detectarmos que é um computador
+    
     ws.on('close', (code, reason) => {
         serverStats.activeConnections--;
         
@@ -3610,7 +3614,9 @@ async function handleComputerStatus(ws, data) {
     const latitude = computerData.latitude !== undefined ? computerData.latitude : (computerData.Latitude !== null ? computerData.Latitude : undefined);
     const longitude = computerData.longitude !== undefined ? computerData.longitude : (computerData.Longitude !== null ? computerData.Longitude : undefined);
     const locationAccuracy = computerData.locationAccuracy !== undefined ? computerData.locationAccuracy : (computerData.LocationAccuracy !== null ? computerData.LocationAccuracy : undefined);
-    const lastLocationUpdate = computerData.lastLocationUpdate || computerData.LastLocationUpdate;
+    const locationAddress = computerData.locationAddress || computerData.LocationAddress || null;
+    const locationSource = computerData.locationSource || computerData.LocationSource || null;
+    const lastLocationUpdate = computerData.lastLocationUpdate || computerData.LastLocationUpdate || (latitude && longitude ? now : undefined);
     const installedPrograms = computerData.installedPrograms || computerData.InstalledPrograms || [];
     
     const now = Date.now();
@@ -3627,6 +3633,13 @@ async function handleComputerStatus(ws, data) {
     
     // Salvar conexão do computador (separado de dispositivos móveis)
     connectedComputers.set(computerId, ws);
+    
+    // Marcar como online imediatamente quando detectamos que é um computador
+    // Isso garante que o status seja atualizado mesmo antes de salvar os dados completos
+    console.log(`🔌 Computador ${computerId} conectado - marcando como online`);
+    ComputerModel.updateStatus(computerId, 'online').catch(err => {
+        console.error('Erro ao atualizar status do computador para online:', err);
+    });
     
     // Preparar dados para salvar no banco (usando valores mapeados)
     const computerToSave = {
@@ -3667,6 +3680,8 @@ async function handleComputerStatus(ws, data) {
         latitude: latitude,
         longitude: longitude,
         locationAccuracy: locationAccuracy,
+        locationAddress: locationAddress,
+        locationSource: locationSource,
         lastLocationUpdate: lastLocationUpdate,
         storageDrives: storageDrives.map(drive => ({
             drive: drive.drive || drive.Drive,
@@ -3688,8 +3703,10 @@ async function handleComputerStatus(ws, data) {
     };
     
     try {
-        // Salvar no banco de dados
+        // Salvar no banco de dados (já com status 'online')
         await ComputerModel.upsert(computerToSave);
+        
+        console.log(`✅ Computador ${computerId} salvo no banco com status: online`);
         
         // Formatar computador para enviar aos clientes web (usando formato do frontend)
         const computerForClient = {
@@ -3739,6 +3756,7 @@ async function handleComputerStatus(ws, data) {
         };
         
         // Notificar clientes web
+        console.log(`📤 Notificando clientes web sobre atualização do computador ${computerId} (status: online)`);
         notifyWebClients({
             type: 'computer_status_update',
             computerId: computerId,

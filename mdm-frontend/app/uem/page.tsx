@@ -69,7 +69,7 @@ export default function UEMPage() {
         }
         
         if (message.type === 'computer_status_update') {
-          // console.log('💻 Atualização de computador recebida:', message.computerId, message.computer) // Removido para reduzir logs
+          console.log('💻 Atualização de computador recebida:', message.computerId, 'Status:', message.computer?.status)
           // Atualizar computador na lista
           setComputers(prev => {
             const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
@@ -140,19 +140,29 @@ export default function UEMPage() {
     websocket.addEventListener('message', messageHandler)
     
     websocket.onerror = (error) => {
-      console.error('Erro WebSocket:', error)
+      // Não logar erros durante conexão inicial (StrictMode causa isso em desenvolvimento)
+      // Só logar se realmente houver um erro após a conexão estar estabelecida
+      if (websocket && websocket.readyState === WebSocket.OPEN) {
+        console.error('Erro WebSocket:', error)
+      }
     }
     
-    websocket.onclose = () => {
-      console.log('WebSocket desconectado')
+    websocket.onclose = (event) => {
+      // Não logar desconexões normais do StrictMode (código 1000 = fechamento normal)
+      if (event.code !== 1000) {
+        console.log('WebSocket desconectado', event.code)
+      }
       setWebsocket(null)
     }
     
     return () => {
       clearInterval(interval)
-      websocket.removeEventListener('message', messageHandler)
-      if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
-        websocket.close()
+      if (websocket) {
+        websocket.removeEventListener('message', messageHandler)
+        // Fechar com código 1000 (normal) para evitar logs desnecessários
+        if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
+          websocket.close(1000, 'Component unmounting')
+        }
       }
     }
   }, [])

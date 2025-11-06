@@ -4,12 +4,16 @@ using System.Security.Principal;
 using Microsoft.Win32;
 using UEMAgent.Models;
 using System.IO;
+using System.Net.Http;
 
 namespace UEMAgent.Services;
 
 public class SystemInfoService
 {
     private readonly string _computerId;
+    private static string? _cachedPublicIP = null;
+    private static DateTime _lastPublicIPCheck = DateTime.MinValue;
+    private static readonly TimeSpan _publicIPCacheTimeout = TimeSpan.FromMinutes(10);
 
     public SystemInfoService()
     {
@@ -52,6 +56,50 @@ public class SystemInfoService
         return Environment.MachineName;
     }
 
+    public async Task<ComputerInfo> GetComputerInfoAsync()
+    {
+        // Obter IP público de forma assíncrona
+        var publicIP = await GetPublicIpAddressAsync();
+        var ipAddress = publicIP ?? GetIpAddress(); // IP público ou privado como fallback
+
+        var info = new ComputerInfo
+        {
+            ComputerId = _computerId,
+            Name = Environment.MachineName,
+            OsType = "Windows",
+            OsVersion = Environment.OSVersion.VersionString,
+            OsBuild = GetWindowsBuild(),
+            Architecture = Environment.Is64BitOperatingSystem ? "x64" : "x86",
+            Hostname = Environment.MachineName,
+            Domain = Environment.UserDomainName,
+            LoggedInUser = WindowsIdentity.GetCurrent().Name,
+            CpuModel = GetCpuModel(),
+            CpuCores = Environment.ProcessorCount,
+            CpuThreads = GetCpuThreads(),
+            MemoryTotal = GetTotalMemory(),
+            MemoryUsed = GetUsedMemory(),
+            StorageTotal = GetTotalStorage(),
+            StorageUsed = GetUsedStorage(),
+            StorageDrives = GetStorageDrives(),
+            IpAddress = ipAddress,
+            MacAddress = GetMacAddress(),
+            NetworkType = GetNetworkType(),
+            WifiSSID = GetWifiSSID(),
+            IsWifiEnabled = IsWifiEnabled(),
+            IsBluetoothEnabled = IsBluetoothEnabled(),
+            AgentVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0",
+            InstalledPrograms = GetInstalledPrograms(),
+            AntivirusInstalled = IsAntivirusInstalled(),
+            AntivirusEnabled = IsAntivirusEnabled(),
+            AntivirusName = GetAntivirusName(),
+            FirewallEnabled = IsFirewallEnabled(),
+            EncryptionEnabled = IsEncryptionEnabled()
+        };
+
+        return info;
+    }
+
+    // Método síncrono para compatibilidade (usa IP privado)
     public ComputerInfo GetComputerInfo()
     {
         var info = new ComputerInfo
@@ -73,7 +121,7 @@ public class SystemInfoService
             StorageTotal = GetTotalStorage(),
             StorageUsed = GetUsedStorage(),
             StorageDrives = GetStorageDrives(),
-            IpAddress = GetIpAddress(),
+            IpAddress = GetIpAddress(), // IP privado apenas
             MacAddress = GetMacAddress(),
             NetworkType = GetNetworkType(),
             WifiSSID = GetWifiSSID(),
@@ -220,6 +268,58 @@ public class SystemInfoService
         return "Unknown";
     }
 
+    private async Task<string?> GetPublicIpAddressAsync()
+    {
+        try
+        {
+            // Usar cache para evitar muitas requisições
+            if (_cachedPublicIP != null && DateTime.Now - _lastPublicIPCheck < _publicIPCacheTimeout)
+            {
+                return _cachedPublicIP;
+            }
+
+            using var httpClient = new HttpClient();
+            httpClient.Timeout = TimeSpan.FromSeconds(5);
+
+            // Tentar múltiplas APIs como fallback
+            var apis = new[]
+            {
+                "https://api.ipify.org",
+                "https://icanhazip.com",
+                "https://ifconfig.me/ip",
+                "https://api.ip.sb/ip"
+            };
+
+            foreach (var api in apis)
+            {
+                try
+                {
+                    var response = await httpClient.GetStringAsync(api);
+                    var publicIP = response.Trim();
+                    
+                    // Validar se é um IP válido
+                    if (System.Net.IPAddress.TryParse(publicIP, out _))
+                    {
+                        _cachedPublicIP = publicIP;
+                        _lastPublicIPCheck = DateTime.Now;
+                        return publicIP;
+                    }
+                }
+                catch
+                {
+                    // Tentar próxima API
+                    continue;
+                }
+            }
+        }
+        catch
+        {
+            // Se falhar, retornar null para usar IP privado como fallback
+        }
+
+        return null;
+    }
+
     private string GetMacAddress()
     {
         try
@@ -240,18 +340,43 @@ public class SystemInfoService
     {
         try
         {
-            var interfaces = NetworkInterface.GetAllNetworkInterfaces()
+            // Primeiro, verificar se há SSID Wi-Fi disponível (indica conexão Wi-Fi ativa)
+            var wifiSSID = GetWifiSSID();
+            if (!string.IsNullOrEmpty(wifiSSID))
+            {
+                return "Wi-Fi";
+            }
+
+            // Se não há SSID, verificar interfaces de rede
+            // Priorizar Wi-Fi sobre Ethernet quando ambas estiverem ativas
+            var allInterfaces = NetworkInterface.GetAllNetworkInterfaces()
                 .Where(nic => nic.OperationalStatus == OperationalStatus.Up &&
                              nic.NetworkInterfaceType != NetworkInterfaceType.Loopback)
-                .FirstOrDefault();
+                .ToList();
 
-            if (interfaces != null)
+            // Procurar primeiro por interface Wi-Fi
+            var wifiInterface = allInterfaces
+                .FirstOrDefault(nic => nic.NetworkInterfaceType == NetworkInterfaceType.Wireless80211);
+            
+            if (wifiInterface != null)
             {
-                if (interfaces.NetworkInterfaceType == NetworkInterfaceType.Wireless80211)
-                    return "Wi-Fi";
-                if (interfaces.NetworkInterfaceType == NetworkInterfaceType.Ethernet)
-                    return "Ethernet";
-                return interfaces.NetworkInterfaceType.ToString();
+                return "Wi-Fi";
+            }
+
+            // Se não há Wi-Fi, procurar por Ethernet
+            var ethernetInterface = allInterfaces
+                .FirstOrDefault(nic => nic.NetworkInterfaceType == NetworkInterfaceType.Ethernet);
+            
+            if (ethernetInterface != null)
+            {
+                return "Ethernet";
+            }
+
+            // Se não encontrou Wi-Fi nem Ethernet, retornar o tipo da primeira interface
+            var firstInterface = allInterfaces.FirstOrDefault();
+            if (firstInterface != null)
+            {
+                return firstInterface.NetworkInterfaceType.ToString();
             }
         }
         catch { }

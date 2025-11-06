@@ -25,11 +25,11 @@ class ComputerModel {
                     logged_in_user, assigned_device_user_id,
                     compliance_status, antivirus_installed, antivirus_enabled,
                     antivirus_name, firewall_enabled, encryption_enabled,
-                    latitude, longitude, location_accuracy, last_location_update
+                    latitude, longitude, location_accuracy, location_address, location_source, last_location_update
                 ) VALUES (
                     $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
                     $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28,
-                    $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39
+                    $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41
                 ) ON CONFLICT (organization_id, computer_id) DO UPDATE SET
                     name = EXCLUDED.name,
                     status = EXCLUDED.status,
@@ -66,6 +66,8 @@ class ComputerModel {
                     latitude = EXCLUDED.latitude,
                     longitude = EXCLUDED.longitude,
                     location_accuracy = EXCLUDED.location_accuracy,
+                    location_address = EXCLUDED.location_address,
+                    location_source = EXCLUDED.location_source,
                     last_location_update = EXCLUDED.last_location_update,
                     updated_at = NOW()
                 RETURNING *
@@ -108,6 +110,8 @@ class ComputerModel {
                 computerData.latitude || null,
                 computerData.longitude || null,
                 computerData.locationAccuracy || null,
+                computerData.locationAddress || null,
+                computerData.locationSource || null,
                 computerData.lastLocationUpdate ? new Date(computerData.lastLocationUpdate) : null
             ]);
 
@@ -430,6 +434,8 @@ class ComputerModel {
             latitude: row.latitude ? parseFloat(row.latitude) : undefined,
             longitude: row.longitude ? parseFloat(row.longitude) : undefined,
             locationAccuracy: row.location_accuracy ? parseFloat(row.location_accuracy) : undefined,
+            locationAddress: row.location_address || undefined,
+            locationSource: row.location_source || undefined,
             lastLocationUpdate: row.last_location_update ? new Date(row.last_location_update).getTime() : undefined,
             restrictions: {
                 cameraDisabled: false,

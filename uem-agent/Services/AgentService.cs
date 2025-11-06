@@ -93,9 +93,9 @@ public class AgentService : BackgroundService
     {
         try
         {
-            var computerInfo = _systemInfoService.GetComputerInfo();
+            var computerInfo = await _systemInfoService.GetComputerInfoAsync();
             await _webSocketService.SendComputerStatusAsync(computerInfo);
-            Console.WriteLine($"✅ Status enviado: {computerInfo.Name}");
+            Console.WriteLine($"✅ Status enviado: {computerInfo.Name} (IP: {computerInfo.IpAddress})");
         }
         catch (Exception ex)
         {
@@ -108,14 +108,20 @@ public class AgentService : BackgroundService
         try
         {
             var location = await _locationService.GetLocationAsync();
-            if (location != null)
+            if (location != null && location.Latitude.HasValue && location.Longitude.HasValue)
             {
                 // Enviar localização junto com o status
-                var computerInfo = _systemInfoService.GetComputerInfo();
+                var computerInfo = await _systemInfoService.GetComputerInfoAsync();
                 computerInfo.Latitude = location.Latitude;
                 computerInfo.Longitude = location.Longitude;
                 computerInfo.LocationAccuracy = location.Accuracy;
+                computerInfo.LocationAddress = location.Address;
+                computerInfo.LocationSource = location.Source;
                 await _webSocketService.SendComputerStatusAsync(computerInfo);
+                
+                Console.WriteLine($"📍 Localização enviada: {location.Address ?? "Desconhecido"} " +
+                                $"(Lat: {location.Latitude:F6}, Lon: {location.Longitude:F6}, " +
+                                $"Precisão: {location.Accuracy / 1000:F1}km, Fonte: {location.Source ?? "IP"})");
             }
         }
         catch (Exception ex)

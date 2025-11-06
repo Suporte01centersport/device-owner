@@ -63,8 +63,10 @@ export interface Computer {
   // Localização (se aplicável)
   latitude?: number
   longitude?: number
-  locationAccuracy?: number
+  locationAccuracy?: number // Precisão em metros
   lastLocationUpdate?: number
+  locationSource?: string // Fonte da localização (ip-api.com, windows, etc.)
+  locationAddress?: string // Endereço formatado (cidade, região, país)
 }
 
 export interface StorageDrive {

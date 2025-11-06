@@ -35,6 +35,8 @@ public class ComputerInfo
     public double? Latitude { get; set; }
     public double? Longitude { get; set; }
     public double? LocationAccuracy { get; set; }
+    public string? LocationAddress { get; set; }
+    public string? LocationSource { get; set; }
 }
 
 public class StorageDrive

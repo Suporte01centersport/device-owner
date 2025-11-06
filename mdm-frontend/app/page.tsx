@@ -88,7 +88,16 @@ export default function Home() {
 
   // WebSocket connection
   useEffect(() => {
+    let websocket: WebSocket | null = null
+    let reconnectTimeout: NodeJS.Timeout | null = null
+    let isMounted = true
+
     const connectWebSocket = () => {
+      // Evitar múltiplas conexões
+      if (websocket && (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN)) {
+        return
+      }
+
       try {
         // Detectar automaticamente o host correto
         // Se acessando de localhost/127.0.0.1, usar localhost
@@ -101,10 +110,14 @@ export default function Home() {
         const wsUrl = `ws://${wsHost}:3002`
         console.log('🔌 Conectando ao WebSocket:', wsUrl)
         
-        const websocket = new WebSocket(wsUrl)
+        websocket = new WebSocket(wsUrl)
         
         websocket.onopen = () => {
-          console.log('WebSocket conectado')
+          if (!isMounted) {
+            websocket?.close()
+            return
+          }
+          console.log('✅ WebSocket conectado para UEM')
           setIsConnected(true)
           setWs(websocket)
           
@@ -116,15 +129,18 @@ export default function Home() {
           
           // Aguardar um pouco antes de solicitar a senha
           setTimeout(() => {
-            // Solicitar senha de administrador atual
-            websocket.send(JSON.stringify({
-              type: 'get_admin_password',
-              timestamp: Date.now()
-            }))
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+              // Solicitar senha de administrador atual
+              websocket.send(JSON.stringify({
+                type: 'get_admin_password',
+                timestamp: Date.now()
+              }))
+            }
           }, 500)
         }
 
         websocket.onmessage = (event) => {
+          if (!isMounted) return
           try {
             const message = JSON.parse(event.data)
             handleWebSocketMessage(message)
@@ -133,16 +149,29 @@ export default function Home() {
           }
         }
 
-        websocket.onclose = () => {
-          console.log('WebSocket desconectado')
+        websocket.onclose = (event) => {
+          if (!isMounted) return
+          console.log('WebSocket desconectado', event.code, event.reason)
           setIsConnected(false)
           setWs(null)
           
-          // Tentar reconectar após 3 segundos
-          setTimeout(connectWebSocket, 3000)
+          // Limpar timeout anterior se existir
+          if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout)
+          }
+          
+          // Tentar reconectar após 3 segundos apenas se não foi fechado intencionalmente
+          if (event.code !== 1000 && isMounted) {
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted) {
+                connectWebSocket()
+              }
+            }, 3000)
+          }
         }
 
         websocket.onerror = (error) => {
+          if (!isMounted) return
           console.error('Erro WebSocket:', error)
           setIsConnected(false)
         }
@@ -155,9 +184,30 @@ export default function Home() {
     connectWebSocket()
 
     return () => {
-      if (ws) {
-        ws.close()
+      isMounted = false
+      
+      // Limpar timeout de reconexão
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
       }
+      
+      // Fechar WebSocket se estiver aberto
+      if (websocket) {
+        // Remover listeners para evitar chamadas após desmontagem
+        websocket.onopen = null
+        websocket.onmessage = null
+        websocket.onerror = null
+        websocket.onclose = null
+        
+        // Fechar conexão
+        if (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN) {
+          websocket.close(1000, 'Component unmounting')
+        }
+        websocket = null
+      }
+      
+      setWs(null)
+      setIsConnected(false)
     }
   }, [])
 

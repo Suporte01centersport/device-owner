@@ -31,7 +31,8 @@
     "db:migrate:group-apps": "node server/database/migrations/run-add-group-available-apps.js",
     "db:migrate:group-restrictions": "node server/database/migrations/run-add-group-restrictions.js",
     "db:migrate:alert-history": "node server/database/migrations/run-add-group-alert-history.js",
-    "db:migrate:computers": "node server/database/migrations/run-add-computers-tables.js"
+    "db:migrate:computers": "node server/database/migrations/run-add-computers-tables.js",
+    "db:migrate:computer-location": "node server/database/migrations/run-add-computer-location-fields.js"
   },
   "dependencies": {
     "@coreui/icons-react": "^2.3.0",
