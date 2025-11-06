@@ -6,6 +6,8 @@ using System.Collections.Generic;
 using Microsoft.Extensions.Options;
 using UEMAgent.Data;
 using UEMAgent.Models;
+using System;
+using System.Threading;
 
 namespace UEMAgent.Services;
 
@@ -16,62 +18,175 @@ public class WebSocketService : IDisposable
     private CancellationTokenSource? _cancellationTokenSource;
     private bool _isConnected = false;
     private int _reconnectAttempts = 0;
+    private readonly RemoteAccessService? _remoteAccessService;
+    private readonly SemaphoreSlim _connectSemaphore = new SemaphoreSlim(1, 1);
+    private Task? _receiveTask;
+    private Task? _heartbeatTask;
+    private DateTime _lastMessageReceived = DateTime.UtcNow;
+    private bool _isReconnecting = false;
 
     public event EventHandler<ComputerInfo>? OnStatusUpdateRequested;
     public event EventHandler<RemoteAction>? OnRemoteActionReceived;
+    public event EventHandler<Models.RemoteInputEvent>? OnRemoteInputReceived;
+    public event EventHandler<string>? OnRemoteSessionRequested;
+    public event EventHandler? OnRemoteSessionStopped;
 
-    public WebSocketService(IOptions<AppSettings> settings)
+    public WebSocketService(IOptions<AppSettings> settings, RemoteAccessService? remoteAccessService = null)
     {
         _settings = settings.Value;
+        _remoteAccessService = remoteAccessService;
     }
 
     public bool IsConnected => _isConnected && _webSocket?.State == WebSocketState.Open;
 
     public async Task ConnectAsync()
     {
-        if (IsConnected)
-            return;
-
-        _cancellationTokenSource = new CancellationTokenSource();
-        
-        while (!_cancellationTokenSource.Token.IsCancellationRequested && 
-               _reconnectAttempts < _settings.MaxReconnectAttempts)
+        // Evitar múltiplas tentativas simultâneas
+        if (!await _connectSemaphore.WaitAsync(0))
         {
+            return; // Já está tentando conectar
+        }
+
+        try
+        {
+            if (IsConnected)
+            {
+                return;
+            }
+
+            _isReconnecting = true;
+            _cancellationTokenSource?.Cancel();
+            _cancellationTokenSource?.Dispose();
+            _cancellationTokenSource = new CancellationTokenSource();
+            
+            // Limpar conexão anterior
             try
             {
-                _webSocket?.Dispose();
-                _webSocket = new ClientWebSocket();
-                
+                if (_webSocket != null)
+                {
+                    if (_webSocket.State == WebSocketState.Open || _webSocket.State == WebSocketState.Connecting)
+                    {
+                        await _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Reconnecting", CancellationToken.None);
+                    }
+                    _webSocket.Dispose();
+                }
+            }
+            catch { }
+
+            _webSocket = new ClientWebSocket();
+            
+            // Configurar timeout de conexão
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(_cancellationTokenSource.Token, timeoutCts.Token);
+            
+            try
+            {
                 var uri = new Uri(_settings.ServerUrl);
-                await _webSocket.ConnectAsync(uri, _cancellationTokenSource.Token);
+                Console.WriteLine($"🔄 Tentando conectar ao servidor: {_settings.ServerUrl}...");
+                
+                await _webSocket.ConnectAsync(uri, linkedCts.Token);
                 
                 _isConnected = true;
                 _reconnectAttempts = 0;
+                _lastMessageReceived = DateTime.UtcNow;
                 
                 Console.WriteLine($"✅ Conectado ao servidor: {_settings.ServerUrl}");
                 
                 // Iniciar recepção de mensagens
-                _ = Task.Run(() => ReceiveMessagesAsync(_cancellationTokenSource.Token));
+                _receiveTask = Task.Run(() => ReceiveMessagesAsync(_cancellationTokenSource.Token));
                 
-                return;
+                // Iniciar heartbeat para detectar conexões mortas
+                _heartbeatTask = Task.Run(() => HeartbeatAsync(_cancellationTokenSource.Token));
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
             {
-                _reconnectAttempts++;
-                Console.WriteLine($"❌ Erro ao conectar (tentativa {_reconnectAttempts}): {ex.Message}");
-                
-                if (_reconnectAttempts < _settings.MaxReconnectAttempts)
-                {
-                    await Task.Delay(_settings.ReconnectDelay, _cancellationTokenSource.Token);
-                }
+                throw new TimeoutException("Timeout ao conectar ao servidor");
             }
+        }
+        catch (Exception ex)
+        {
+            _isConnected = false;
+            _reconnectAttempts++;
+            
+            // Calcular delay exponencial (máximo 60 segundos)
+            var delay = Math.Min(_settings.ReconnectDelay * (int)Math.Pow(2, Math.Min(_reconnectAttempts - 1, 4)), 60000);
+            
+            Console.WriteLine($"❌ Erro ao conectar (tentativa {_reconnectAttempts}): {ex.Message}");
+            Console.WriteLine($"⏳ Tentando novamente em {delay / 1000} segundos...");
+            
+            // Continuar tentando reconectar indefinidamente (não parar após MaxReconnectAttempts)
+            if (!_cancellationTokenSource?.Token.IsCancellationRequested ?? true)
+            {
+                await Task.Delay(delay, _cancellationTokenSource?.Token ?? CancellationToken.None);
+                _ = Task.Run(() => ConnectAsync()); // Tentar novamente em background
+            }
+        }
+        finally
+        {
+            _isReconnecting = false;
+            _connectSemaphore.Release();
+        }
+    }
+
+    public async Task SendDesktopFrameAsync(byte[] frameData, string sessionId)
+    {
+        if (!IsConnected)
+        {
+            // Não tentar reconectar para frames (evitar spam)
+            return;
+        }
+
+        try
+        {
+            var message = new Dictionary<string, object>
+            {
+                { "type", "desktop_frame" },
+                { "sessionId", sessionId },
+                { "frame", Convert.ToBase64String(frameData) },
+                { "timestamp", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() }
+            };
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+            var json = JsonSerializer.Serialize(message, options);
+            var buffer = Encoding.UTF8.GetBytes(json);
+            
+            await _webSocket!.SendAsync(
+                new ArraySegment<byte>(buffer),
+                WebSocketMessageType.Text,
+                true,
+                CancellationToken.None
+            );
+        }
+        catch (WebSocketException wsEx)
+        {
+            // Erro de WebSocket - marcar como desconectado
+            _isConnected = false;
+            if (!_isReconnecting)
+            {
+                _ = Task.Run(() => ConnectAsync());
+            }
+        }
+        catch (Exception ex)
+        {
+            // Outros erros - silenciosamente ignorar para frames
         }
     }
 
     public async Task SendComputerStatusAsync(ComputerInfo computerInfo)
     {
         if (!IsConnected)
+        {
+            // Tentar reconectar se não estiver conectado
+            if (!_isReconnecting)
+            {
+                _ = Task.Run(() => ConnectAsync());
+            }
             return;
+        }
 
         try
         {
@@ -94,7 +209,6 @@ public class WebSocketService : IDisposable
             };
             
             var json = JsonSerializer.Serialize(message, options);
-            Console.WriteLine($"📤 Enviando status do computador: {computerInfo.Name} ({computerInfo.ComputerId})");
             
             var buffer = Encoding.UTF8.GetBytes(json);
             
@@ -105,16 +219,33 @@ public class WebSocketService : IDisposable
                 CancellationToken.None
             );
         }
+        catch (WebSocketException wsEx)
+        {
+            Console.WriteLine($"❌ Erro WebSocket ao enviar status: {wsEx.Message}");
+            _isConnected = false;
+            
+            // Tentar reconectar
+            if (!_isReconnecting)
+            {
+                _ = Task.Run(() => ConnectAsync());
+            }
+        }
         catch (Exception ex)
         {
             Console.WriteLine($"❌ Erro ao enviar status: {ex.Message}");
             _isConnected = false;
+            
+            // Tentar reconectar
+            if (!_isReconnecting)
+            {
+                _ = Task.Run(() => ConnectAsync());
+            }
         }
     }
 
     private async Task ReceiveMessagesAsync(CancellationToken cancellationToken)
     {
-        var buffer = new byte[4096];
+        var buffer = new byte[8192]; // Buffer maior para mensagens grandes
         
         while (!cancellationToken.IsCancellationRequested && IsConnected)
         {
@@ -127,20 +258,42 @@ public class WebSocketService : IDisposable
 
                 if (result.MessageType == WebSocketMessageType.Close)
                 {
-                    await _webSocket.CloseAsync(
-                        WebSocketCloseStatus.NormalClosure,
-                        "Closing",
-                        cancellationToken
-                    );
+                    Console.WriteLine("⚠️ Servidor fechou a conexão");
                     _isConnected = false;
+                    
+                    // Tentar reconectar
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _ = Task.Run(() => ConnectAsync());
+                    }
                     break;
                 }
 
+                _lastMessageReceived = DateTime.UtcNow; // Atualizar timestamp da última mensagem
+                
                 var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
                 if (!string.IsNullOrEmpty(message))
                 {
-                    ProcessMessage(message);
+                    _ = Task.Run(async () => await ProcessMessageAsync(message));
                 }
+            }
+            catch (WebSocketException wsEx)
+            {
+                Console.WriteLine($"❌ Erro WebSocket: {wsEx.Message}");
+                _isConnected = false;
+                
+                // Tentar reconectar
+                if (!cancellationToken.IsCancellationRequested)
+                {
+                    await Task.Delay(1000, cancellationToken); // Pequeno delay antes de reconectar
+                    _ = Task.Run(() => ConnectAsync());
+                }
+                break;
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancelamento normal, não é erro
+                break;
             }
             catch (Exception ex)
             {
@@ -150,7 +303,7 @@ public class WebSocketService : IDisposable
                 // Tentar reconectar
                 if (!cancellationToken.IsCancellationRequested)
                 {
-                    await Task.Delay(_settings.ReconnectDelay, cancellationToken);
+                    await Task.Delay(1000, cancellationToken);
                     _ = Task.Run(() => ConnectAsync());
                 }
                 break;
@@ -158,7 +311,98 @@ public class WebSocketService : IDisposable
         }
     }
 
-    private void ProcessMessage(string message)
+    private async Task HeartbeatAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested && IsConnected)
+        {
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken); // Verificar a cada 30 segundos
+                
+                // Verificar se recebemos alguma mensagem recentemente (últimos 60 segundos)
+                var timeSinceLastMessage = DateTime.UtcNow - _lastMessageReceived;
+                if (timeSinceLastMessage.TotalSeconds > 60 && IsConnected)
+                {
+                    Console.WriteLine("⚠️ Nenhuma mensagem recebida há mais de 60 segundos. Reconectando...");
+                    _isConnected = false;
+                    
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _ = Task.Run(() => ConnectAsync());
+                    }
+                    break;
+                }
+                
+                // Verificar se a conexão ainda está aberta
+                if (_webSocket?.State != WebSocketState.Open)
+                {
+                    Console.WriteLine($"⚠️ Estado da conexão: {_webSocket?.State}. Reconectando...");
+                    _isConnected = false;
+                    
+                    if (!cancellationToken.IsCancellationRequested)
+                    {
+                        _ = Task.Run(() => ConnectAsync());
+                    }
+                    break;
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erro no heartbeat: {ex.Message}");
+                // Continuar tentando
+            }
+        }
+    }
+
+    private async Task SendRemoteAccessInfoAsync(string computerId)
+    {
+        if (!IsConnected) return;
+
+        try
+        {
+            var remoteAccessService = _remoteAccessService ?? new RemoteAccessService();
+            var anydeskInstalled = remoteAccessService.IsAnyDeskInstalled();
+            var anydeskId = anydeskInstalled ? remoteAccessService.GetAnyDeskId() : null;
+
+            var response = new
+            {
+                type = "remote_access_info_response",
+                computerId = computerId,
+                info = new
+                {
+                    anydeskInstalled = anydeskInstalled,
+                    anydeskId = anydeskId,
+                    rdpEnabled = false // Seria necessário verificar via registro
+                },
+                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+            };
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+            var json = JsonSerializer.Serialize(response, options);
+            var buffer = Encoding.UTF8.GetBytes(json);
+
+            await _webSocket!.SendAsync(
+                new ArraySegment<byte>(buffer),
+                WebSocketMessageType.Text,
+                true,
+                CancellationToken.None
+            );
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao enviar informações de acesso remoto: {ex.Message}");
+        }
+    }
+
+    private async Task ProcessMessageAsync(string message)
     {
         try
         {
@@ -175,6 +419,7 @@ public class WebSocketService : IDisposable
                 case "uem_remote_action":
                     var action = root.GetProperty("action").GetString();
                     var paramsElement = root.TryGetProperty("params", out var p) ? p : default;
+                    Console.WriteLine($"📥 Mensagem uem_remote_action recebida - Action: {action}");
                     var remoteAction = new RemoteAction
                     {
                         Action = action ?? "",
@@ -183,7 +428,34 @@ public class WebSocketService : IDisposable
                                 new Dictionary<string, object>() : 
                                 new Dictionary<string, object>()
                     };
+                    Console.WriteLine($"📦 Params recebidos: {JsonSerializer.Serialize(remoteAction.Params)}");
                     OnRemoteActionReceived?.Invoke(this, remoteAction);
+                    break;
+                    
+                case "get_remote_access_info":
+                    // Responder com informações de acesso remoto
+                    var computerId = root.TryGetProperty("computerId", out var cid) ? cid.GetString() : null;
+                    await SendRemoteAccessInfoAsync(computerId ?? "");
+                    break;
+                    
+                case "remote_input":
+                    // Receber eventos de input remoto (mouse, teclado)
+                    var inputEvent = JsonSerializer.Deserialize<Models.RemoteInputEvent>(message);
+                    if (inputEvent != null)
+                    {
+                        OnRemoteInputReceived?.Invoke(this, inputEvent);
+                    }
+                    break;
+                    
+                case "start_remote_session":
+                    // Iniciar sessão de acesso remoto
+                    var sessionComputerId = root.TryGetProperty("computerId", out var sid) ? sid.GetString() : null;
+                    OnRemoteSessionRequested?.Invoke(this, sessionComputerId ?? "");
+                    break;
+                    
+                case "stop_remote_session":
+                    // Parar sessão de acesso remoto
+                    OnRemoteSessionStopped?.Invoke(this, EventArgs.Empty);
                     break;
                     
                 default:
@@ -200,8 +472,26 @@ public class WebSocketService : IDisposable
     public void Dispose()
     {
         _cancellationTokenSource?.Cancel();
+        
+        try
+        {
+            _receiveTask?.Wait(TimeSpan.FromSeconds(2));
+            _heartbeatTask?.Wait(TimeSpan.FromSeconds(2));
+        }
+        catch { }
+        
+        try
+        {
+            if (_webSocket?.State == WebSocketState.Open)
+            {
+                _webSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Disposing", CancellationToken.None).Wait(TimeSpan.FromSeconds(2));
+            }
+        }
+        catch { }
+        
         _webSocket?.Dispose();
         _cancellationTokenSource?.Dispose();
+        _connectSemaphore?.Dispose();
     }
 }
 

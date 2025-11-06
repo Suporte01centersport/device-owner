@@ -41,17 +41,26 @@ export default function UEMPage() {
       : hostname
     const wsUrl = `ws://${wsHost}:3002`
     const websocket = new WebSocket(wsUrl)
+    let websocketRef: WebSocket | null = null
     
     websocket.onopen = () => {
       websocket.send(JSON.stringify({
         type: 'web_client',
         timestamp: Date.now()
       }))
+      websocketRef = websocket
+      setWebsocket(websocket) // Atualizar estado com o websocket conectado
     }
     
     websocket.onmessage = (event) => {
       try {
         const message = JSON.parse(event.data)
+        
+        // Logar todas as mensagens recebidas para debug
+        if (message.type !== 'desktop_frame') { // Não logar frames (são muitos)
+          console.log('📥 Mensagem WebSocket recebida no page.tsx:', message.type)
+        }
+        
         if (message.type === 'computer_status_update') {
           console.log('💻 Atualização de computador recebida:', message.computerId, message.computer)
           // Atualizar computador na lista
@@ -127,7 +136,40 @@ export default function UEMPage() {
     
     return () => {
       clearInterval(interval)
-      websocket.close()
+      if (websocketRef) {
+        websocketRef.close()
+      }
+    }
+  }, [])
+
+  const [websocket, setWebsocket] = useState<WebSocket | null>(null)
+
+  useEffect(() => {
+    // Conectar ao WebSocket do servidor para acesso remoto
+    const hostname = window.location.hostname
+    const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
+      ? 'localhost' 
+      : hostname
+    const wsUrl = `ws://${wsHost}:3002`
+    const ws = new WebSocket(wsUrl)
+    
+    ws.onopen = () => {
+      console.log('✅ WebSocket conectado para UEM')
+      ws.send(JSON.stringify({ type: 'web_client' }))
+      setWebsocket(ws)
+    }
+
+    ws.onerror = (error) => {
+      console.error('Erro WebSocket:', error)
+    }
+
+    ws.onclose = () => {
+      console.log('WebSocket desconectado')
+      setWebsocket(null)
+    }
+
+    return () => {
+      ws.close()
     }
   }, [])
 
@@ -236,6 +278,7 @@ export default function UEMPage() {
           computer={selectedComputer}
           onClose={handleCloseModal}
           onDelete={handleDeleteComputer}
+          websocket={websocket || undefined}
         />
       )}
     </div>

@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using UEMAgent.Services;
 using UEMAgent.Data;
 
@@ -24,9 +25,20 @@ internal static class Program
                 
                 // Serviços
                 services.AddSingleton<SystemInfoService>();
-                services.AddSingleton<WebSocketService>();
-                services.AddSingleton<LocationService>();
                 services.AddSingleton<RemoteAccessService>();
+                services.AddSingleton<LocationService>();
+                services.AddSingleton<ScreenCaptureService>();
+                services.AddSingleton<RemoteDesktopService>((sp) =>
+                {
+                    var screenCapture = sp.GetRequiredService<ScreenCaptureService>();
+                    return new RemoteDesktopService(screenCapture);
+                });
+                services.AddSingleton<WebSocketService>((sp) => 
+                {
+                    var settings = sp.GetRequiredService<IOptions<AppSettings>>();
+                    var remoteAccessService = sp.GetRequiredService<RemoteAccessService>();
+                    return new WebSocketService(settings, remoteAccessService);
+                });
                 services.AddHostedService<AgentService>();
             })
             .Build();

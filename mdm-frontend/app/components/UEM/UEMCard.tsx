@@ -1,6 +1,6 @@
 'use client'
 
-import { Computer } from '../types/uem'
+import { Computer } from '../../types/uem'
 
 interface UEMCardProps {
   computer: Computer

@@ -1,20 +1,23 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Computer, RemoteAction } from '../types/uem'
+import { Computer, RemoteAction } from '../../types/uem'
+import RemoteAccessModal from './RemoteAccessModal'
 
 interface UEMModalProps {
   computer: Computer
   onClose: () => void
   onDelete: (computerId: string) => void
   sendMessage?: (message: any) => void
+  websocket?: WebSocket
 }
 
-export default function UEMModal({ computer, onClose, onDelete, sendMessage }: UEMModalProps) {
+export default function UEMModal({ computer, onClose, onDelete, sendMessage, websocket }: UEMModalProps) {
   const [activeTab, setActiveTab] = useState('overview')
   const [remoteActions, setRemoteActions] = useState<RemoteAction[]>([])
   const [selectedAction, setSelectedAction] = useState<string | null>(null)
   const [showRemoteActionModal, setShowRemoteActionModal] = useState(false)
+  const [showRemoteAccessModal, setShowRemoteAccessModal] = useState(false)
 
   useEffect(() => {
     // Carregar ações remotas disponíveis
@@ -69,6 +72,12 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage }: U
   }
 
   const handleExecuteRemoteAction = async (actionId: string) => {
+    // Se for acesso remoto, abrir modal especial
+    if (actionId === 'remote_access') {
+      setShowRemoteAccessModal(true)
+      return
+    }
+
     try {
       const response = await fetch('/api/uem/remote/execute', {
         method: 'POST',
@@ -542,13 +551,18 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage }: U
                         action.dangerous ? 'border-l-4 border-red-500' : ''
                       }`}
                       onClick={() => {
-                        setSelectedAction(action.id)
-                        if (action.requiresConfirmation) {
-                          if (confirm(`Tem certeza que deseja executar: ${action.name}?`)) {
+                        // Se for ação especial (como remote_access), tratar diferente
+                        if ((action as any).special) {
+                          handleExecuteRemoteAction(action.id)
+                        } else {
+                          setSelectedAction(action.id)
+                          if (action.requiresConfirmation) {
+                            if (confirm(`Tem certeza que deseja executar: ${action.name}?`)) {
+                              handleExecuteRemoteAction(action.id)
+                            }
+                          } else {
                             handleExecuteRemoteAction(action.id)
                           }
-                        } else {
-                          handleExecuteRemoteAction(action.id)
                         }
                       }}
                     >
@@ -588,6 +602,15 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage }: U
           </button>
         </div>
       </div>
+
+      {/* Remote Access Modal */}
+      {showRemoteAccessModal && (
+        <RemoteAccessModal
+          computer={computer}
+          onClose={() => setShowRemoteAccessModal(false)}
+          websocket={websocket}
+        />
+      )}
     </div>
   )
 }

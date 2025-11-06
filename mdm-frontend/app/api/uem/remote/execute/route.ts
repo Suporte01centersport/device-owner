@@ -11,6 +11,17 @@ type RemoteAction =
   | 'run_script'
   | 'install_software'
   | 'uninstall_software'
+  | 'start_remote_desktop'
+  | 'stop_remote_desktop'
+  | 'remote_mouse_move'
+  | 'remote_mouse_click'
+  | 'remote_mouse_down'
+  | 'remote_mouse_up'
+  | 'remote_mouse_wheel'
+  | 'remote_key_press'
+  | 'remote_key_down'
+  | 'remote_key_up'
+  | 'remote_text'
 
 interface ExecuteActionRequest {
   deviceId: string
@@ -43,7 +54,32 @@ export async function POST(request: NextRequest) {
     console.log(`💻 UEM Action solicitada: ${action} para computador ${deviceId}`)
 
     // Enviar comando via WebSocket (usar connectedComputers, não connectedDevices)
-    const { connectedComputers } = require('../../../../server/websocket')
+    // Usar helper para evitar problemas com webpack
+    let connectedComputers
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const loadWebSocket = require('../../../../server/load-websocket')
+      const websocketModule = loadWebSocket()
+      connectedComputers = websocketModule.connectedComputers
+    } catch (error: any) {
+      console.error('Erro ao carregar módulo websocket:', error)
+      return NextResponse.json({
+        success: false,
+        error: 'Servidor WebSocket não está disponível',
+        deviceId,
+        action
+      }, { status: 503 })
+    }
+    
+    if (!connectedComputers) {
+      return NextResponse.json({
+        success: false,
+        error: 'Servidor WebSocket não está inicializado',
+        deviceId,
+        action
+      }, { status: 503 })
+    }
+    
     const computerWs = connectedComputers.get(deviceId)
     
     if (!computerWs || computerWs.readyState !== 1) { // 1 = OPEN

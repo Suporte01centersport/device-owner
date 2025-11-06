@@ -39,12 +39,22 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
     }
   }, [showSupportDropdown, loadUnreadMessages])
 
-  // Fechar dropdown ao clicar fora
+  // Fechar dropdown ao clicar fora ou quando um modal/remote desktop estiver aberto
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element
+      // Verificar se clicou em um modal ou acesso remoto (z-50)
+      const isModalOrRemoteDesktop = target.closest('[class*="z-50"]') || 
+                                     target.closest('.fixed.inset-0[class*="z-50"]')
+      
       if (showSupportDropdown && !target.closest('.support-dropdown-container')) {
-        setShowSupportDropdown(false)
+        // Se clicou em um modal ou acesso remoto, fechar o dropdown
+        if (isModalOrRemoteDesktop) {
+          setShowSupportDropdown(false)
+        } else {
+          // Comportamento normal: fechar ao clicar fora
+          setShowSupportDropdown(false)
+        }
       }
     }
 
@@ -132,7 +142,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
             
             {/* Dropdown de notificações de suporte */}
             {showSupportDropdown && (
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-border z-50 max-h-96 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-border z-40 max-h-96 overflow-hidden">
                 <div className="p-4 border-b border-border bg-gradient-to-r from-blue-50 to-blue-100">
                   <div className="flex items-center justify-between">
                     <h3 className="font-semibold text-primary flex items-center gap-2">

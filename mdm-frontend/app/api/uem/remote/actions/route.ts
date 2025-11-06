@@ -70,6 +70,14 @@ const AVAILABLE_ACTIONS = [
     requiresDeviceOwner: false,
     requiresConfirmation: true,
     params: ['name', 'version']
+  },
+  {
+    id: 'remote_access',
+    name: 'Acesso Remoto',
+    description: 'Visualizar e controlar a tela do computador em tempo real',
+    requiresDeviceOwner: false,
+    requiresConfirmation: false,
+    special: true // Ação especial que abre um modal/componente
   }
 ]
 
