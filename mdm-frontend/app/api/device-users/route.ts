@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 // @ts-ignore
 import { query, transaction } from '../../../server/database/config'

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 /**
  * API para buscar usuários de uma planilha (Google Sheets ou OneDrive)
  * GET /api/users/from-sheet?url=URL_DA_PLANILHA
