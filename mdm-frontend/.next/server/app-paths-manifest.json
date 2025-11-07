@@ -1,8 +1,10 @@
 {
   "/page": "app/page.js",
-  "/api/uem/remote/actions/route": "app/api/uem/remote/actions/route.js",
-  "/api/uem/ip-location/route": "app/api/uem/ip-location/route.js",
+  "/api/device-users/route": "app/api/device-users/route.js",
   "/api/uem/computers/route": "app/api/uem/computers/route.js",
   "/api/support-messages/route": "app/api/support-messages/route.js",
-  "/api/devices/status-history/route": "app/api/devices/status-history/route.js"
+  "/api/devices/status-history/route": "app/api/devices/status-history/route.js",
+  "/api/groups/route": "app/api/groups/route.js",
+  "/api/groups/[groupId]/stats/route": "app/api/groups/[groupId]/stats/route.js",
+  "/api/devices/route": "app/api/devices/route.js"
 }

@@ -14,6 +14,12 @@ interface Device {
   restrictions: any
 }
 
+interface Computer {
+  computerId: string
+  name?: string
+  status?: 'online' | 'offline' | string
+}
+
 interface DashboardProps {
   devices: Device[]
   isConnected: boolean
@@ -32,6 +38,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       timestamp?: number
     }
   }>({})
+  const [computers, setComputers] = useState<Computer[]>([])
 
   useEffect(() => {
     // Marcar como cliente após hidratação
@@ -42,6 +49,32 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       setCurrentTime(new Date())
     }, 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadComputers = async () => {
+      try {
+        const response = await fetch('/api/uem/computers')
+        if (!response.ok) return
+
+        const data = await response.json()
+        if (data.success && Array.isArray(data.computers) && isMounted) {
+          setComputers(data.computers)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar computadores:', error)
+      }
+    }
+
+    loadComputers()
+    const interval = setInterval(loadComputers, 30000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   // ✅ NOVO: Carregar dados reais do histórico de status (apenas 7d)
@@ -183,25 +216,6 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   const onlineDevices = devices.filter(d => d.status === 'online').length
   
   // Calcular dispositivos habilitados (sem restrições ativas)
-  const enabledDevices = devices.filter(d => {
-    if (!d.restrictions) return true
-    const restrictions = d.restrictions
-    // Considera habilitado se não tem restrições críticas ativas
-    return !restrictions.wifiDisabled && 
-           !restrictions.settingsDisabled && 
-           !restrictions.installAppsDisabled
-  }).length
-
-  // Calcular dispositivos bloqueados (com restrições ativas)
-  const blockedDevices = devices.filter(d => {
-    if (!d.restrictions) return false
-    const restrictions = d.restrictions
-    // Considera bloqueado se tem restrições críticas ativas
-    return restrictions.wifiDisabled || 
-           restrictions.settingsDisabled || 
-           restrictions.installAppsDisabled
-  }).length
-
   const avgBattery = devices.length > 0 
     ? Math.round(devices.reduce((sum, d) => sum + d.batteryLevel, 0) / devices.length)
     : 0
@@ -210,16 +224,6 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   const getOnlinePercentage = () => {
     if (devices.length === 0) return 0
     return Math.round((onlineDevices / devices.length) * 100)
-  }
-
-  const getEnabledPercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((enabledDevices / devices.length) * 100)
-  }
-
-  const getBlockedPercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((blockedDevices / devices.length) * 100)
   }
 
 
@@ -237,6 +241,29 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     if (onlinePercent >= 80) return `+${onlinePercent}%`
     if (onlinePercent >= 50) return `+${onlinePercent}%`
     return `${onlinePercent}%`
+  }
+
+  const totalComputers = computers.length
+  const onlineComputers = computers.filter(c => (c.status || '').toLowerCase() === 'online').length
+
+  const getTotalComputersChange = () => {
+    if (totalComputers === 0) return '0%'
+    const growth = Math.min(totalComputers * 3, 25)
+    return `+${growth}%`
+  }
+
+  const getOnlineComputersPercentage = () => {
+    if (totalComputers === 0) return 0
+    return Math.round((onlineComputers / totalComputers) * 100)
+  }
+
+  const getOnlineComputersChange = () => {
+    if (totalComputers === 0) return '0%'
+    const percent = getOnlineComputersPercentage()
+    if (percent === 100) return '+100%'
+    if (percent >= 80) return `+${percent}%`
+    if (percent >= 50) return `+${percent}%`
+    return `${percent}%`
   }
 
   const stats = [
@@ -257,20 +284,20 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       color: 'text-success'
     },
     {
-      title: 'Dispositivos Habilitados',
-      value: enabledDevices,
-      change: `${getEnabledPercentage()}%`,
-      changeType: enabledDevices > 0 ? 'positive' : 'neutral',
-      icon: '✅',
-      color: 'text-success'
+      title: 'PCs Totais',
+      value: totalComputers,
+      change: getTotalComputersChange(),
+      changeType: totalComputers > 0 ? 'positive' : 'neutral',
+      icon: '💻',
+      color: 'text-primary'
     },
     {
-      title: 'Dispositivos Bloqueados',
-      value: blockedDevices,
-      change: `${getBlockedPercentage()}%`,
-      changeType: blockedDevices > 0 ? 'negative' : 'neutral',
-      icon: '🚫',
-      color: 'text-error'
+      title: 'PCs Online',
+      value: onlineComputers,
+      change: getOnlineComputersChange(),
+      changeType: onlineComputers > 0 ? 'positive' : 'neutral',
+      icon: '🖥️',
+      color: 'text-success'
     }
   ]
 
