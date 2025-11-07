@@ -42,8 +42,21 @@ public class AgentService : BackgroundService
         _remoteDesktopService.SessionStarted += OnDesktopSessionStarted;
         _remoteDesktopService.SessionStopped += OnDesktopSessionStopped;
 
-        // Conectar ao servidor
+        // Iniciar monitoramento persistente da conexão
+        _webSocketService.StartPersistentConnection();
+
+        // Primeira tentativa imediata de conexão
         await _webSocketService.ConnectAsync();
+
+        // Aguardar até que a conexão seja estabelecida ou o serviço seja cancelado
+        try
+        {
+            await _webSocketService.WaitForConnectionAsync(TimeSpan.FromSeconds(30), stoppingToken);
+        }
+        catch (TimeoutException ex)
+        {
+            Console.WriteLine($"⚠️ Não foi possível estabelecer conexão inicial no tempo limite: {ex.Message}");
+        }
 
         // Enviar status inicial
         await SendComputerStatusAsync();
@@ -59,10 +72,7 @@ public class AgentService : BackgroundService
                 // Reconectar se necessário (tentativa contínua em background)
                 if (!_webSocketService.IsConnected)
                 {
-                    Console.WriteLine("⚠️ Não conectado ao servidor. Tentando reconectar...");
-                    _ = Task.Run(() => _webSocketService.ConnectAsync());
-                    
-                    // Aguardar um pouco antes de tentar enviar dados
+                    Console.WriteLine("⚠️ Não conectado ao servidor. Aguardando reconexão automática...");
                     await Task.Delay(2000, stoppingToken);
                     continue;
                 }
@@ -87,6 +97,8 @@ public class AgentService : BackgroundService
                 await Task.Delay(5000, stoppingToken);
             }
         }
+
+        _webSocketService.StopPersistentConnection();
     }
 
     private async Task SendComputerStatusAsync()

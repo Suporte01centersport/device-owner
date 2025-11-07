@@ -1,6 +1,15 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip
+} from 'recharts'
 
 interface Device {
   deviceId: string
@@ -18,6 +27,7 @@ interface Computer {
   computerId: string
   name?: string
   status?: 'online' | 'offline' | string
+  lastSeen?: number
 }
 
 interface DashboardProps {
@@ -28,7 +38,8 @@ interface DashboardProps {
 
 export default function Dashboard({ devices, isConnected, onMessage }: DashboardProps) {
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [chartData, setChartData] = useState<Array<{ day: string; value: number }>>([])
+  const [deviceHistory, setDeviceHistory] = useState<Array<{ day: string; date: string; devices: number }>>([])
+  const [chartData, setChartData] = useState<Array<{ day: string; date: string; devices: number; computers: number }>>([])
   const [isLoadingChart, setIsLoadingChart] = useState(false)
   const [isClient, setIsClient] = useState(false)
   const [notificationStatus, setNotificationStatus] = useState<{
@@ -50,6 +61,11 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }, 1000)
     return () => clearInterval(timer)
   }, [])
+
+  useEffect(() => {
+    const merged = mergeDeviceAndComputerHistory(deviceHistory, computers)
+    setChartData(merged)
+  }, [deviceHistory, computers])
 
   useEffect(() => {
     let isMounted = true
@@ -88,14 +104,14 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
         if (result.success && result.data) {
           // Processar dados da semana (segunda a domingo)
           const processedData = processHistoryData(result.data)
-          setChartData(processedData)
+          setDeviceHistory(processedData)
         } else {
           // Se não houver dados, usar valores zerados
-          setChartData(generateEmptyChartData())
+          setDeviceHistory(generateEmptyChartData())
         }
       } catch (error) {
         console.error('❌ Erro ao carregar histórico:', error)
-        setChartData(generateEmptyChartData())
+        setDeviceHistory(generateEmptyChartData())
       } finally {
         setIsLoadingChart(false)
       }
@@ -132,7 +148,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     })
     
     // Gerar array de dados da semana (Segunda a Domingo)
-    const chartData: Array<{ day: string; value: number }> = []
+    const history: Array<{ day: string; date: string; devices: number }> = []
     const currentDate = new Date(startDate)
     
     for (let i = 0; i < 7; i++) {
@@ -140,15 +156,16 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       const dayName = days[currentDate.getDay()]
       const value = dateMap.get(dateStr) || 0
       
-      chartData.push({
+      history.push({
         day: dayName,
-        value: value
+        date: dateStr,
+        devices: value
       })
       
       currentDate.setDate(currentDate.getDate() + 1)
     }
     
-    return chartData
+    return history
   }
 
   const generateEmptyChartData = () => {
@@ -166,9 +183,41 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       date.setDate(startDate.getDate() + i)
       return {
         day: days[date.getDay()],
-        value: 0
+        date: date.toISOString().split('T')[0],
+        devices: 0
       }
     })
+  }
+
+  const mergeDeviceAndComputerHistory = (
+    deviceHistoryData: Array<{ day: string; date: string; devices: number }>,
+    computerList: Computer[]
+  ) => {
+    if (deviceHistoryData.length === 0) return []
+
+    const now = new Date()
+    const sevenDaysAgo = new Date(now)
+    sevenDaysAgo.setDate(now.getDate() - 6)
+
+    const computerCounts = new Map<string, number>()
+
+    computerList.forEach((computer) => {
+      if (!computer.lastSeen) return
+      const status = (computer.status || '').toLowerCase()
+      if (status !== 'online') return
+      const lastSeenDate = new Date(computer.lastSeen)
+      if (lastSeenDate < sevenDaysAgo) return
+      const dateStr = lastSeenDate.toISOString().split('T')[0]
+      const current = computerCounts.get(dateStr) || 0
+      computerCounts.set(dateStr, current + 1)
+    })
+
+    return deviceHistoryData.map((entry) => ({
+      day: entry.day,
+      date: entry.date,
+      devices: entry.devices,
+      computers: computerCounts.get(entry.date) || 0
+    }))
   }
 
   // Processar mensagens de notificação
@@ -347,6 +396,41 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       }
     })
 
+  const chartStackData = useMemo(() => {
+    return chartData.map((entry) => ({
+      day: entry.day,
+      celulares: entry.devices ?? 0,
+      pcs: entry.computers ?? 0
+    }))
+  }, [chartData])
+
+  const renderBarChartTooltip = useMemo(() => {
+    return ({ active, payload, label }: any) => {
+      if (!active || !payload || payload.length === 0) {
+        return null
+      }
+
+      const celularesValue = payload.find((item: any) => item.dataKey === 'celulares')?.value ?? 0
+      const pcsValue = payload.find((item: any) => item.dataKey === 'pcs')?.value ?? 0
+
+      return (
+        <div className="bg-slate-900/95 text-white text-xs px-4 py-3 rounded-lg shadow-lg border border-slate-700">
+          <div className="text-[11px] text-slate-300 mb-2 font-medium text-center">{label}</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 text-blue-200">
+              <span role="img" aria-label="Celulares">📱</span>
+              <span className="font-semibold text-white">{celularesValue}</span>
+            </div>
+            <div className="flex items-center gap-1 text-blue-100">
+              <span role="img" aria-label="PCs">💻</span>
+              <span className="font-semibold text-white">{pcsValue}</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  }, [])
+
 
   return (
     <div className="p-6 space-y-6">
@@ -419,50 +503,44 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
           </div>
           
           {/* Bar Chart */}
-          <div className="h-64 flex items-end justify-between gap-2 relative">
-            {chartData.map((data, index) => {
-              // ✅ Limite de 50 para o gráfico do dashboard
-              const maxValue = 50;
-              const currentValue = data.value || 0;
-              
-              // Calcular altura baseada em 50 como máximo
-              const heightPx = currentValue >= maxValue
-                ? 256 // Máximo: barra cheia (h-64 = 256px)
-                : Math.max((currentValue / maxValue) * 256, 4); // Proporcional a 50, mínimo 4px
-              
-              // Formatar valor para exibição
-              const displayValue = currentValue > maxValue ? '50+' : currentValue;
-              
-              return (
-                <div key={index} className="flex-1 flex flex-col items-center group cursor-pointer">
-                  <div 
-                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all duration-500 relative shadow-sm"
-                    style={{ height: `${heightPx}px` }}
-                    title={`${data.day}: ${data.value} dispositivo${data.value > 1 ? 's' : ''}`}
-                  >
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                      {displayValue} dispositivo{data.value > 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  <div className="text-xs text-secondary mt-2 font-medium">
-                    {data.day}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartStackData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="mobileGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.95} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0.95} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="day" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[0, 50]}
+                  interval={0}
+                  ticks={[0, 10, 20, 30, 40, 50]}
+                />
+                <RechartsTooltip content={renderBarChartTooltip} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
+                <Bar dataKey="celulares" stackId="devices" fill="url(#mobileGradient)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="pcs" stackId="devices" fill="rgba(191, 219, 254, 0.95)" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
           
           {/* Chart legend */}
           <div className="flex justify-center mt-4 gap-6">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded"></div>
-              <span className="text-xs text-secondary">Dispositivos Online</span>
+              <span className="text-xs text-secondary">Celulares Online</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gray-300 rounded"></div>
-              <span className="text-xs text-secondary">Reseta toda Segunda-feira</span>
+              <div className="w-3 h-3 bg-blue-200 rounded"></div>
+              <span className="text-xs text-secondary">PCs Online</span>
             </div>
           </div>
+          <div className="text-center text-[11px] text-muted mt-2">Celulares usam histórico diário; PCs consideram a última atividade registrada em cada dia</div>
         </div>
 
         {/* Recent Activity */}
@@ -526,8 +604,8 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
                 const reportData = {
                   totalDevices: devices.length,
                   onlineDevices: onlineDevices,
-                  enabledDevices: enabledDevices,
-                  blockedDevices: blockedDevices,
+                  totalComputers: totalComputers,
+                  onlineComputers: onlineComputers,
                   avgBattery: avgBattery,
                   timestamp: new Date().toISOString()
                 }

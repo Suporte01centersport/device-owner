@@ -130,11 +130,11 @@ export default function Home() {
           // Aguardar um pouco antes de solicitar a senha
           setTimeout(() => {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
-              // Solicitar senha de administrador atual
-              websocket.send(JSON.stringify({
-                type: 'get_admin_password',
-                timestamp: Date.now()
-              }))
+            // Solicitar senha de administrador atual
+            websocket.send(JSON.stringify({
+              type: 'get_admin_password',
+              timestamp: Date.now()
+            }))
             }
           }, 500)
         }
@@ -202,7 +202,7 @@ export default function Home() {
         // Fechar conexão
         if (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN) {
           websocket.close(1000, 'Component unmounting')
-        }
+      }
         websocket = null
       }
       

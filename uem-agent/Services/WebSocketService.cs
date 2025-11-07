@@ -24,6 +24,8 @@ public class WebSocketService : IDisposable
     private Task? _heartbeatTask;
     private DateTime _lastMessageReceived = DateTime.UtcNow;
     private bool _isReconnecting = false;
+    private Task? _connectionMonitorTask;
+    private CancellationTokenSource? _connectionMonitorCts;
 
     public event EventHandler<ComputerInfo>? OnStatusUpdateRequested;
     public event EventHandler<RemoteAction>? OnRemoteActionReceived;
@@ -38,6 +40,28 @@ public class WebSocketService : IDisposable
     }
 
     public bool IsConnected => _isConnected && _webSocket?.State == WebSocketState.Open;
+
+    public void StartPersistentConnection()
+    {
+        if (_connectionMonitorTask != null && !_connectionMonitorTask.IsCompleted)
+        {
+            return;
+        }
+
+        _connectionMonitorCts?.Cancel();
+        _connectionMonitorCts?.Dispose();
+        _connectionMonitorCts = new CancellationTokenSource();
+
+        _connectionMonitorTask = Task.Run(() => MonitorConnectionAsync(_connectionMonitorCts.Token));
+    }
+
+    public void StopPersistentConnection()
+    {
+        _connectionMonitorCts?.Cancel();
+        _connectionMonitorCts?.Dispose();
+        _connectionMonitorCts = null;
+        _connectionMonitorTask = null;
+    }
 
     public async Task ConnectAsync()
     {
@@ -126,6 +150,28 @@ public class WebSocketService : IDisposable
             _isReconnecting = false;
             _connectSemaphore.Release();
         }
+    }
+
+    public async Task WaitForConnectionAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var start = DateTime.UtcNow;
+
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            if (IsConnected)
+            {
+                return;
+            }
+
+            if (timeout != Timeout.InfiniteTimeSpan && DateTime.UtcNow - start > timeout)
+            {
+                throw new TimeoutException("Não foi possível estabelecer conexão com o servidor UEM no tempo limite informado.");
+            }
+
+            await Task.Delay(1000, cancellationToken);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
     }
 
     public async Task SendDesktopFrameAsync(byte[] frameData, string sessionId)
@@ -397,6 +443,37 @@ public class WebSocketService : IDisposable
         }
     }
 
+    private async Task MonitorConnectionAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                if (!IsConnected && !_isReconnecting)
+                {
+                    await ConnectAsync();
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Erro no monitor de conexão: {ex.Message}");
+            }
+
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+        }
+    }
+
     private async Task SendRemoteAccessInfoAsync(string computerId)
     {
         if (!IsConnected) return;
@@ -512,6 +589,7 @@ public class WebSocketService : IDisposable
 
     public void Dispose()
     {
+        StopPersistentConnection();
         _cancellationTokenSource?.Cancel();
         
         try

@@ -360,7 +360,7 @@ public class SystemInfoService
             
             if (wifiInterface != null)
             {
-                return "Wi-Fi";
+                    return "Wi-Fi";
             }
 
             // Se não há Wi-Fi, procurar por Ethernet
@@ -369,7 +369,7 @@ public class SystemInfoService
             
             if (ethernetInterface != null)
             {
-                return "Ethernet";
+                    return "Ethernet";
             }
 
             // Se não encontrou Wi-Fi nem Ethernet, retornar o tipo da primeira interface

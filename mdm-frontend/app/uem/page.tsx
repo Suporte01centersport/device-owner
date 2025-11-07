@@ -143,8 +143,8 @@ export default function UEMPage() {
       // Não logar erros durante conexão inicial (StrictMode causa isso em desenvolvimento)
       // Só logar se realmente houver um erro após a conexão estar estabelecida
       if (websocket && websocket.readyState === WebSocket.OPEN) {
-        console.error('Erro WebSocket:', error)
-      }
+      console.error('Erro WebSocket:', error)
+    }
     }
     
     websocket.onclose = (event) => {
@@ -158,9 +158,9 @@ export default function UEMPage() {
     return () => {
       clearInterval(interval)
       if (websocket) {
-        websocket.removeEventListener('message', messageHandler)
+      websocket.removeEventListener('message', messageHandler)
         // Fechar com código 1000 (normal) para evitar logs desnecessários
-        if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
+      if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
           websocket.close(1000, 'Component unmounting')
         }
       }
