@@ -9,6 +9,7 @@ public class AppSettings
     public int HeartbeatInterval { get; set; } = 10000;
     public int ReconnectDelay { get; set; } = 5000;
     public int MaxReconnectAttempts { get; set; } = 10;
+    public string? AdminPassword { get; set; }
 }
 
 

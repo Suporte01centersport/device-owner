@@ -264,6 +264,7 @@ internal static class Program
         services.Configure<AppSettings>(configuration);
         
         // Serviços
+        services.AddSingleton<AdminPasswordService>();
         services.AddSingleton<SystemInfoService>();
         services.AddSingleton<RemoteAccessService>();
         services.AddSingleton<LocationService>();
@@ -277,9 +278,11 @@ internal static class Program
         {
             var settings = sp.GetRequiredService<IOptions<AppSettings>>();
             var remoteAccessService = sp.GetRequiredService<RemoteAccessService>();
-            return new WebSocketService(settings, remoteAccessService);
+            var adminPasswordService = sp.GetRequiredService<AdminPasswordService>();
+            return new WebSocketService(settings, remoteAccessService, adminPasswordService);
         });
         services.AddHostedService<AgentService>();
+        services.AddHostedService<ConnectivityMonitorService>();
     }
 }
 

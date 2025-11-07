@@ -2,12 +2,15 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.DependencyInjection;
 using System.Drawing;
 using System.Threading.Tasks;
+using UEMAgent.Services;
 
 namespace UEMAgent;
 
 public partial class MainForm : Form
 {
     private readonly IHost _host;
+    private readonly AdminPasswordService _adminPasswordService;
+    private readonly WebSocketService _webSocketService;
     private System.Windows.Forms.Timer? _updateTimer;
     private Label? _statusLabel;
     private Label? _connectionLabel;
@@ -18,6 +21,8 @@ public partial class MainForm : Form
     public MainForm(IHost host)
     {
         _host = host;
+        _adminPasswordService = host.Services.GetRequiredService<AdminPasswordService>();
+        _webSocketService = host.Services.GetRequiredService<WebSocketService>();
         InitializeComponent();
         InitializeSystemTray();
     }
@@ -222,6 +227,11 @@ public partial class MainForm : Form
 
     private void ExitApplication()
     {
+        if (!AuthorizeShutdown())
+        {
+            return;
+        }
+
         if (_notifyIcon != null)
         {
             _notifyIcon.Visible = false;
@@ -303,6 +313,52 @@ public partial class MainForm : Form
             _updateTimer?.Dispose();
         }
         base.Dispose(disposing);
+    }
+
+    private bool AuthorizeShutdown()
+    {
+        if (!_adminPasswordService.HasPassword)
+        {
+            _ = _webSocketService.RequestAdminPasswordAsync();
+            MessageBox.Show(
+                "Não foi possível validar a senha de administrador. Verifique a sincronização com o servidor e tente novamente.",
+                "Senha não sincronizada",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+            return false;
+        }
+
+        const int maxAttempts = 3;
+
+        for (var attempt = 0; attempt < maxAttempts; attempt++)
+        {
+            using var prompt = new PasswordPromptForm();
+            var dialogResult = prompt.ShowDialog(this);
+            if (dialogResult != DialogResult.OK)
+            {
+                return false;
+            }
+
+            var enteredPassword = prompt.EnteredPassword;
+            if (_adminPasswordService.ValidatePassword(enteredPassword))
+            {
+                return true;
+            }
+
+            MessageBox.Show(
+                "Senha incorreta. Tente novamente.",
+                "Acesso negado",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+        }
+
+        MessageBox.Show(
+            "Número máximo de tentativas atingido. Encerramento bloqueado.",
+            "Acesso negado",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Error);
+
+        return false;
     }
 }
 

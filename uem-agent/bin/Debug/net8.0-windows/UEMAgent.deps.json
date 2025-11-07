@@ -11,12 +11,13 @@
           "Microsoft.Extensions.Configuration": "8.0.0",
           "Microsoft.Extensions.Configuration.Json": "8.0.0",
           "Microsoft.Extensions.Hosting": "8.0.0",
+          "Microsoft.Extensions.Hosting.WindowsServices": "8.0.0",
           "Newtonsoft.Json": "13.0.3",
           "System.Diagnostics.PerformanceCounter": "7.0.0",
           "System.Drawing.Common": "8.0.0",
           "System.Management": "7.0.0",
           "System.Net.WebSockets.Client": "4.3.2",
-          "System.ServiceProcess.ServiceController": "7.0.0"
+          "System.ServiceProcess.ServiceController": "8.0.0"
         },
         "runtime": {
           "UEMAgent.dll": {}
@@ -243,6 +244,19 @@
         },
         "runtime": {
           "lib/net8.0/Microsoft.Extensions.Hosting.Abstractions.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
+          }
+        }
+      },
+      "Microsoft.Extensions.Hosting.WindowsServices/8.0.0": {
+        "dependencies": {
+          "Microsoft.Extensions.Hosting": "8.0.0",
+          "Microsoft.Extensions.Logging.EventLog": "8.0.0",
+          "System.ServiceProcess.ServiceController": "8.0.0"
+        },
+        "runtime": {
+          "lib/net8.0/Microsoft.Extensions.Hosting.WindowsServices.dll": {
             "assemblyVersion": "8.0.0.0",
             "fileVersion": "8.0.23.53103"
           }
@@ -925,22 +939,22 @@
           "System.Threading": "4.3.0"
         }
       },
-      "System.ServiceProcess.ServiceController/7.0.0": {
+      "System.ServiceProcess.ServiceController/8.0.0": {
         "dependencies": {
           "System.Diagnostics.EventLog": "8.0.0"
         },
         "runtime": {
-          "lib/net7.0/System.ServiceProcess.ServiceController.dll": {
-            "assemblyVersion": "7.0.0.0",
-            "fileVersion": "7.0.22.51805"
+          "lib/net8.0/System.ServiceProcess.ServiceController.dll": {
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
           }
         },
         "runtimeTargets": {
-          "runtimes/win/lib/net7.0/System.ServiceProcess.ServiceController.dll": {
+          "runtimes/win/lib/net8.0/System.ServiceProcess.ServiceController.dll": {
             "rid": "win",
             "assetType": "runtime",
-            "assemblyVersion": "7.0.0.0",
-            "fileVersion": "7.0.22.51805"
+            "assemblyVersion": "8.0.0.0",
+            "fileVersion": "8.0.23.53103"
           }
         }
       },
@@ -1122,6 +1136,13 @@
       "sha512": "sha512-AG7HWwVRdCHlaA++1oKDxLsXIBxmDpMPb3VoyOoAghEWnkUvEAdYQUwnV4jJbAaa/nMYNiEh5ByoLauZBEiovg==",
       "path": "microsoft.extensions.hosting.abstractions/8.0.0",
       "hashPath": "microsoft.extensions.hosting.abstractions.8.0.0.nupkg.sha512"
+    },
+    "Microsoft.Extensions.Hosting.WindowsServices/8.0.0": {
+      "type": "package",
+      "serviceable": true,
+      "sha512": "sha512-8JIvU6R9fejZj/p6QATeDaNEPtIvLuwE5Uh7qyPx7tp+Fc9FqYaAe6ylU2dM839IUpmsU4ZVev956slZyrYEhQ==",
+      "path": "microsoft.extensions.hosting.windowsservices/8.0.0",
+      "hashPath": "microsoft.extensions.hosting.windowsservices.8.0.0.nupkg.sha512"
     },
     "Microsoft.Extensions.Logging/8.0.0": {
       "type": "package",
@@ -1655,12 +1676,12 @@
       "path": "system.security.principal.windows/4.3.0",
       "hashPath": "system.security.principal.windows.4.3.0.nupkg.sha512"
     },
-    "System.ServiceProcess.ServiceController/7.0.0": {
+    "System.ServiceProcess.ServiceController/8.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-7W5e7z2LSsxEvnix0F4pQuo22l46vx69+VHZyN9vtMFTtB2kWInimBmhbFXKIv1hK2O2D4hGnBn4bAZGzse8PQ==",
-      "path": "system.serviceprocess.servicecontroller/7.0.0",
-      "hashPath": "system.serviceprocess.servicecontroller.7.0.0.nupkg.sha512"
+      "sha512": "sha512-jtYVG3bpw2n/NvNnP2g/JLri0D4UtfusTvLeH6cZPNAEjJXJVGspS3wLgVvjNbm+wjaYkFgsXejMTocV1T5DIQ==",
+      "path": "system.serviceprocess.servicecontroller/8.0.0",
+      "hashPath": "system.serviceprocess.servicecontroller.8.0.0.nupkg.sha512"
     },
     "System.Text.Encoding/4.3.0": {
       "type": "package",

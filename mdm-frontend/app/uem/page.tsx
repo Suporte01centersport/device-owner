@@ -1,171 +1,399 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import UEMCard from '../components/UEM/UEMCard'
 import UEMModal from '../components/UEM/UEMModal'
 import { Computer } from '../types/uem'
+
+type ComputerPayload = Partial<Computer> & { computerId: string }
+
+const OFFLINE_GRACE_PERIOD_MS = 10000
+
+const getLastActivityTimestamp = (computer?: Partial<Computer>) => {
+  if (!computer) return 0
+  const heartbeat = computer.lastHeartbeat ?? 0
+  const lastSeen = computer.lastSeen ?? 0
+  return Math.max(heartbeat, lastSeen)
+}
+
+const ensureComputerShape = (source: ComputerPayload, fallback?: Computer): Computer => {
+  return {
+    id: source.id ?? fallback?.id ?? source.computerId,
+    name: source.name ?? fallback?.name ?? 'Computador',
+    computerId: source.computerId,
+    status: source.status ?? fallback?.status ?? 'offline',
+    lastSeen: source.lastSeen ?? fallback?.lastSeen ?? Date.now(),
+    osType: source.osType ?? fallback?.osType ?? 'unknown',
+    osVersion: source.osVersion ?? fallback?.osVersion ?? '',
+    osBuild: source.osBuild ?? fallback?.osBuild,
+    architecture: source.architecture ?? fallback?.architecture ?? 'unknown',
+    hostname: source.hostname ?? fallback?.hostname,
+    domain: source.domain ?? fallback?.domain,
+    cpuModel: source.cpuModel ?? fallback?.cpuModel,
+    cpuCores: source.cpuCores ?? fallback?.cpuCores,
+    cpuThreads: source.cpuThreads ?? fallback?.cpuThreads,
+    memoryTotal: source.memoryTotal ?? fallback?.memoryTotal ?? 0,
+    memoryUsed: source.memoryUsed ?? fallback?.memoryUsed ?? 0,
+    storageTotal: source.storageTotal ?? fallback?.storageTotal ?? 0,
+    storageUsed: source.storageUsed ?? fallback?.storageUsed ?? 0,
+    storageDrives: source.storageDrives ?? fallback?.storageDrives ?? [],
+    ipAddress: source.ipAddress ?? fallback?.ipAddress,
+    macAddress: source.macAddress ?? fallback?.macAddress,
+    networkType: source.networkType ?? fallback?.networkType,
+    wifiSSID: source.wifiSSID ?? fallback?.wifiSSID,
+    isWifiEnabled: source.isWifiEnabled ?? fallback?.isWifiEnabled ?? false,
+    isBluetoothEnabled: source.isBluetoothEnabled ?? fallback?.isBluetoothEnabled ?? false,
+    agentVersion: source.agentVersion ?? fallback?.agentVersion,
+    agentInstalledAt: source.agentInstalledAt ?? fallback?.agentInstalledAt,
+    lastHeartbeat: source.lastHeartbeat ?? fallback?.lastHeartbeat,
+    loggedInUser: source.loggedInUser ?? fallback?.loggedInUser,
+    assignedDeviceUserId: source.assignedDeviceUserId ?? fallback?.assignedDeviceUserId ?? null,
+    assignedUser: source.assignedUser ?? fallback?.assignedUser ?? null,
+    assignedUserId: source.assignedUserId ?? fallback?.assignedUserId ?? null,
+    assignedUserName: source.assignedUserName ?? fallback?.assignedUserName ?? null,
+    complianceStatus: source.complianceStatus ?? fallback?.complianceStatus ?? 'unknown',
+    antivirusInstalled: source.antivirusInstalled ?? fallback?.antivirusInstalled ?? false,
+    antivirusEnabled: source.antivirusEnabled ?? fallback?.antivirusEnabled ?? false,
+    antivirusName: source.antivirusName ?? fallback?.antivirusName,
+    firewallEnabled: source.firewallEnabled ?? fallback?.firewallEnabled ?? false,
+    encryptionEnabled: source.encryptionEnabled ?? fallback?.encryptionEnabled ?? false,
+    restrictions: { ...(fallback?.restrictions ?? {}), ...(source.restrictions ?? {}) },
+    installedPrograms: source.installedPrograms ?? fallback?.installedPrograms,
+    installedProgramsCount:
+      source.installedProgramsCount ??
+      source.installedPrograms?.length ??
+      fallback?.installedProgramsCount ??
+      fallback?.installedPrograms?.length ??
+      0,
+    latitude: source.latitude ?? fallback?.latitude,
+    longitude: source.longitude ?? fallback?.longitude,
+    locationAccuracy: source.locationAccuracy ?? fallback?.locationAccuracy,
+    lastLocationUpdate: source.lastLocationUpdate ?? fallback?.lastLocationUpdate,
+    locationSource: source.locationSource ?? fallback?.locationSource,
+    locationAddress: source.locationAddress ?? fallback?.locationAddress
+  }
+}
+
+const mergeComputerState = (existing: Computer | undefined, incoming: ComputerPayload): Computer => {
+  const normalized = ensureComputerShape(incoming, existing)
+
+  if (!existing) {
+    return normalized
+  }
+
+  const lastActivityExisting = getLastActivityTimestamp(existing)
+  const lastActivityIncoming = getLastActivityTimestamp(normalized)
+
+  const merged: Computer = {
+    ...existing,
+    ...normalized,
+    restrictions: normalized.restrictions,
+    installedPrograms: normalized.installedPrograms ?? existing.installedPrograms,
+    installedProgramsCount: normalized.installedProgramsCount
+  }
+
+  merged.lastSeen = Math.max(existing.lastSeen, normalized.lastSeen)
+
+  const heartbeatExisting = existing.lastHeartbeat ?? 0
+  const heartbeatIncoming = normalized.lastHeartbeat ?? 0
+  const resolvedHeartbeat = Math.max(heartbeatExisting, heartbeatIncoming)
+  merged.lastHeartbeat = resolvedHeartbeat > 0 ? resolvedHeartbeat : undefined
+
+  if (lastActivityIncoming >= lastActivityExisting) {
+    merged.status = normalized.status
+  } else {
+    merged.status = existing.status
+  }
+
+  return merged
+}
+
+const buildComputerPayload = (raw: any, fallbackId?: string): ComputerPayload | null => {
+  const computerId = raw?.computerId ?? fallbackId
+  if (!computerId) {
+    return null
+  }
+  return { ...raw, computerId }
+}
 
 export default function UEMPage() {
   const [computers, setComputers] = useState<Computer[]>([])
   const [selectedComputer, setSelectedComputer] = useState<Computer | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const [websocket, setWebsocket] = useState<WebSocket | null>(null)
+  const isMountedRef = useRef(false)
+  const lastRequestId = useRef(0)
+  const offlineTimersRef = useRef<Record<string, NodeJS.Timeout>>({})
 
-  // Carregar computadores e conectar ao WebSocket (consolidado em um único useEffect)
   useEffect(() => {
-    const loadComputers = async () => {
-      setLoading(true)
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      Object.values(offlineTimersRef.current).forEach(timer => clearTimeout(timer))
+      offlineTimersRef.current = {}
+    }
+  }, [])
+
+  const clearPendingOffline = useCallback((computerId: string) => {
+    const timers = offlineTimersRef.current
+    const pending = timers[computerId]
+    if (pending) {
+      clearTimeout(pending)
+      delete timers[computerId]
+    }
+  }, [])
+
+  const scheduleOfflineUpdate = useCallback((payload: ComputerPayload) => {
+    const computerId = payload.computerId
+    if (!computerId) {
+      return
+    }
+
+    const timers = offlineTimersRef.current
+    if (timers[computerId]) {
+      clearTimeout(timers[computerId])
+    }
+
+    timers[computerId] = setTimeout(() => {
+      delete timers[computerId]
+
+      setComputers(prev => {
+        const index = prev.findIndex(c => c.computerId === computerId)
+        const normalized = ensureComputerShape({ ...payload, status: 'offline' }, index >= 0 ? prev[index] : undefined)
+
+        if (index === -1) {
+          return [...prev, normalized]
+        }
+
+        if (prev[index].status === 'offline') {
+          const merged = mergeComputerState(prev[index], normalized)
+          if (merged === prev[index]) {
+            return prev
+          }
+          const next = [...prev]
+          next[index] = merged
+          return next
+        }
+
+        const next = [...prev]
+        next[index] = mergeComputerState(prev[index], normalized)
+        return next
+      })
+    }, OFFLINE_GRACE_PERIOD_MS)
+  }, [])
+
+  const mergeComputers = useCallback((incoming: Computer[]) => {
+    if (!incoming || incoming.length === 0) {
+      setComputers(prev => (prev.length === 0 ? prev : []))
+      return
+    }
+
+    setComputers(prev => {
+      const prevMap = new Map(prev.map(computer => [computer.computerId, computer]))
+      const mergedList: Computer[] = []
+
+      incoming.forEach(rawComputer => {
+        if (!rawComputer || !rawComputer.computerId) {
+          return
+        }
+
+        const existing = prevMap.get(rawComputer.computerId)
+        const merged = mergeComputerState(existing, rawComputer)
+
+        if (rawComputer.status === 'online') {
+          clearPendingOffline(rawComputer.computerId)
+        }
+
+        if (rawComputer.status === 'offline' && existing && existing.status === 'online') {
+          scheduleOfflineUpdate(rawComputer)
+          merged.status = existing.status
+        }
+
+        mergedList.push(merged)
+        prevMap.delete(rawComputer.computerId)
+      })
+
+      // Preservar computadores que não vieram na lista atual (útil para evitar sumiço em caso de resposta parcial)
+      prevMap.forEach(remaining => {
+        mergedList.push(remaining)
+      })
+
+      return mergedList
+    })
+  }, [clearPendingOffline, scheduleOfflineUpdate])
+
+  const upsertComputer = useCallback((payload: ComputerPayload) => {
+    setComputers(prev => {
+      const index = prev.findIndex(computer => computer.computerId === payload.computerId)
+      if (index === -1) {
+        const normalized = ensureComputerShape(payload)
+        if (payload.status === 'online') {
+          clearPendingOffline(payload.computerId)
+        }
+        if (payload.status === 'offline') {
+          scheduleOfflineUpdate(payload)
+        }
+        return [...prev, normalized]
+      }
+
+      const updated = [...prev]
+      if (payload.status === 'online') {
+        clearPendingOffline(payload.computerId)
+        updated[index] = mergeComputerState(prev[index], payload)
+      } else {
+        if (prev[index].status === 'online') {
+          scheduleOfflineUpdate(payload)
+        } else {
+          updated[index] = mergeComputerState(prev[index], payload)
+        }
+      }
+      return updated
+    })
+  }, [clearPendingOffline, scheduleOfflineUpdate])
+
+  const loadComputers = useCallback(
+    async (showSpinner: boolean) => {
+      const requestId = ++lastRequestId.current
+
+      if (showSpinner) {
+        if (isMountedRef.current) {
+          setLoading(true)
+        }
+      } else if (isMountedRef.current) {
+        setIsRefreshing(true)
+      }
+
       try {
         const response = await fetch('/api/uem/computers')
-        if (response.ok) {
-          const data = await response.json()
-          if (data.success) {
-            setComputers(data.computers || [])
-          }
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+
+        const data = await response.json()
+        if (requestId !== lastRequestId.current || !isMountedRef.current) {
+          return
+        }
+
+        if (data.success && Array.isArray(data.computers)) {
+          mergeComputers(data.computers as Computer[])
         }
       } catch (error) {
-        console.error('Erro ao carregar computadores:', error)
+        if (requestId === lastRequestId.current) {
+          console.error('Erro ao carregar computadores:', error)
+        }
       } finally {
-        setLoading(false)
+        if (requestId === lastRequestId.current && isMountedRef.current) {
+          if (showSpinner) {
+            setLoading(false)
+          }
+          setIsRefreshing(false)
+        }
       }
+    },
+    [mergeComputers]
+  )
+
+  useEffect(() => {
+    loadComputers(true)
+    const interval = setInterval(() => loadComputers(false), 30000)
+
+    return () => {
+      clearInterval(interval)
     }
-    loadComputers()
-    
-    // Atualizar a cada 30 segundos
-    const interval = setInterval(loadComputers, 30000)
-    
-    // Conectar ao WebSocket para receber atualizações em tempo real e acesso remoto
+  }, [loadComputers])
+
+  useEffect(() => {
     const hostname = window.location.hostname
-    const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
-      ? 'localhost' 
-      : hostname
+    const wsHost = hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname
     const wsUrl = `ws://${wsHost}:3002`
-    const websocket = new WebSocket(wsUrl)
-    
-    websocket.onopen = () => {
+    const socket = new WebSocket(wsUrl)
+
+    const handleOpen = () => {
+      if (!isMountedRef.current) {
+        socket.close()
+        return
+      }
+
       console.log('✅ WebSocket conectado para UEM')
-      websocket.send(JSON.stringify({
-        type: 'web_client',
-        timestamp: Date.now()
-      }))
-      setWebsocket(websocket) // Atualizar estado com o websocket conectado
+      socket.send(
+        JSON.stringify({
+          type: 'web_client',
+          timestamp: Date.now()
+        })
+      )
+      setWebsocket(socket)
     }
-    
-    // Usar addEventListener ao invés de onmessage para permitir múltiplos handlers
-    const messageHandler = (event: MessageEvent) => {
+
+    const handleMessage = (event: MessageEvent) => {
+      if (!isMountedRef.current) {
+        return
+      }
+
       try {
         const message = JSON.parse(event.data)
-        
-        // Ignorar mensagens de desktop_frame (são tratadas pelo RemoteDesktopViewer)
+
         if (message.type === 'desktop_frame') {
           return
         }
-        
-        // Logar todas as mensagens recebidas para debug
-        if (message.type !== 'desktop_frame') { // Não logar frames (são muitos)
-          // console.log('📥 Mensagem WebSocket recebida no page.tsx:', message.type) // Removido para reduzir logs
-        }
-        
+
         if (message.type === 'computer_status_update') {
-          console.log('💻 Atualização de computador recebida:', message.computerId, 'Status:', message.computer?.status)
-          // Atualizar computador na lista
-          setComputers(prev => {
-            const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
-            if (existingIndex >= 0) {
-              const updated = [...prev]
-              updated[existingIndex] = { ...updated[existingIndex], ...message.computer }
-              // console.log('✅ Computador atualizado na lista') // Removido para reduzir logs
-              return updated
-            } else {
-              // Novo computador - adicionar à lista
-              // console.log('🆕 Novo computador adicionado à lista:', message.computer) // Removido para reduzir logs
-              const computer = message.computer
-              return [...prev, {
-                id: computer.id || computer.computerId,
-                name: computer.name || 'Computador',
-                computerId: computer.computerId || message.computerId,
-                status: computer.status || 'online',
-                lastSeen: computer.lastSeen || Date.now(),
-                osType: computer.osType || 'unknown',
-                osVersion: computer.osVersion || '',
-                osBuild: computer.osBuild,
-                architecture: computer.architecture || 'unknown',
-                hostname: computer.hostname,
-                domain: computer.domain,
-                cpuModel: computer.cpuModel,
-                cpuCores: computer.cpuCores,
-                cpuThreads: computer.cpuThreads,
-                memoryTotal: computer.memoryTotal || 0,
-                memoryUsed: computer.memoryUsed || 0,
-                storageTotal: computer.storageTotal || 0,
-                storageUsed: computer.storageUsed || 0,
-                storageDrives: computer.storageDrives || [],
-                ipAddress: computer.ipAddress,
-                macAddress: computer.macAddress,
-                networkType: computer.networkType,
-                wifiSSID: computer.wifiSSID,
-                isWifiEnabled: computer.isWifiEnabled !== undefined ? computer.isWifiEnabled : false,
-                isBluetoothEnabled: computer.isBluetoothEnabled !== undefined ? computer.isBluetoothEnabled : false,
-                agentVersion: computer.agentVersion,
-                agentInstalledAt: computer.agentInstalledAt,
-                lastHeartbeat: computer.lastHeartbeat,
-                loggedInUser: computer.loggedInUser,
-                assignedDeviceUserId: computer.assignedDeviceUserId,
-                assignedUserId: computer.assignedUserId,
-                assignedUserName: computer.assignedUserName,
-                complianceStatus: computer.complianceStatus || 'unknown',
-                antivirusInstalled: computer.antivirusInstalled !== undefined ? computer.antivirusInstalled : false,
-                antivirusEnabled: computer.antivirusEnabled !== undefined ? computer.antivirusEnabled : false,
-                antivirusName: computer.antivirusName,
-                firewallEnabled: computer.firewallEnabled !== undefined ? computer.firewallEnabled : false,
-                encryptionEnabled: computer.encryptionEnabled !== undefined ? computer.encryptionEnabled : false,
-                latitude: computer.latitude,
-                longitude: computer.longitude,
-                locationAccuracy: computer.locationAccuracy,
-                lastLocationUpdate: computer.lastLocationUpdate,
-                restrictions: computer.restrictions || {},
-                installedPrograms: computer.installedPrograms || [],
-                installedProgramsCount: computer.installedPrograms?.length || computer.installedProgramsCount || 0
-              }]
-            }
-          })
+          const payload = buildComputerPayload(message.computer, message.computerId)
+          if (payload) {
+            upsertComputer(payload)
+          }
+        } else if (message.type === 'computer_disconnected') {
+          const computerId = message.computerId
+          if (computerId) {
+            scheduleOfflineUpdate({
+              computerId,
+              status: 'offline',
+              lastSeen: message.timestamp ?? Date.now()
+            })
+          }
         }
       } catch (error) {
         console.error('Erro ao processar mensagem WebSocket:', error)
       }
     }
-    
-    websocket.addEventListener('message', messageHandler)
-    
-    websocket.onerror = (error) => {
-      // Não logar erros durante conexão inicial (StrictMode causa isso em desenvolvimento)
-      // Só logar se realmente houver um erro após a conexão estar estabelecida
-      if (websocket && websocket.readyState === WebSocket.OPEN) {
-      console.error('Erro WebSocket:', error)
-    }
-    }
-    
-    websocket.onclose = (event) => {
-      // Não logar desconexões normais do StrictMode (código 1000 = fechamento normal)
+
+    const handleClose = (event: CloseEvent) => {
       if (event.code !== 1000) {
         console.log('WebSocket desconectado', event.code)
       }
-      setWebsocket(null)
-    }
-    
-    return () => {
-      clearInterval(interval)
-      if (websocket) {
-      websocket.removeEventListener('message', messageHandler)
-        // Fechar com código 1000 (normal) para evitar logs desnecessários
-      if (websocket.readyState === WebSocket.OPEN || websocket.readyState === WebSocket.CONNECTING) {
-          websocket.close(1000, 'Component unmounting')
-        }
+      if (isMountedRef.current) {
+        setWebsocket(null)
       }
     }
-  }, [])
+
+    const handleError = (error: Event) => {
+      if (isMountedRef.current && socket.readyState === WebSocket.OPEN) {
+        console.error('Erro WebSocket:', error)
+      }
+    }
+
+    socket.addEventListener('open', handleOpen)
+    socket.addEventListener('message', handleMessage)
+    socket.addEventListener('close', handleClose)
+    socket.addEventListener('error', handleError)
+
+    return () => {
+      socket.removeEventListener('open', handleOpen)
+      socket.removeEventListener('message', handleMessage)
+      socket.removeEventListener('close', handleClose)
+      socket.removeEventListener('error', handleError)
+
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.close(1000, 'Component unmounting')
+      }
+
+      if (isMountedRef.current) {
+        setWebsocket(null)
+      }
+    }
+  }, [scheduleOfflineUpdate, upsertComputer])
 
   const handleComputerClick = (computer: Computer) => {
     setSelectedComputer(computer)
@@ -224,6 +452,13 @@ export default function UEMPage() {
           </button>
         </div>
       </div>
+
+      {isRefreshing && !loading && (
+        <div className="flex items-center gap-2 text-sm text-blue-600 mb-4">
+          <span className="h-2 w-2 rounded-full bg-blue-600 animate-ping"></span>
+          <span>Atualizando dados...</span>
+        </div>
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-12">

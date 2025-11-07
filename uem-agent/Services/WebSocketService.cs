@@ -19,6 +19,7 @@ public class WebSocketService : IDisposable
     private bool _isConnected = false;
     private int _reconnectAttempts = 0;
     private readonly RemoteAccessService? _remoteAccessService;
+    private readonly AdminPasswordService _adminPasswordService;
     private readonly SemaphoreSlim _connectSemaphore = new SemaphoreSlim(1, 1);
     private Task? _receiveTask;
     private Task? _heartbeatTask;
@@ -26,6 +27,9 @@ public class WebSocketService : IDisposable
     private bool _isReconnecting = false;
     private Task? _connectionMonitorTask;
     private CancellationTokenSource? _connectionMonitorCts;
+    private readonly object _reconnectLock = new();
+    private DateTime _lastReconnectRequestUtc = DateTime.MinValue;
+    private readonly TimeSpan _reconnectDebounce = TimeSpan.FromSeconds(5);
 
     public event EventHandler<ComputerInfo>? OnStatusUpdateRequested;
     public event EventHandler<RemoteAction>? OnRemoteActionReceived;
@@ -33,10 +37,14 @@ public class WebSocketService : IDisposable
     public event EventHandler<string>? OnRemoteSessionRequested;
     public event EventHandler? OnRemoteSessionStopped;
 
-    public WebSocketService(IOptions<AppSettings> settings, RemoteAccessService? remoteAccessService = null)
+    public WebSocketService(
+        IOptions<AppSettings> settings,
+        RemoteAccessService? remoteAccessService = null,
+        AdminPasswordService? adminPasswordService = null)
     {
         _settings = settings.Value;
         _remoteAccessService = remoteAccessService;
+        _adminPasswordService = adminPasswordService ?? throw new ArgumentNullException(nameof(adminPasswordService));
     }
 
     public bool IsConnected => _isConnected && _webSocket?.State == WebSocketState.Open;
@@ -98,6 +106,15 @@ public class WebSocketService : IDisposable
             catch { }
 
             _webSocket = new ClientWebSocket();
+            try
+            {
+                var heartbeatSeconds = Math.Max(5, _settings.HeartbeatInterval / 1000);
+                _webSocket.Options.KeepAliveInterval = TimeSpan.FromSeconds(heartbeatSeconds);
+            }
+            catch (PlatformNotSupportedException)
+            {
+                // Alguns ambientes não suportam ajustes no KeepAliveInterval. Ignorar silenciosamente.
+            }
             
             // Configurar timeout de conexão
             using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -121,6 +138,9 @@ public class WebSocketService : IDisposable
                 
                 // Iniciar heartbeat para detectar conexões mortas
                 _heartbeatTask = Task.Run(() => HeartbeatAsync(_cancellationTokenSource.Token));
+
+                // Solicitar sincronização da senha de administrador
+                await RequestAdminPasswordAsync();
             }
             catch (OperationCanceledException) when (timeoutCts.Token.IsCancellationRequested)
             {
@@ -286,6 +306,67 @@ public class WebSocketService : IDisposable
             {
                 _ = Task.Run(() => ConnectAsync());
             }
+        }
+    }
+
+    public async Task RequestAdminPasswordAsync()
+    {
+        if (!IsConnected)
+        {
+            Console.WriteLine("⚠️ Não é possível solicitar senha de administrador: conexão indisponível.");
+            return;
+        }
+
+        try
+        {
+            var payload = new Dictionary<string, object>
+            {
+                { "type", "get_admin_password" }
+            };
+
+            var options = new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            };
+
+            var json = JsonSerializer.Serialize(payload, options);
+            var buffer = Encoding.UTF8.GetBytes(json);
+
+            await _webSocket!.SendAsync(
+                new ArraySegment<byte>(buffer),
+                WebSocketMessageType.Text,
+                true,
+                CancellationToken.None
+            );
+
+            Console.WriteLine("📤 Solicitação de senha de administrador enviada ao servidor.");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"❌ Erro ao solicitar senha de administrador: {ex.Message}");
+        }
+    }
+
+    public void TriggerReconnect(string reason = "")
+    {
+        lock (_reconnectLock)
+        {
+            var now = DateTime.UtcNow;
+            if (now - _lastReconnectRequestUtc < _reconnectDebounce)
+            {
+                Console.WriteLine($"⏳ Ignorando reconexão duplicada (razão: {reason})");
+                return;
+            }
+            _lastReconnectRequestUtc = now;
+        }
+
+        Console.WriteLine($"🔁 TriggerReconnect chamado. Motivo: {reason}");
+        _isConnected = false;
+
+        if (!_isReconnecting)
+        {
+            _ = Task.Run(async () => await ConnectAsync());
         }
     }
 
@@ -530,6 +611,24 @@ public class WebSocketService : IDisposable
             {
                 case "request_computer_status":
                     OnStatusUpdateRequested?.Invoke(this, new ComputerInfo());
+                    break;
+
+                case "set_admin_password":
+                    var pushedPassword = root.TryGetProperty("data", out var dataElement) &&
+                                        dataElement.ValueKind == JsonValueKind.Object &&
+                                        dataElement.TryGetProperty("password", out var pwdElement)
+                        ? pwdElement.GetString()
+                        : null;
+                    _adminPasswordService.SetPassword(pushedPassword);
+                    Console.WriteLine("🔐 Senha de administrador atualizada via push do servidor.");
+                    break;
+
+                case "admin_password_response":
+                    var responsePassword = root.TryGetProperty("password", out var responsePwdElement)
+                        ? responsePwdElement.GetString()
+                        : null;
+                    _adminPasswordService.SetPassword(responsePassword);
+                    Console.WriteLine("🔐 Senha de administrador sincronizada via solicitação ativa.");
                     break;
                     
                        case "uem_remote_action":
