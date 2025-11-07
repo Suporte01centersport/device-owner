@@ -8,7 +8,8 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip
+  Tooltip as RechartsTooltip,
+  Legend
 } from 'recharts'
 
 interface Device {
@@ -61,11 +62,6 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }, 1000)
     return () => clearInterval(timer)
   }, [])
-
-  useEffect(() => {
-    const merged = mergeDeviceAndComputerHistory(deviceHistory, computers)
-    setChartData(merged)
-  }, [deviceHistory, computers])
 
   useEffect(() => {
     let isMounted = true
@@ -132,40 +128,45 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     const startDate = new Date(endDate)
     startDate.setDate(endDate.getDate() - daysFromMonday)
     
-    // Criar mapa de datas para contagem
-    const dateMap = new Map<string, number>()
+    // Criar mapas de datas para contagem
+    const deviceMap = new Map<string, number>()
+    const mobileMap = new Map<string, number>()
+    const computerMap = new Map<string, number>()
     
     data.forEach((item: any) => {
-      // Converter data do banco para string no formato YYYY-MM-DD
       const dateObj = new Date(item.status_date)
       const date = dateObj.toISOString().split('T')[0]
-      const count = parseInt(item.devices_online || 0)
+      const totalDevices = parseInt(item.devices_online || 0)
+      const mobileDevices = parseInt(item.mobile_online ?? item.devices_online ?? 0)
+      const computerDevices = parseInt(item.computers_online || 0)
       
-      if (!dateMap.has(date)) {
-        dateMap.set(date, 0)
-      }
-      dateMap.set(date, dateMap.get(date)! + count)
+      deviceMap.set(date, totalDevices)
+      mobileMap.set(date, mobileDevices)
+      computerMap.set(date, computerDevices)
     })
     
     // Gerar array de dados da semana (Segunda a Domingo)
-    const history: Array<{ day: string; date: string; devices: number }> = []
+    const historyData: Array<{ day: string; date: string; devices: number; computers: number }> = []
     const currentDate = new Date(startDate)
     
     for (let i = 0; i < 7; i++) {
       const dateStr = currentDate.toISOString().split('T')[0]
       const dayName = days[currentDate.getDay()]
-      const value = dateMap.get(dateStr) || 0
+      const deviceCount = deviceMap.get(dateStr) || 0
+      const computerCount = computerMap.get(dateStr) || 0
+      const mobileCount = mobileMap.get(dateStr) || deviceCount - computerCount
       
-      history.push({
+      historyData.push({
         day: dayName,
         date: dateStr,
-        devices: value
+        devices: Math.max(mobileCount, 0),
+        computers: Math.max(computerCount, 0)
       })
       
       currentDate.setDate(currentDate.getDate() + 1)
     }
     
-    return history
+    return historyData
   }
 
   const generateEmptyChartData = () => {
@@ -203,8 +204,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
 
     computerList.forEach((computer) => {
       if (!computer.lastSeen) return
-      const status = (computer.status || '').toLowerCase()
-      if (status !== 'online') return
+      if ((computer.status || '').toLowerCase() !== 'online') return
       const lastSeenDate = new Date(computer.lastSeen)
       if (lastSeenDate < sevenDaysAgo) return
       const dateStr = lastSeenDate.toISOString().split('T')[0]
@@ -212,12 +212,17 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       computerCounts.set(dateStr, current + 1)
     })
 
-    return deviceHistoryData.map((entry) => ({
-      day: entry.day,
-      date: entry.date,
-      devices: entry.devices,
-      computers: computerCounts.get(entry.date) || 0
-    }))
+    return deviceHistoryData.map((entry) => {
+      const baseDevices = entry.devices || 0
+      const baseComputers = computerCounts.get(entry.date) || 0
+
+      return {
+        day: entry.day,
+        date: entry.date,
+        devices: baseDevices,
+        computers: baseComputers
+      }
+    })
   }
 
   // Processar mensagens de notificação
@@ -256,35 +261,104 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
           }
         }))
       }
+      if (message.type === 'computer_status_update') {
+        console.log('💻 Atualização de computador recebida:', message.computerId, 'Status:', message.computer?.status)
+        // Atualizar computador na lista
+        setComputers(prev => {
+          const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
+          if (existingIndex >= 0) {
+            const updated = [...prev]
+            updated[existingIndex] = { ...updated[existingIndex], ...message.computer }
+            return updated
+          } else {
+            const computer = message.computer
+            return [...prev, {
+              id: computer.id || computer.computerId,
+              name: computer.name || 'Computador',
+              computerId: computer.computerId || message.computerId,
+              status: computer.status || 'online',
+              lastSeen: computer.lastSeen || Date.now(),
+              osType: computer.osType || 'unknown',
+              osVersion: computer.osVersion || '',
+              osBuild: computer.osBuild,
+              architecture: computer.architecture || 'unknown',
+              hostname: computer.hostname,
+              domain: computer.domain,
+              cpuModel: computer.cpuModel,
+              cpuCores: computer.cpuCores,
+              cpuThreads: computer.cpuThreads,
+              memoryTotal: computer.memoryTotal || 0,
+              memoryUsed: computer.memoryUsed || 0,
+              storageTotal: computer.storageTotal || 0,
+              storageUsed: computer.storageUsed || 0,
+              storageDrives: computer.storageDrives || [],
+              ipAddress: computer.ipAddress,
+              macAddress: computer.macAddress,
+              networkType: computer.networkType,
+              wifiSSID: computer.wifiSSID,
+              isWifiEnabled: computer.isWifiEnabled !== undefined ? computer.isWifiEnabled : false,
+              isBluetoothEnabled: computer.isBluetoothEnabled !== undefined ? computer.isBluetoothEnabled : false,
+              agentVersion: computer.agentVersion,
+              agentInstalledAt: computer.agentInstalledAt,
+              lastHeartbeat: computer.lastHeartbeat,
+              loggedInUser: computer.loggedInUser,
+              assignedDeviceUserId: computer.assignedDeviceUserId,
+              assignedUserId: computer.assignedUserId,
+              assignedUserName: computer.assignedUserName,
+              complianceStatus: computer.complianceStatus || 'unknown',
+              antivirusInstalled: computer.antivirusInstalled !== undefined ? computer.antivirusInstalled : false,
+              antivirusEnabled: computer.antivirusEnabled !== undefined ? computer.antivirusEnabled : false,
+              antivirusName: computer.antivirusName,
+              firewallEnabled: computer.firewallEnabled !== undefined ? computer.firewallEnabled : false,
+              encryptionEnabled: computer.encryptionEnabled !== undefined ? computer.encryptionEnabled : false,
+              latitude: computer.latitude,
+              longitude: computer.longitude,
+              locationAccuracy: computer.locationAccuracy,
+              lastLocationUpdate: computer.lastLocationUpdate,
+              restrictions: computer.restrictions || {},
+              installedPrograms: computer.installedPrograms || [],
+              installedProgramsCount: computer.installedPrograms?.length || computer.installedProgramsCount || 0
+            }]
+          }
+        })
+      }
     }
 
     // Registrar o handler de mensagens
     onMessage(handleMessage)
   }, [onMessage])
 
-  const onlineDevices = devices.filter(d => d.status === 'online').length
+  const combinedDevices = useMemo(() => devices, [devices])
+
+  const combinedComputers = useMemo(() => computers, [computers])
+
+  useEffect(() => {
+    const merged = mergeDeviceAndComputerHistory(deviceHistory, combinedComputers)
+    setChartData(merged)
+  }, [deviceHistory, combinedComputers])
+
+  const onlineDevices = combinedDevices.filter(d => d.status === 'online').length
   
-  // Calcular dispositivos habilitados (sem restrições ativas)
-  const avgBattery = devices.length > 0 
-    ? Math.round(devices.reduce((sum, d) => sum + d.batteryLevel, 0) / devices.length)
+  const avgBattery = combinedDevices.length > 0 
+    ? Math.round(combinedDevices.reduce((sum, d) => sum + d.batteryLevel, 0) / combinedDevices.length)
     : 0
 
   // Calcular porcentagens em tempo real
   const getOnlinePercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((onlineDevices / devices.length) * 100)
+    if (combinedDevices.length === 0) return 0
+    return Math.round((onlineDevices / combinedDevices.length) * 100)
   }
 
 
   const getTotalDevicesChange = () => {
-    if (devices.length === 0) return '0%'
+    if (combinedDevices.length === 0) return '0%'
     // Mostrar crescimento baseado no número de dispositivos
-    const growth = Math.min(devices.length * 3, 25) // 3% por dispositivo, máximo 25%
+    const growth = Math.min(combinedDevices.length * 3, 25) // 3% por dispositivo, máximo 25%
     return `+${growth}%`
   }
 
   const getOnlineChange = () => {
-    if (devices.length === 0) return '0%'
+    if (combinedDevices.length === 0) return '0%'
     const onlinePercent = getOnlinePercentage()
     if (onlinePercent === 100) return '+100%'
     if (onlinePercent >= 80) return `+${onlinePercent}%`
@@ -292,8 +366,8 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     return `${onlinePercent}%`
   }
 
-  const totalComputers = computers.length
-  const onlineComputers = computers.filter(c => (c.status || '').toLowerCase() === 'online').length
+  const totalComputers = combinedComputers.length
+  const onlineComputers = combinedComputers.filter(c => (c.status || '').toLowerCase() === 'online').length
 
   const getTotalComputersChange = () => {
     if (totalComputers === 0) return '0%'
@@ -318,9 +392,9 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   const stats = [
     {
       title: 'Dispositivos Totais',
-      value: devices.length,
+      value: combinedDevices.length,
       change: getTotalDevicesChange(),
-      changeType: devices.length > 0 ? 'positive' : 'neutral',
+      changeType: combinedDevices.length > 0 ? 'positive' : 'neutral',
       icon: '📱',
       color: 'text-primary'
     },
@@ -351,27 +425,35 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   ]
 
   // Gerar dados de atividade recente baseados em eventos REAIS
-  const recentActivities = devices
-    .filter(device => device.status === 'online') // Mostrar apenas dispositivos que tiveram atividade real
-    .slice(0, 4)
-    .map((device, index) => {
-      const now = Date.now()
-      const lastSeen = device.lastSeen
-      const timeDiff = now - lastSeen
+  const recentActivities = useMemo(() => {
+    const now = Date.now()
+
+    const buildActivity = (opts: {
+      id: string
+      name: string
+      icon: string
+      lastSeen?: number
+      status?: string
+      kind: 'device' | 'computer'
+    }) => {
+      if (!opts.lastSeen) return null
+
+      const timeDiff = now - opts.lastSeen
       const minutes = Math.floor(timeDiff / 60000)
       const hours = Math.floor(timeDiff / 3600000)
-      
+
       let timeText = ''
       if (minutes < 1) timeText = 'Agora mesmo'
       else if (minutes < 60) timeText = `${minutes} min atrás`
       else if (hours < 24) timeText = `${hours}h atrás`
       else timeText = `${Math.floor(hours / 24)}d atrás`
-      
-      // Determinar ação real baseada no status do dispositivo
+
       let action = ''
       let type: 'success' | 'warning' | 'info' = 'success'
-      
-      if (device.status === 'online') {
+
+      const status = (opts.status || '').toLowerCase()
+
+      if (status === 'online') {
         if (minutes < 1) {
           action = 'Conectado ao servidor'
           type = 'success'
@@ -386,15 +468,50 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
         action = 'Desconectado'
         type = 'warning'
       }
-      
-      return {
-        id: device.deviceId,
-        device: device.name || `Dispositivo ${index + 1}`,
-        action: action,
-        time: timeText,
-        type: type
+
+      if (opts.kind === 'computer') {
+        action = status === 'online' ? 'PC conectado' : 'PC offline'
       }
-    })
+
+      return {
+        id: opts.id,
+        device: opts.name,
+        action,
+        time: timeText,
+        type,
+        icon: opts.icon,
+        timestamp: opts.lastSeen
+      }
+    }
+
+    const deviceActivities = combinedDevices
+      .filter(device => device.lastSeen)
+      .map(device => buildActivity({
+        id: device.deviceId,
+        name: device.name || device.deviceId,
+        icon: '📱',
+        lastSeen: device.lastSeen,
+        status: device.status,
+        kind: 'device'
+      }))
+      .filter(Boolean) as Array<{ id: string; device: string; action: string; time: string; type: 'success' | 'warning' | 'info'; icon: string; timestamp: number }>
+
+    const computerActivities = combinedComputers
+      .filter(computer => computer.lastSeen)
+      .map(computer => buildActivity({
+        id: computer.computerId,
+        name: computer.name || computer.computerId,
+        icon: '💻',
+        lastSeen: computer.lastSeen,
+        status: computer.status,
+        kind: 'computer'
+      }))
+      .filter(Boolean) as Array<{ id: string; device: string; action: string; time: string; type: 'success' | 'warning' | 'info'; icon: string; timestamp: number }>
+
+    return [...deviceActivities, ...computerActivities]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 4)
+  }, [combinedDevices, combinedComputers])
 
   const chartStackData = useMemo(() => {
     return chartData.map((entry) => ({
@@ -523,8 +640,17 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
                   ticks={[0, 10, 20, 30, 40, 50]}
                 />
                 <RechartsTooltip content={renderBarChartTooltip} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
-                <Bar dataKey="celulares" stackId="devices" fill="url(#mobileGradient)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="pcs" stackId="devices" fill="rgba(191, 219, 254, 0.95)" radius={[6, 6, 0, 0]} />
+                <Legend
+                  verticalAlign="top"
+                  align="center"
+                  wrapperStyle={{ top: -6, fontSize: 12 }}
+                  payload={[
+                    { value: 'Celulares Online', type: 'square', color: '#2563eb' },
+                    { value: 'PCs Online', type: 'square', color: '#93c5fd' }
+                  ]}
+                />
+                <Bar dataKey="celulares" fill="url(#mobileGradient)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="pcs" fill="#93c5fd" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -566,6 +692,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
                     activity.type === 'success' ? 'bg-green-500' :
                     activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                   }`} />
+                  <div className="text-lg">{activity.icon}</div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-primary truncate">{activity.device}</div>
                     <div className="text-sm text-secondary">{activity.action}</div>
@@ -586,7 +713,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       {/* Quick Actions */}
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-primary mb-4">Ações Rápidas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <button 
               className="btn btn-primary hover:scale-105 transition-transform duration-200"
               onClick={() => {
@@ -602,7 +729,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
               onClick={() => {
                 // Gerar relatório dos dispositivos
                 const reportData = {
-                  totalDevices: devices.length,
+                  totalDevices: combinedDevices.length,
                   onlineDevices: onlineDevices,
                   totalComputers: totalComputers,
                   onlineComputers: onlineComputers,
@@ -645,7 +772,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             <h3 className="text-lg font-semibold text-primary mb-4">Status das Notificações</h3>
             <div className="space-y-3">
               {Object.entries(notificationStatus).map(([deviceId, status]) => {
-                const device = devices.find(d => d.deviceId === deviceId)
+                const device = combinedDevices.find(d => d.deviceId === deviceId)
                 const deviceName = device?.name || `Dispositivo ${deviceId.slice(-4)}`
                 
                 return (
@@ -707,14 +834,14 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             <div>
               <h4 className="font-semibold text-primary">Bateria Média</h4>
               <p className="text-sm text-secondary">
-                {devices.length > 0 ? `${devices.length} dispositivos` : 'Nenhum dispositivo'}
+                {combinedDevices.length > 0 ? `${combinedDevices.length} dispositivos` : 'Nenhum dispositivo'}
               </p>
             </div>
           </div>
           <div className={`text-2xl font-bold ${
             avgBattery > 50 ? 'text-green-600' : avgBattery > 20 ? 'text-yellow-600' : 'text-red-600'
           }`}>
-            {devices.length > 0 ? `${avgBattery}%` : 'N/A'}
+            {combinedDevices.length > 0 ? `${avgBattery}%` : 'N/A'}
           </div>
           <div className="text-sm text-secondary">Nível médio</div>
         </div>
@@ -730,7 +857,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             </div>
           </div>
           <div className="text-2xl font-bold text-blue-600">
-            {onlineDevices}/{devices.length}
+            {onlineDevices}/{combinedDevices.length}
           </div>
           <div className="text-sm text-secondary">Online/Total</div>
         </div>

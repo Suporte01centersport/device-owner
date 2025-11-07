@@ -1,5 +1,7 @@
 {
+  "/page": "app/page.js",
+  "/api/uem/remote/actions/route": "app/api/uem/remote/actions/route.js",
   "/api/uem/computers/route": "app/api/uem/computers/route.js",
-  "/api/devices/status-history/route": "app/api/devices/status-history/route.js",
-  "/page": "app/page.js"
+  "/api/support-messages/route": "app/api/support-messages/route.js",
+  "/api/uem/ip-location/route": "app/api/uem/ip-location/route.js"
 }
