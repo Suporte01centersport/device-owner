@@ -1,5 +1,5 @@
 // Script para executar migration de group_available_apps
-require('dotenv').config();
+require('../../load-env');
 const { Pool } = require('pg');
 const fs = require('fs');
 const path = require('path');

@@ -5,7 +5,7 @@
  * Remove dispositivos que podem ter sido criados com deviceId inválido
  */
 
-require('dotenv').config();
+require('../load-env');
 const DeviceModel = require('../database/models/Device');
 const { query } = require('../database/config');
 

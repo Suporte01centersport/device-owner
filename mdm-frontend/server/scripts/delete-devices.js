@@ -5,7 +5,7 @@
  * Uso: node server/delete-devices.js
  */
 
-require('dotenv').config();
+require('../load-env');
 const { Pool } = require('pg');
 
 const pool = new Pool({

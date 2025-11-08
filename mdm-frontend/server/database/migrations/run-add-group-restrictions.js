@@ -1,5 +1,5 @@
 // Script para executar a migration de adicionar restrições de grupo
-require('dotenv').config();
+require('../../load-env');
 const fs = require('fs');
 const path = require('path');
 const { Pool } = require('pg');

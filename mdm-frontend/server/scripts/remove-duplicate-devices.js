@@ -5,7 +5,7 @@
  * Remove dispositivos com mesmo modelo, mantendo apenas o mais recente
  */
 
-require('dotenv').config();
+require('../load-env');
 const DeviceModel = require('../database/models/Device');
 const { query } = require('../database/config');
 

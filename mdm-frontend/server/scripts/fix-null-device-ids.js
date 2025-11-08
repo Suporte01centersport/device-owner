@@ -4,7 +4,7 @@
  * Script para corrigir dispositivos com device_id NULL no banco
  */
 
-require('dotenv').config();
+require('../load-env');
 const { query } = require('../database/config');
 
 async function fixNullDeviceIds() {

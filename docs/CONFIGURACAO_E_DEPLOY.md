@@ -4,7 +4,7 @@ Guia completo de configuração e deploy para ambientes de **Produção** (Ubunt
 
 > **📌 IMPORTANTE:** 
 > - Caminhos como `/opt/mdm-owner` são **exemplos**. Use o caminho onde você clonou o projeto.
-> - Nome do banco de dados (`mdm_owner`) é padrão. Verifique seu `.env` se for diferente.
+> - Nome do banco de dados (`mdm_owner`) é padrão. Verifique seu arquivo de ambiente (ex.: `.env.production`) se for diferente.
 > - Este guia serve tanto para **servidor Linux de produção** quanto **localhost para testes**.
 > 
 > **📦 Estrutura de Arquivos:**
@@ -76,7 +76,7 @@ Após o primeiro deploy, **OBRIGATORIAMENTE** edite as senhas:
 
 ```bash
 cd /opt/mdm-owner/mdm-frontend
-nano .env
+nano .env.production
 ```
 
 Altere estas linhas:
@@ -177,6 +177,8 @@ sudo systemctl enable dnsmasq
 
 O servidor Linux precisa rodar o **Discovery Server** na porta 3003 para responder aos broadcasts UDP. Isso permite que o launcher Android descubra automaticamente o servidor.
 
+> **Nota:** o script `deploy-production.sh` e o `pm2 start ecosystem.config.js` já registram o processo `mdm-discovery`. Use os comandos abaixo apenas se precisar iniciar manualmente.
+
 #### Iniciar Discovery Server
 
 ```bash
@@ -199,11 +201,11 @@ pm2 startup
 
 ### Configuração do Servidor WebSocket
 
-Verificar se o arquivo `.env` está configurado corretamente:
+Verificar se o arquivo `.env.production` está configurado corretamente:
 
 ```bash
 # Verificar configuração
-cat mdm-frontend/.env
+cat mdm-frontend/.env.production
 ```
 
 **Configuração mínima necessária:**
@@ -317,11 +319,11 @@ cd C:\Desenvolvimento\device-owner
 .\start-dev-windows.bat
 ```
 
-### Arquivo .env (Desenvolvimento)
+### Arquivos de ambiente (Desenvolvimento)
 
-O script cria automaticamente o `.env` com base no `.env.development`.
+O script cria automaticamente o `.env.development` a partir do template `env.development.example` e gera um `.env` base para compatibilidade com o Next.js.
 
-**Localização:** `mdm-frontend\.env`
+**Localização principal:** `mdm-frontend\.env.development`
 
 ### Comandos Úteis - Desenvolvimento
 
@@ -608,9 +610,9 @@ taskkill /PID <PID> /F
 #### "Cannot connect to database"
 
 - Verifique se PostgreSQL está rodando
-- Verifique credenciais no `.env`
+- Verifique credenciais no arquivo de ambiente correspondente (`.env.development` no Windows, `.env.production` no servidor)
 - Verifique se banco foi criado (`npm run db:setup`)
-- Verifique nome do banco no `.env` (DB_NAME)
+- Verifique nome do banco no arquivo de ambiente (`DB_NAME`)
   ```bash
   # Ver bancos existentes
   sudo -u postgres psql -c "\l" | grep mdm
@@ -722,13 +724,13 @@ pm2 restart all
 - [ ] IP estático configurado (recomendado)
 - [ ] DNS local configurado (opcional)
 - [ ] PM2 configurado para iniciar automaticamente
-- [ ] Senhas alteradas no `.env`
+- [ ] Senhas alteradas no `.env.production`
 - [ ] Testes de conectividade passando
 
 ### Desenvolvimento Windows
 - [ ] Node.js instalado
 - [ ] PostgreSQL instalado e rodando
-- [ ] Arquivo `.env` criado
+- [ ] Arquivo `.env.development` criado
 - [ ] Script `start-dev-windows.bat` funcionando
 
 ---

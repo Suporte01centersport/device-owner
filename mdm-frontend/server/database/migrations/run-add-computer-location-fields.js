@@ -4,7 +4,7 @@
  * Script para adicionar campos de localização (address e source) na tabela computers
  */
 
-require('dotenv').config();
+require('../../load-env');
 const fs = require('fs');
 const path = require('path');
 const { query } = require('../config');

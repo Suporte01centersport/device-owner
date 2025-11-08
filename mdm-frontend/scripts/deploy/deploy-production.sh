@@ -25,17 +25,22 @@ git pull origin main
 echo -e "${YELLOW}🔧 Configurando ambiente de produção...${NC}"
 cd mdm-frontend
 
-# Copiar arquivo de produção se não existir
-if [ ! -f .env ]; then
-    echo -e "${YELLOW}📝 Criando arquivo .env de produção...${NC}"
-    cp .env.production .env
-    echo -e "${RED}⚠️  ATENÇÃO: Edite o arquivo .env e altere as senhas!${NC}"
+# Garantir arquivos de ambiente baseados nos templates
+if [ ! -f .env.production ]; then
+    echo -e "${YELLOW}📝 Criando arquivo .env.production a partir do template...${NC}"
+    cp env.production.example .env.production
+    echo -e "${RED}⚠️  ATENÇÃO: Edite o arquivo .env.production e altere as senhas!${NC}"
     echo -e "${RED}   DB_PASSWORD, ADMIN_PASSWORD e JWT_SECRET${NC}"
     read -p "Pressione ENTER após editar as senhas..."
 fi
 
+if [ ! -f .env ]; then
+    echo -e "${YELLOW}📝 Criando arquivo .env base a partir do template...${NC}"
+    cp env.example .env
+fi
+
 echo -e "${YELLOW}📚 Instalando dependências...${NC}"
-npm install --production
+npm ci --omit=dev
 
 echo -e "${YELLOW}🏗️  Buildando aplicação Next.js...${NC}"
 npm run build
@@ -44,16 +49,12 @@ echo -e "${YELLOW}🗄️  Configurando banco de dados...${NC}"
 npm run db:setup
 
 echo -e "${YELLOW}🔄 Parando serviços antigos...${NC}"
-pm2 stop mdm-websocket 2>/dev/null || true
-pm2 stop mdm-frontend 2>/dev/null || true
+pm2 delete mdm-websocket 2>/dev/null || true
+pm2 delete mdm-frontend 2>/dev/null || true
+pm2 delete mdm-discovery 2>/dev/null || true
 
 echo -e "${YELLOW}🚀 Iniciando serviços com PM2...${NC}"
-
-# Iniciar WebSocket
-pm2 start npm --name "mdm-websocket" -- run websocket:prod
-
-# Iniciar Frontend
-pm2 start npm --name "mdm-frontend" -- start
+pm2 start ecosystem.config.js
 
 # Salvar configuração PM2
 pm2 save

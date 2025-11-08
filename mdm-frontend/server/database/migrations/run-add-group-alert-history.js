@@ -1,5 +1,5 @@
 // Script para aplicar migração de histórico de alertas de grupo
-require('dotenv').config();
+require('../../load-env');
 const { query } = require('../config');
 const fs = require('fs');
 const path = require('path');
