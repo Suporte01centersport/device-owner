@@ -478,12 +478,13 @@ body {
 
 /* Support dropdown styles */
 .support-dropdown-container {
-  z-index: 1000;
+  z-index: 40; /* Abaixo de modais (z-50) e acesso remoto (z-50) */
 }
 
 .line-clamp-2 {
   display: -webkit-box;
   -webkit-line-clamp: 2;
+  line-clamp: 2; /* Propriedade padrão para compatibilidade */
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

@@ -1,6 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend
+} from 'recharts'
 
 interface Device {
   deviceId: string
@@ -14,6 +24,13 @@ interface Device {
   restrictions: any
 }
 
+interface Computer {
+  computerId: string
+  name?: string
+  status?: 'online' | 'offline' | string
+  lastSeen?: number
+}
+
 interface DashboardProps {
   devices: Device[]
   isConnected: boolean
@@ -22,7 +39,8 @@ interface DashboardProps {
 
 export default function Dashboard({ devices, isConnected, onMessage }: DashboardProps) {
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
-  const [chartData, setChartData] = useState<Array<{ day: string; value: number }>>([])
+  const [deviceHistory, setDeviceHistory] = useState<Array<{ day: string; date: string; devices: number }>>([])
+  const [chartData, setChartData] = useState<Array<{ day: string; date: string; devices: number; computers: number }>>([])
   const [isLoadingChart, setIsLoadingChart] = useState(false)
   const [isClient, setIsClient] = useState(false)
   const [notificationStatus, setNotificationStatus] = useState<{
@@ -32,6 +50,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       timestamp?: number
     }
   }>({})
+  const [computers, setComputers] = useState<Computer[]>([])
 
   useEffect(() => {
     // Marcar como cliente após hidratação
@@ -42,6 +61,32 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       setCurrentTime(new Date())
     }, 1000)
     return () => clearInterval(timer)
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
+
+    const loadComputers = async () => {
+      try {
+        const response = await fetch('/api/uem/computers')
+        if (!response.ok) return
+
+        const data = await response.json()
+        if (data.success && Array.isArray(data.computers) && isMounted) {
+          setComputers(data.computers)
+        }
+      } catch (error) {
+        console.error('Erro ao carregar computadores:', error)
+      }
+    }
+
+    loadComputers()
+    const interval = setInterval(loadComputers, 30000)
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+    }
   }, [])
 
   // ✅ NOVO: Carregar dados reais do histórico de status (apenas 7d)
@@ -55,14 +100,14 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
         if (result.success && result.data) {
           // Processar dados da semana (segunda a domingo)
           const processedData = processHistoryData(result.data)
-          setChartData(processedData)
+          setDeviceHistory(processedData)
         } else {
           // Se não houver dados, usar valores zerados
-          setChartData(generateEmptyChartData())
+          setDeviceHistory(generateEmptyChartData())
         }
       } catch (error) {
         console.error('❌ Erro ao carregar histórico:', error)
-        setChartData(generateEmptyChartData())
+        setDeviceHistory(generateEmptyChartData())
       } finally {
         setIsLoadingChart(false)
       }
@@ -83,39 +128,45 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     const startDate = new Date(endDate)
     startDate.setDate(endDate.getDate() - daysFromMonday)
     
-    // Criar mapa de datas para contagem
-    const dateMap = new Map<string, number>()
+    // Criar mapas de datas para contagem
+    const deviceMap = new Map<string, number>()
+    const mobileMap = new Map<string, number>()
+    const computerMap = new Map<string, number>()
     
     data.forEach((item: any) => {
-      // Converter data do banco para string no formato YYYY-MM-DD
       const dateObj = new Date(item.status_date)
       const date = dateObj.toISOString().split('T')[0]
-      const count = parseInt(item.devices_online || 0)
+      const totalDevices = parseInt(item.devices_online || 0)
+      const mobileDevices = parseInt(item.mobile_online ?? item.devices_online ?? 0)
+      const computerDevices = parseInt(item.computers_online || 0)
       
-      if (!dateMap.has(date)) {
-        dateMap.set(date, 0)
-      }
-      dateMap.set(date, dateMap.get(date)! + count)
+      deviceMap.set(date, totalDevices)
+      mobileMap.set(date, mobileDevices)
+      computerMap.set(date, computerDevices)
     })
     
     // Gerar array de dados da semana (Segunda a Domingo)
-    const chartData: Array<{ day: string; value: number }> = []
+    const historyData: Array<{ day: string; date: string; devices: number; computers: number }> = []
     const currentDate = new Date(startDate)
     
     for (let i = 0; i < 7; i++) {
       const dateStr = currentDate.toISOString().split('T')[0]
       const dayName = days[currentDate.getDay()]
-      const value = dateMap.get(dateStr) || 0
+      const deviceCount = deviceMap.get(dateStr) || 0
+      const computerCount = computerMap.get(dateStr) || 0
+      const mobileCount = mobileMap.get(dateStr) || deviceCount - computerCount
       
-      chartData.push({
+      historyData.push({
         day: dayName,
-        value: value
+        date: dateStr,
+        devices: Math.max(mobileCount, 0),
+        computers: Math.max(computerCount, 0)
       })
       
       currentDate.setDate(currentDate.getDate() + 1)
     }
     
-    return chartData
+    return historyData
   }
 
   const generateEmptyChartData = () => {
@@ -133,7 +184,43 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       date.setDate(startDate.getDate() + i)
       return {
         day: days[date.getDay()],
-        value: 0
+        date: date.toISOString().split('T')[0],
+        devices: 0
+      }
+    })
+  }
+
+  const mergeDeviceAndComputerHistory = (
+    deviceHistoryData: Array<{ day: string; date: string; devices: number }>,
+    computerList: Computer[]
+  ) => {
+    if (deviceHistoryData.length === 0) return []
+
+    const now = new Date()
+    const sevenDaysAgo = new Date(now)
+    sevenDaysAgo.setDate(now.getDate() - 6)
+
+    const computerCounts = new Map<string, number>()
+
+    computerList.forEach((computer) => {
+      if (!computer.lastSeen) return
+      if ((computer.status || '').toLowerCase() !== 'online') return
+      const lastSeenDate = new Date(computer.lastSeen)
+      if (lastSeenDate < sevenDaysAgo) return
+      const dateStr = lastSeenDate.toISOString().split('T')[0]
+      const current = computerCounts.get(dateStr) || 0
+      computerCounts.set(dateStr, current + 1)
+    })
+
+    return deviceHistoryData.map((entry) => {
+      const baseDevices = entry.devices || 0
+      const baseComputers = computerCounts.get(entry.date) || 0
+
+      return {
+        day: entry.day,
+        date: entry.date,
+        devices: baseDevices,
+        computers: baseComputers
       }
     })
   }
@@ -174,64 +261,104 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
           }
         }))
       }
+      if (message.type === 'computer_status_update') {
+        console.log('💻 Atualização de computador recebida:', message.computerId, 'Status:', message.computer?.status)
+        // Atualizar computador na lista
+        setComputers(prev => {
+          const existingIndex = prev.findIndex(c => c.computerId === message.computerId)
+          if (existingIndex >= 0) {
+            const updated = [...prev]
+            updated[existingIndex] = { ...updated[existingIndex], ...message.computer }
+            return updated
+          } else {
+            const computer = message.computer
+            return [...prev, {
+              id: computer.id || computer.computerId,
+              name: computer.name || 'Computador',
+              computerId: computer.computerId || message.computerId,
+              status: computer.status || 'online',
+              lastSeen: computer.lastSeen || Date.now(),
+              osType: computer.osType || 'unknown',
+              osVersion: computer.osVersion || '',
+              osBuild: computer.osBuild,
+              architecture: computer.architecture || 'unknown',
+              hostname: computer.hostname,
+              domain: computer.domain,
+              cpuModel: computer.cpuModel,
+              cpuCores: computer.cpuCores,
+              cpuThreads: computer.cpuThreads,
+              memoryTotal: computer.memoryTotal || 0,
+              memoryUsed: computer.memoryUsed || 0,
+              storageTotal: computer.storageTotal || 0,
+              storageUsed: computer.storageUsed || 0,
+              storageDrives: computer.storageDrives || [],
+              ipAddress: computer.ipAddress,
+              macAddress: computer.macAddress,
+              networkType: computer.networkType,
+              wifiSSID: computer.wifiSSID,
+              isWifiEnabled: computer.isWifiEnabled !== undefined ? computer.isWifiEnabled : false,
+              isBluetoothEnabled: computer.isBluetoothEnabled !== undefined ? computer.isBluetoothEnabled : false,
+              agentVersion: computer.agentVersion,
+              agentInstalledAt: computer.agentInstalledAt,
+              lastHeartbeat: computer.lastHeartbeat,
+              loggedInUser: computer.loggedInUser,
+              assignedDeviceUserId: computer.assignedDeviceUserId,
+              assignedUserId: computer.assignedUserId,
+              assignedUserName: computer.assignedUserName,
+              complianceStatus: computer.complianceStatus || 'unknown',
+              antivirusInstalled: computer.antivirusInstalled !== undefined ? computer.antivirusInstalled : false,
+              antivirusEnabled: computer.antivirusEnabled !== undefined ? computer.antivirusEnabled : false,
+              antivirusName: computer.antivirusName,
+              firewallEnabled: computer.firewallEnabled !== undefined ? computer.firewallEnabled : false,
+              encryptionEnabled: computer.encryptionEnabled !== undefined ? computer.encryptionEnabled : false,
+              latitude: computer.latitude,
+              longitude: computer.longitude,
+              locationAccuracy: computer.locationAccuracy,
+              lastLocationUpdate: computer.lastLocationUpdate,
+              restrictions: computer.restrictions || {},
+              installedPrograms: computer.installedPrograms || [],
+              installedProgramsCount: computer.installedPrograms?.length || computer.installedProgramsCount || 0
+            }]
+          }
+        })
+      }
     }
 
     // Registrar o handler de mensagens
     onMessage(handleMessage)
   }, [onMessage])
 
-  const onlineDevices = devices.filter(d => d.status === 'online').length
+  const combinedDevices = useMemo(() => devices, [devices])
+
+  const combinedComputers = useMemo(() => computers, [computers])
+
+  useEffect(() => {
+    const merged = mergeDeviceAndComputerHistory(deviceHistory, combinedComputers)
+    setChartData(merged)
+  }, [deviceHistory, combinedComputers])
+
+  const onlineDevices = combinedDevices.filter(d => d.status === 'online').length
   
-  // Calcular dispositivos habilitados (sem restrições ativas)
-  const enabledDevices = devices.filter(d => {
-    if (!d.restrictions) return true
-    const restrictions = d.restrictions
-    // Considera habilitado se não tem restrições críticas ativas
-    return !restrictions.wifiDisabled && 
-           !restrictions.settingsDisabled && 
-           !restrictions.installAppsDisabled
-  }).length
-
-  // Calcular dispositivos bloqueados (com restrições ativas)
-  const blockedDevices = devices.filter(d => {
-    if (!d.restrictions) return false
-    const restrictions = d.restrictions
-    // Considera bloqueado se tem restrições críticas ativas
-    return restrictions.wifiDisabled || 
-           restrictions.settingsDisabled || 
-           restrictions.installAppsDisabled
-  }).length
-
-  const avgBattery = devices.length > 0 
-    ? Math.round(devices.reduce((sum, d) => sum + d.batteryLevel, 0) / devices.length)
+  const avgBattery = combinedDevices.length > 0 
+    ? Math.round(combinedDevices.reduce((sum, d) => sum + d.batteryLevel, 0) / combinedDevices.length)
     : 0
 
   // Calcular porcentagens em tempo real
   const getOnlinePercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((onlineDevices / devices.length) * 100)
-  }
-
-  const getEnabledPercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((enabledDevices / devices.length) * 100)
-  }
-
-  const getBlockedPercentage = () => {
-    if (devices.length === 0) return 0
-    return Math.round((blockedDevices / devices.length) * 100)
+    if (combinedDevices.length === 0) return 0
+    return Math.round((onlineDevices / combinedDevices.length) * 100)
   }
 
 
   const getTotalDevicesChange = () => {
-    if (devices.length === 0) return '0%'
+    if (combinedDevices.length === 0) return '0%'
     // Mostrar crescimento baseado no número de dispositivos
-    const growth = Math.min(devices.length * 3, 25) // 3% por dispositivo, máximo 25%
+    const growth = Math.min(combinedDevices.length * 3, 25) // 3% por dispositivo, máximo 25%
     return `+${growth}%`
   }
 
   const getOnlineChange = () => {
-    if (devices.length === 0) return '0%'
+    if (combinedDevices.length === 0) return '0%'
     const onlinePercent = getOnlinePercentage()
     if (onlinePercent === 100) return '+100%'
     if (onlinePercent >= 80) return `+${onlinePercent}%`
@@ -239,12 +366,35 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     return `${onlinePercent}%`
   }
 
+  const totalComputers = combinedComputers.length
+  const onlineComputers = combinedComputers.filter(c => (c.status || '').toLowerCase() === 'online').length
+
+  const getTotalComputersChange = () => {
+    if (totalComputers === 0) return '0%'
+    const growth = Math.min(totalComputers * 3, 25)
+    return `+${growth}%`
+  }
+
+  const getOnlineComputersPercentage = () => {
+    if (totalComputers === 0) return 0
+    return Math.round((onlineComputers / totalComputers) * 100)
+  }
+
+  const getOnlineComputersChange = () => {
+    if (totalComputers === 0) return '0%'
+    const percent = getOnlineComputersPercentage()
+    if (percent === 100) return '+100%'
+    if (percent >= 80) return `+${percent}%`
+    if (percent >= 50) return `+${percent}%`
+    return `${percent}%`
+  }
+
   const stats = [
     {
       title: 'Dispositivos Totais',
-      value: devices.length,
+      value: combinedDevices.length,
       change: getTotalDevicesChange(),
-      changeType: devices.length > 0 ? 'positive' : 'neutral',
+      changeType: combinedDevices.length > 0 ? 'positive' : 'neutral',
       icon: '📱',
       color: 'text-primary'
     },
@@ -257,45 +407,53 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       color: 'text-success'
     },
     {
-      title: 'Dispositivos Habilitados',
-      value: enabledDevices,
-      change: `${getEnabledPercentage()}%`,
-      changeType: enabledDevices > 0 ? 'positive' : 'neutral',
-      icon: '✅',
-      color: 'text-success'
+      title: 'PCs Totais',
+      value: totalComputers,
+      change: getTotalComputersChange(),
+      changeType: totalComputers > 0 ? 'positive' : 'neutral',
+      icon: '💻',
+      color: 'text-primary'
     },
     {
-      title: 'Dispositivos Bloqueados',
-      value: blockedDevices,
-      change: `${getBlockedPercentage()}%`,
-      changeType: blockedDevices > 0 ? 'negative' : 'neutral',
-      icon: '🚫',
-      color: 'text-error'
+      title: 'PCs Online',
+      value: onlineComputers,
+      change: getOnlineComputersChange(),
+      changeType: onlineComputers > 0 ? 'positive' : 'neutral',
+      icon: '🖥️',
+      color: 'text-success'
     }
   ]
 
   // Gerar dados de atividade recente baseados em eventos REAIS
-  const recentActivities = devices
-    .filter(device => device.status === 'online') // Mostrar apenas dispositivos que tiveram atividade real
-    .slice(0, 4)
-    .map((device, index) => {
-      const now = Date.now()
-      const lastSeen = device.lastSeen
-      const timeDiff = now - lastSeen
+  const recentActivities = useMemo(() => {
+    const now = Date.now()
+
+    const buildActivity = (opts: {
+      id: string
+      name: string
+      icon: string
+      lastSeen?: number
+      status?: string
+      kind: 'device' | 'computer'
+    }) => {
+      if (!opts.lastSeen) return null
+
+      const timeDiff = now - opts.lastSeen
       const minutes = Math.floor(timeDiff / 60000)
       const hours = Math.floor(timeDiff / 3600000)
-      
+
       let timeText = ''
       if (minutes < 1) timeText = 'Agora mesmo'
       else if (minutes < 60) timeText = `${minutes} min atrás`
       else if (hours < 24) timeText = `${hours}h atrás`
       else timeText = `${Math.floor(hours / 24)}d atrás`
-      
-      // Determinar ação real baseada no status do dispositivo
+
       let action = ''
       let type: 'success' | 'warning' | 'info' = 'success'
-      
-      if (device.status === 'online') {
+
+      const status = (opts.status || '').toLowerCase()
+
+      if (status === 'online') {
         if (minutes < 1) {
           action = 'Conectado ao servidor'
           type = 'success'
@@ -310,15 +468,85 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
         action = 'Desconectado'
         type = 'warning'
       }
-      
-      return {
-        id: device.deviceId,
-        device: device.name || `Dispositivo ${index + 1}`,
-        action: action,
-        time: timeText,
-        type: type
+
+      if (opts.kind === 'computer') {
+        action = status === 'online' ? 'PC conectado' : 'PC offline'
       }
-    })
+
+      return {
+        id: opts.id,
+        device: opts.name,
+        action,
+        time: timeText,
+        type,
+        icon: opts.icon,
+        timestamp: opts.lastSeen
+      }
+    }
+
+    const deviceActivities = combinedDevices
+      .filter(device => device.lastSeen)
+      .map(device => buildActivity({
+        id: device.deviceId,
+        name: device.name || device.deviceId,
+        icon: '📱',
+        lastSeen: device.lastSeen,
+        status: device.status,
+        kind: 'device'
+      }))
+      .filter(Boolean) as Array<{ id: string; device: string; action: string; time: string; type: 'success' | 'warning' | 'info'; icon: string; timestamp: number }>
+
+    const computerActivities = combinedComputers
+      .filter(computer => computer.lastSeen)
+      .map(computer => buildActivity({
+        id: computer.computerId,
+        name: computer.name || computer.computerId,
+        icon: '💻',
+        lastSeen: computer.lastSeen,
+        status: computer.status,
+        kind: 'computer'
+      }))
+      .filter(Boolean) as Array<{ id: string; device: string; action: string; time: string; type: 'success' | 'warning' | 'info'; icon: string; timestamp: number }>
+
+    return [...deviceActivities, ...computerActivities]
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 4)
+  }, [combinedDevices, combinedComputers])
+
+  const chartStackData = useMemo(() => {
+    return chartData.map((entry) => ({
+      day: entry.day,
+      celulares: entry.devices ?? 0,
+      pcs: entry.computers ?? 0
+    }))
+  }, [chartData])
+
+  const renderBarChartTooltip = useMemo(() => {
+    return ({ active, payload, label }: any) => {
+      if (!active || !payload || payload.length === 0) {
+        return null
+      }
+
+      const celularesValue = payload.find((item: any) => item.dataKey === 'celulares')?.value ?? 0
+      const pcsValue = payload.find((item: any) => item.dataKey === 'pcs')?.value ?? 0
+
+      return (
+        <div className="bg-slate-900/95 text-white text-xs px-4 py-3 rounded-lg shadow-lg border border-slate-700">
+          <div className="text-[11px] text-slate-300 mb-2 font-medium text-center">{label}</div>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 text-blue-200">
+              <span role="img" aria-label="Celulares">📱</span>
+              <span className="font-semibold text-white">{celularesValue}</span>
+            </div>
+            <div className="flex items-center gap-1 text-blue-100">
+              <span role="img" aria-label="PCs">💻</span>
+              <span className="font-semibold text-white">{pcsValue}</span>
+            </div>
+          </div>
+        </div>
+      )
+    }
+  }, [])
 
 
   return (
@@ -392,50 +620,53 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
           </div>
           
           {/* Bar Chart */}
-          <div className="h-64 flex items-end justify-between gap-2 relative">
-            {chartData.map((data, index) => {
-              // ✅ Limite de 50 para o gráfico do dashboard
-              const maxValue = 50;
-              const currentValue = data.value || 0;
-              
-              // Calcular altura baseada em 50 como máximo
-              const heightPx = currentValue >= maxValue
-                ? 256 // Máximo: barra cheia (h-64 = 256px)
-                : Math.max((currentValue / maxValue) * 256, 4); // Proporcional a 50, mínimo 4px
-              
-              // Formatar valor para exibição
-              const displayValue = currentValue > maxValue ? '50+' : currentValue;
-              
-              return (
-                <div key={index} className="flex-1 flex flex-col items-center group cursor-pointer">
-                  <div 
-                    className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t hover:from-blue-600 hover:to-blue-500 transition-all duration-500 relative shadow-sm"
-                    style={{ height: `${heightPx}px` }}
-                    title={`${data.day}: ${data.value} dispositivo${data.value > 1 ? 's' : ''}`}
-                  >
-                    <div className="absolute -top-8 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 whitespace-nowrap z-10">
-                      {displayValue} dispositivo{data.value > 1 ? 's' : ''}
-                    </div>
-                  </div>
-                  <div className="text-xs text-secondary mt-2 font-medium">
-                    {data.day}
-                  </div>
-                </div>
-              );
-            })}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartStackData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="mobileGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.95} />
+                    <stop offset="95%" stopColor="#2563eb" stopOpacity={0.95} />
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+                <XAxis dataKey="day" tick={{ fill: '#475569', fontSize: 12 }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fill: '#94a3b8', fontSize: 12 }}
+                  axisLine={false}
+                  tickLine={false}
+                  domain={[0, 50]}
+                  interval={0}
+                  ticks={[0, 10, 20, 30, 40, 50]}
+                />
+                <RechartsTooltip content={renderBarChartTooltip} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
+                <Legend
+                  verticalAlign="top"
+                  align="center"
+                  wrapperStyle={{ top: -6, fontSize: 12 }}
+                  payload={[
+                    { value: 'Celulares Online', type: 'square', color: '#2563eb' },
+                    { value: 'PCs Online', type: 'square', color: '#93c5fd' }
+                  ]}
+                />
+                <Bar dataKey="celulares" fill="url(#mobileGradient)" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="pcs" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
           
           {/* Chart legend */}
           <div className="flex justify-center mt-4 gap-6">
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded"></div>
-              <span className="text-xs text-secondary">Dispositivos Online</span>
+              <span className="text-xs text-secondary">Celulares Online</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gray-300 rounded"></div>
-              <span className="text-xs text-secondary">Reseta toda Segunda-feira</span>
+              <div className="w-3 h-3 bg-blue-200 rounded"></div>
+              <span className="text-xs text-secondary">PCs Online</span>
             </div>
           </div>
+          <div className="text-center text-[11px] text-muted mt-2">Celulares usam histórico diário; PCs consideram a última atividade registrada em cada dia</div>
         </div>
 
         {/* Recent Activity */}
@@ -461,6 +692,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
                     activity.type === 'success' ? 'bg-green-500' :
                     activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
                   }`} />
+                  <div className="text-lg">{activity.icon}</div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-primary truncate">{activity.device}</div>
                     <div className="text-sm text-secondary">{activity.action}</div>
@@ -481,7 +713,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       {/* Quick Actions */}
         <div className="card p-6">
           <h3 className="text-lg font-semibold text-primary mb-4">Ações Rápidas</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <button 
               className="btn btn-primary hover:scale-105 transition-transform duration-200"
               onClick={() => {
@@ -497,10 +729,10 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
               onClick={() => {
                 // Gerar relatório dos dispositivos
                 const reportData = {
-                  totalDevices: devices.length,
+                  totalDevices: combinedDevices.length,
                   onlineDevices: onlineDevices,
-                  enabledDevices: enabledDevices,
-                  blockedDevices: blockedDevices,
+                  totalComputers: totalComputers,
+                  onlineComputers: onlineComputers,
                   avgBattery: avgBattery,
                   timestamp: new Date().toISOString()
                 }
@@ -540,7 +772,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             <h3 className="text-lg font-semibold text-primary mb-4">Status das Notificações</h3>
             <div className="space-y-3">
               {Object.entries(notificationStatus).map(([deviceId, status]) => {
-                const device = devices.find(d => d.deviceId === deviceId)
+                const device = combinedDevices.find(d => d.deviceId === deviceId)
                 const deviceName = device?.name || `Dispositivo ${deviceId.slice(-4)}`
                 
                 return (
@@ -602,14 +834,14 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             <div>
               <h4 className="font-semibold text-primary">Bateria Média</h4>
               <p className="text-sm text-secondary">
-                {devices.length > 0 ? `${devices.length} dispositivos` : 'Nenhum dispositivo'}
+                {combinedDevices.length > 0 ? `${combinedDevices.length} dispositivos` : 'Nenhum dispositivo'}
               </p>
             </div>
           </div>
           <div className={`text-2xl font-bold ${
             avgBattery > 50 ? 'text-green-600' : avgBattery > 20 ? 'text-yellow-600' : 'text-red-600'
           }`}>
-            {devices.length > 0 ? `${avgBattery}%` : 'N/A'}
+            {combinedDevices.length > 0 ? `${avgBattery}%` : 'N/A'}
           </div>
           <div className="text-sm text-secondary">Nível médio</div>
         </div>
@@ -625,7 +857,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             </div>
           </div>
           <div className="text-2xl font-bold text-blue-600">
-            {onlineDevices}/{devices.length}
+            {onlineDevices}/{combinedDevices.length}
           </div>
           <div className="text-sm text-secondary">Online/Total</div>
         </div>

@@ -1,68 +1,83 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Lista de ações remotas disponíveis
+// Lista de ações remotas disponíveis para computadores (UEM)
 const AVAILABLE_ACTIONS = [
   {
     id: 'lock_device',
-    name: 'Bloquear Dispositivo',
-    description: 'Bloqueia a tela do dispositivo imediatamente',
-    requiresDeviceOwner: true,
+    name: 'Bloquear Computador',
+    description: 'Bloqueia a tela do computador imediatamente',
+    requiresDeviceOwner: false,
     requiresConfirmation: false
   },
   {
     id: 'reboot_device',
-    name: 'Reiniciar Dispositivo',
-    description: 'Reinicia o dispositivo remotamente',
-    requiresDeviceOwner: true,
+    name: 'Reiniciar Computador',
+    description: 'Reinicia o computador remotamente',
+    requiresDeviceOwner: false,
+    requiresConfirmation: true
+  },
+  {
+    id: 'shutdown_device',
+    name: 'Desligar Computador',
+    description: 'Desliga o computador remotamente',
+    requiresDeviceOwner: false,
     requiresConfirmation: true
   },
   {
     id: 'wipe_device',
-    name: 'Factory Reset',
-    description: 'Apaga todos os dados do dispositivo (IRREVERSÍVEL)',
-    requiresDeviceOwner: true,
+    name: 'Resetar Computador',
+    description: 'Reseta o computador para configurações de fábrica (IRREVERSÍVEL)',
+    requiresDeviceOwner: false,
     requiresConfirmation: true,
     dangerous: true
   },
   {
-    id: 'set_kiosk_mode',
-    name: 'Modo Quiosque',
-    description: 'Fixa um aplicativo na tela (lock task mode)',
-    requiresDeviceOwner: true,
-    requiresConfirmation: false,
-    params: ['packageName', 'enabled']
-  },
-  {
     id: 'disable_camera',
     name: 'Desabilitar Câmera',
-    description: 'Desabilita ou habilita a câmera do dispositivo',
-    requiresDeviceOwner: true,
+    description: 'Desabilita ou habilita a câmera do computador',
+    requiresDeviceOwner: false,
     requiresConfirmation: false,
     params: ['disabled']
   },
   {
-    id: 'clear_app_cache',
-    name: 'Limpar Cache de App',
-    description: 'Limpa o cache de um aplicativo específico',
+    id: 'disable_usb',
+    name: 'Desabilitar USB',
+    description: 'Bloqueia transferência de dados via USB',
     requiresDeviceOwner: false,
     requiresConfirmation: false,
-    params: ['packageName']
+    params: ['disabled']
   },
   {
-    id: 'uninstall_app',
-    name: 'Desinstalar Aplicativo',
-    description: 'Remove um aplicativo do dispositivo',
-    requiresDeviceOwner: true,
+    id: 'run_script',
+    name: 'Executar Script',
+    description: 'Executa um script PowerShell/Bash no computador',
+    requiresDeviceOwner: false,
     requiresConfirmation: true,
-    params: ['packageName']
+    params: ['script', 'type']
   },
   {
-    id: 'install_app',
-    name: 'Instalar Aplicativo',
-    description: 'Instala um aplicativo remotamente via URL',
-    requiresDeviceOwner: true,
+    id: 'install_software',
+    name: 'Instalar Software',
+    description: 'Instala um software remotamente via URL ou pacote',
+    requiresDeviceOwner: false,
     requiresConfirmation: false,
-    params: ['url']
+    params: ['url', 'installer']
+  },
+  {
+    id: 'uninstall_software',
+    name: 'Desinstalar Software',
+    description: 'Remove um software do computador',
+    requiresDeviceOwner: false,
+    requiresConfirmation: true,
+    params: ['name', 'version']
+  },
+  {
+    id: 'remote_access',
+    name: 'Acesso Remoto',
+    description: 'Visualizar e controlar a tela do computador em tempo real',
+    requiresDeviceOwner: false,
+    requiresConfirmation: false,
+    special: true // Ação especial que abre um modal/componente
   }
 ]
 

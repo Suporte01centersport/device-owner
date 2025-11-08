@@ -16,6 +16,7 @@ const DeviceModel = require('./database/models/Device');
 const DeviceGroupModel = require('./database/models/DeviceGroup');
 const AppAccessHistory = require('./database/models/AppAccessHistory');
 const DeviceStatusHistory = require('./database/models/DeviceStatusHistory');
+const ComputerModel = require('./database/models/Computer');
 const { query, transaction } = require('./database/config');
 const BatchQueue = require('./database/batch-queue');
 const LocationCache = require('./database/location-cache');
@@ -955,16 +956,15 @@ wss.on('connection', ws => {
             serverStats.totalMessages++;
             
             const data = JSON.parse(message);
-            console.log('Tipo:', data.type);
-            console.log('Data completa:', data);
-            console.log('Connection ID:', ws.connectionId);
-            console.log('Tipo de conexão:', ws.connectionType);
             
-            log.debug(`Mensagem recebida`, {
-                connectionId: ws.connectionId,
-                type: data.type,
-                size: message.length
-            });
+            // Não logar mensagens desktop_frame (são muitas e poluem o log)
+            if (data.type !== 'desktop_frame') {
+                log.debug(`Mensagem recebida`, {
+                    connectionId: ws.connectionId,
+                    type: data.type,
+                    size: message.length
+                });
+            }
             
             await handleMessage(ws, data);
         } catch (error) {
@@ -985,6 +985,10 @@ wss.on('connection', ws => {
         }
     });
 
+    // Detectar quando um computador conecta (antes de receber mensagens)
+    // Isso será atualizado quando recebermos a primeira mensagem 'computer_status'
+    // Mas podemos marcar como online quando detectarmos que é um computador
+    
     ws.on('close', (code, reason) => {
         serverStats.activeConnections--;
         
@@ -997,9 +1001,28 @@ wss.on('connection', ws => {
             activeConnections: serverStats.activeConnections
         });
         
-        // Remover dispositivo se for um dispositivo Android
+        // Remover computador se for um computador (UEM)
+        if (ws.isComputer && ws.computerId) {
+            connectedComputers.delete(ws.computerId);
+            log.info('Computador desconectado', { computerId: ws.computerId });
+            
+            // Atualizar status no banco
+            ComputerModel.updateStatus(ws.computerId, 'offline').catch(err => {
+                console.error('Erro ao atualizar status do computador:', err);
+            });
+            
+            // Notificar clientes web sobre desconexão do computador
+            notifyWebClients({
+                type: 'computer_disconnected',
+                computerId: ws.computerId,
+                reason: 'Connection closed',
+                timestamp: Date.now()
+            });
+        }
+        
+        // Remover dispositivo se for um dispositivo Android (não computador)
         for (const [deviceId, deviceWs] of connectedDevices.entries()) {
-            if (deviceWs === ws) {
+            if (deviceWs === ws && !ws.isComputer) {
                 connectedDevices.delete(deviceId);
                 
                 // Atualizar status para offline no armazenamento persistente
@@ -1103,6 +1126,7 @@ wss.on('connection', ws => {
     // Identificar tipo de cliente
     ws.isDevice = false;
     ws.isWebClient = false;
+    ws.isComputer = false;
     
     // Configurar timeout para conexões inativas - mais longo para dispositivos
     ws.inactivityTimeout = setTimeout(() => {
@@ -1114,9 +1138,30 @@ wss.on('connection', ws => {
 });
 
 async function handleMessage(ws, data) {
-    console.log('Processando tipo:', data.type);
-    console.log('É dispositivo?', ws.isDevice);
-    console.log('Device ID:', ws.deviceId);
+    // Não logar mensagens desktop_frame (são muitas e poluem o log)
+    if (data.type !== 'desktop_frame') {
+        // Log apenas para tipos de mensagem importantes (não frames)
+        // Log especial para uem_remote_action para debug
+        if (data.type === 'uem_remote_action') {
+            console.log(`📨 Mensagem uem_remote_action recebida no servidor:`, {
+                action: data.action,
+                computerId: data.computerId,
+                isWebClient: ws.isWebClient,
+                isComputer: ws.isComputer,
+                connectionId: ws.connectionId
+            });
+        }
+        // Log para register_desktop_session para debug
+        if (data.type === 'register_desktop_session') {
+            console.log(`📥 Mensagem register_desktop_session recebida no handleMessage:`, {
+                sessionId: data.sessionId,
+                computerId: data.computerId,
+                isWebClient: ws.isWebClient,
+                isComputer: ws.isComputer,
+                connectionId: ws.connectionId
+            });
+        }
+    }
     
     // Atualizar lastSeen para dispositivos Android
     if (ws.isDevice && ws.deviceId) {
@@ -1183,15 +1228,37 @@ async function handleMessage(ws, data) {
             handleSetAdminPassword(ws, data);
             break;
         case 'get_admin_password':
-            console.log('Cliente é web client?', ws.isWebClient);
-            console.log('globalAdminPassword atual:', globalAdminPassword);
             handleGetAdminPassword(ws, data);
             break;
         case 'support_message':
             handleSupportMessage(ws, data);
             break;
+        case 'computer_status':
+            handleComputerStatus(ws, data);
+            break;
+        case 'uem_remote_action':
+            handleUEMRemoteAction(ws, data);
+            break;
+        case 'desktop_frame':
+            handleDesktopFrame(ws, data);
+            break;
+        case 'register_desktop_session':
+            handleRegisterDesktopSession(ws, data);
+            break;
+        case 'register_webrtc_session':
+            handleRegisterWebRTCSession(ws, data);
+            break;
+        case 'webrtc_offer':
+            handleWebRTCOffer(ws, data);
+            break;
+        case 'webrtc_answer':
+            handleWebRTCAnswer(ws, data);
+            break;
+        case 'webrtc_ice_candidate':
+            handleWebRTCIceCandidate(ws, data);
+            break;
         default:
-            console.log('Unknown message type:', data.type);
+            // Mensagem desconhecida (silenciosamente ignorar)
     }
 }
 
@@ -1924,9 +1991,8 @@ async function handleWebClient(ws, data) {
         totalWebClients: webClients.size
     });
     
-    console.log('📊 === CARREGANDO DISPOSITIVOS DO BANCO DE DADOS ===');
-    
     // ✅ BUSCAR TODOS OS DISPOSITIVOS DO BANCO DE DADOS (FONTE DE VERDADE)
+    // IMPORTANTE: Apenas dispositivos móveis (Android), não computadores
     let dbDevices = [];
     try {
         const dbResult = await query(`
@@ -1939,21 +2005,9 @@ async function handleWebClient(ws, data) {
             FROM devices d
             LEFT JOIN device_users du ON d.assigned_device_user_id = du.id
             WHERE d.deleted_at IS NULL
+            AND (d.os_type = 'Android' OR d.os_type IS NULL)
             ORDER BY d.last_seen DESC
         `);
-        
-        console.log(`📊 Query retornou ${dbResult.rows.length} dispositivos do banco`);
-        if (dbResult.rows.length > 0) {
-            const firstRow = dbResult.rows[0];
-            console.log('🔍 DEBUG - Primeira linha do banco (RAW):', {
-                device_id: firstRow.device_id,
-                name: firstRow.name,
-                assigned_device_user_id: firstRow.assigned_device_user_id,
-                user_id: firstRow.user_id,
-                user_name: firstRow.user_name,
-                user_cpf: firstRow.user_cpf
-            });
-        }
         
         dbDevices = dbResult.rows.map(row => ({
             deviceId: row.device_id,
@@ -2007,20 +2061,7 @@ async function handleWebClient(ws, data) {
             assignedUserCpf: row.user_cpf || null
         }));
         
-        console.log(`✅ Carregados ${dbDevices.length} dispositivos do banco de dados`);
-        
-        // 🔍 DEBUG: Verificar dados de usuário vinculado
-        if (dbDevices.length > 0) {
-            const firstDevice = dbDevices[0];
-            console.log('🔍 DEBUG - Primeiro dispositivo do banco:', {
-                deviceId: firstDevice.deviceId,
-                name: firstDevice.name,
-                assignedDeviceUserId: firstDevice.assignedDeviceUserId,
-                assignedUserId: firstDevice.assignedUserId,
-                assignedUserName: firstDevice.assignedUserName,
-                hasUser: !!(firstDevice.assignedUserId || firstDevice.assignedUserName)
-            });
-        }
+        // Dispositivos carregados do banco
     } catch (error) {
         log.error('Erro ao carregar dispositivos do banco', { error: error.message });
         console.error('❌ Erro ao buscar dispositivos do banco:', error);
@@ -2094,28 +2135,7 @@ async function handleWebClient(ws, data) {
         timestamp: Date.now()
     };
     
-    console.log('=== ENVIANDO LISTA DE DISPOSITIVOS PARA CLIENTE WEB ===');
-    console.log('Número de dispositivos:', devices.length);
-    if (devices.length > 0) {
-        console.log('🔍 DEBUG - Primeiro dispositivo ENVIANDO:', {
-            deviceId: devices[0].deviceId,
-            name: devices[0].name,
-            model: devices[0].model,
-            status: devices[0].status,
-            batteryLevel: devices[0].batteryLevel,
-            installedAppsCount: devices[0].installedAppsCount,
-            hasInstalledApps: !!devices[0].installedApps,
-            installedAppsLength: devices[0].installedApps?.length,
-            // ✅ DADOS DE USUÁRIO VINCULADO
-            assignedDeviceUserId: devices[0].assignedDeviceUserId,
-            assignedUserId: devices[0].assignedUserId,
-            assignedUserName: devices[0].assignedUserName,
-            assignedUserCpf: devices[0].assignedUserCpf,
-            hasUserData: !!(devices[0].assignedUserId || devices[0].assignedUserName)
-        });
-    }
-    console.log('=======================================================');
-    
+    // Enviar lista de dispositivos para cliente web (sem log detalhado)
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(response));
     }
@@ -2171,41 +2191,36 @@ async function handleDeleteDevice(ws, data) {
         // Obter dados do dispositivo antes de deletar (para logs)
         const deviceData = persistentDevices.get(deviceId);
         
-        // ✅ DESVINCULAR USUÁRIO NO BANCO DE DADOS ao deletar
+        // ✅ DELETAR PERMANENTEMENTE DO BANCO DE DADOS
         try {
-            await query(
-                `UPDATE devices 
-                 SET assigned_device_user_id = NULL, deleted_at = NOW(), updated_at = NOW()
-                 WHERE device_id = $1`,
-                [deviceId]
-            );
-            console.log(`✅ Vínculo de usuário removido do banco para dispositivo ${deviceId}`);
-            log.info(`Vínculo de usuário removido ao deletar dispositivo`, {
+            // Usar o modelo Device para deletar (que remove todas as relações)
+            await DeviceModel.delete(deviceId);
+            console.log(`✅ Dispositivo ${deviceId} deletado permanentemente do banco de dados`);
+            log.info(`Dispositivo deletado permanentemente`, {
                 deviceId: deviceId,
                 deviceName: deviceData?.name || 'desconhecido'
             });
         } catch (dbError) {
-            console.error(`❌ Erro ao remover vínculo de usuário do banco:`, dbError);
-            log.error(`Erro ao remover vínculo de usuário`, {
+            console.error(`❌ Erro ao deletar dispositivo do banco:`, dbError);
+            log.error(`Erro ao deletar dispositivo`, {
                 deviceId: deviceId,
                 error: dbError.message
             });
-            // Continuar mesmo se falhar (não bloquear a deleção)
+            // Continuar mesmo se falhar (não bloquear a deleção da memória)
         }
         
-        // Remover apenas das listas em memória (mantém registro no banco para reconexão)
+        // Remover das listas em memória
         persistentDevices.delete(deviceId);
-        // Marcar como deletado para não ser reenviado em listas até reconexão
         deletedDeviceIds.add(deviceId);
         connectedDevices.delete(deviceId);
         
-        console.log(`🗑️ Dispositivo ${deviceId} removido da memória e vínculo de usuário zerado no banco`);
+        console.log(`🗑️ Dispositivo ${deviceId} removido permanentemente da memória e do banco de dados`);
         
-        log.info(`Dispositivo removido da memória e vínculo zerado`, {
+        log.info(`Dispositivo deletado permanentemente`, {
             deviceId: deviceId,
             deviceName: deviceData?.name || 'desconhecido',
             connectionId: ws.connectionId,
-            note: 'Vínculo de usuário removido; registro mantido no banco para reconexão'
+            note: 'Dispositivo deletado permanentemente do banco de dados e da memória'
         });
         
         // Enviar confirmação para o cliente que solicitou a deleção
@@ -3557,7 +3572,615 @@ function handleGeofenceEvent(ws, data) {
     }
 }
 
-// Exportar connectedDevices para uso em API routes
+// Map separado para computadores (UEM)
+const connectedComputers = new Map(); // computerId -> WebSocket
+
+// Handlers para computadores (UEM)
+async function handleComputerStatus(ws, data) {
+    const computerData = data.data;
+    
+    // Suportar tanto PascalCase (C#) quanto camelCase (JavaScript)
+    const computerId = computerData?.computerId || computerData?.ComputerId;
+    const name = computerData.name || computerData.Name;
+    const osType = computerData.osType || computerData.OsType;
+    const osVersion = computerData.osVersion || computerData.OsVersion;
+    const osBuild = computerData.osBuild || computerData.OsBuild;
+    const architecture = computerData.architecture || computerData.Architecture;
+    const hostname = computerData.hostname || computerData.Hostname;
+    const domain = computerData.domain || computerData.Domain;
+    const loggedInUser = computerData.loggedInUser || computerData.LoggedInUser;
+    const cpuModel = computerData.cpuModel || computerData.CpuModel;
+    const cpuCores = computerData.cpuCores || computerData.CpuCores;
+    const cpuThreads = computerData.cpuThreads || computerData.CpuThreads;
+    const memoryTotal = computerData.memoryTotal || computerData.MemoryTotal || 0;
+    const memoryUsed = computerData.memoryUsed || computerData.MemoryUsed || 0;
+    const storageTotal = computerData.storageTotal || computerData.StorageTotal || 0;
+    const storageUsed = computerData.storageUsed || computerData.StorageUsed || 0;
+    const storageDrives = computerData.storageDrives || computerData.StorageDrives || [];
+    const ipAddress = computerData.ipAddress || computerData.IpAddress;
+    const macAddress = computerData.macAddress || computerData.MacAddress;
+    const networkType = computerData.networkType || computerData.NetworkType;
+    const wifiSSID = computerData.wifiSSID || computerData.WifiSSID;
+    const isWifiEnabled = computerData.isWifiEnabled !== undefined ? computerData.isWifiEnabled : (computerData.IsWifiEnabled || false);
+    const isBluetoothEnabled = computerData.isBluetoothEnabled !== undefined ? computerData.isBluetoothEnabled : (computerData.IsBluetoothEnabled || false);
+    const agentVersion = computerData.agentVersion || computerData.AgentVersion;
+    const agentInstalledAt = computerData.agentInstalledAt || computerData.AgentInstalledAt;
+    const complianceStatus = computerData.complianceStatus || computerData.ComplianceStatus || 'unknown';
+    const antivirusInstalled = computerData.antivirusInstalled !== undefined ? computerData.antivirusInstalled : (computerData.AntivirusInstalled || false);
+    const antivirusEnabled = computerData.antivirusEnabled !== undefined ? computerData.antivirusEnabled : (computerData.AntivirusEnabled || false);
+    const antivirusName = computerData.antivirusName || computerData.AntivirusName;
+    const firewallEnabled = computerData.firewallEnabled !== undefined ? computerData.firewallEnabled : (computerData.FirewallEnabled || false);
+    const encryptionEnabled = computerData.encryptionEnabled !== undefined ? computerData.encryptionEnabled : (computerData.EncryptionEnabled || false);
+    const latitude = computerData.latitude !== undefined ? computerData.latitude : (computerData.Latitude !== null ? computerData.Latitude : undefined);
+    const longitude = computerData.longitude !== undefined ? computerData.longitude : (computerData.Longitude !== null ? computerData.Longitude : undefined);
+    const locationAccuracy = computerData.locationAccuracy !== undefined ? computerData.locationAccuracy : (computerData.LocationAccuracy !== null ? computerData.LocationAccuracy : undefined);
+    const locationAddress = computerData.locationAddress || computerData.LocationAddress || null;
+    const locationSource = computerData.locationSource || computerData.LocationSource || null;
+    const lastLocationUpdate = computerData.lastLocationUpdate || computerData.LastLocationUpdate || (latitude && longitude ? now : undefined);
+    const installedPrograms = computerData.installedPrograms || computerData.InstalledPrograms || [];
+    
+    const now = Date.now();
+    
+    if (!computerId || computerId === 'null' || computerId === 'undefined') {
+        console.error('❌ ComputerId inválido:', computerId);
+        console.error('Dados recebidos:', JSON.stringify(computerData, null, 2));
+        return;
+    }
+    
+    // Marcar como computador
+    ws.isComputer = true;
+    ws.computerId = computerId;
+    
+    // Salvar conexão do computador (separado de dispositivos móveis)
+    connectedComputers.set(computerId, ws);
+    
+    // Marcar como online imediatamente quando detectamos que é um computador
+    // Isso garante que o status seja atualizado mesmo antes de salvar os dados completos
+    console.log(`🔌 Computador ${computerId} conectado - marcando como online`);
+    ComputerModel.updateStatus(computerId, 'online').catch(err => {
+        console.error('Erro ao atualizar status do computador para online:', err);
+    });
+    
+    // Preparar dados para salvar no banco (usando valores mapeados)
+    const computerToSave = {
+        computerId: computerId,
+        name: name || hostname || 'Computador',
+        status: 'online',
+        lastSeen: now,
+        osType: osType || 'unknown',
+        osVersion: osVersion || '',
+        osBuild: osBuild,
+        architecture: architecture || 'unknown',
+        hostname: hostname,
+        domain: domain,
+        cpuModel: cpuModel,
+        cpuCores: cpuCores,
+        cpuThreads: cpuThreads,
+        memoryTotal: memoryTotal,
+        memoryUsed: memoryUsed,
+        storageTotal: storageTotal,
+        storageUsed: storageUsed,
+        ipAddress: ipAddress,
+        macAddress: macAddress,
+        networkType: networkType,
+        wifiSSID: wifiSSID,
+        isWifiEnabled: isWifiEnabled,
+        isBluetoothEnabled: isBluetoothEnabled,
+        agentVersion: agentVersion,
+        agentInstalledAt: agentInstalledAt,
+        lastHeartbeat: now,
+        loggedInUser: loggedInUser,
+        assignedDeviceUserId: computerData.assignedDeviceUserId || null,
+        complianceStatus: complianceStatus,
+        antivirusInstalled: antivirusInstalled,
+        antivirusEnabled: antivirusEnabled,
+        antivirusName: antivirusName,
+        firewallEnabled: firewallEnabled,
+        encryptionEnabled: encryptionEnabled,
+        latitude: latitude,
+        longitude: longitude,
+        locationAccuracy: locationAccuracy,
+        locationAddress: locationAddress,
+        locationSource: locationSource,
+        lastLocationUpdate: lastLocationUpdate,
+        storageDrives: storageDrives.map(drive => ({
+            drive: drive.drive || drive.Drive,
+            label: drive.label || drive.Label,
+            fileSystem: drive.fileSystem || drive.FileSystem,
+            total: drive.total || drive.Total || 0,
+            used: drive.used || drive.Used || 0,
+            free: drive.free || drive.Free || 0
+        })),
+        installedPrograms: installedPrograms.map(prog => ({
+            name: prog.name || prog.Name,
+            version: prog.version || prog.Version,
+            publisher: prog.publisher || prog.Publisher,
+            installDate: prog.installDate || prog.InstallDate,
+            installLocation: prog.installLocation || prog.InstallLocation,
+            size: prog.size || prog.Size
+        })),
+        restrictions: computerData.restrictions || {}
+    };
+    
+    try {
+        // Salvar no banco de dados (já com status 'online')
+        await ComputerModel.upsert(computerToSave);
+        
+        console.log(`✅ Computador ${computerId} salvo no banco com status: online`);
+        
+        // Formatar computador para enviar aos clientes web (usando formato do frontend)
+        const computerForClient = {
+            id: computerToSave.computerId, // Usar computerId como ID temporário
+            name: computerToSave.name,
+            computerId: computerId,
+            status: 'online',
+            lastSeen: now,
+            osType: computerToSave.osType,
+            osVersion: computerToSave.osVersion,
+            osBuild: computerToSave.osBuild,
+            architecture: computerToSave.architecture,
+            hostname: computerToSave.hostname,
+            domain: computerToSave.domain,
+            cpuModel: computerToSave.cpuModel,
+            cpuCores: computerToSave.cpuCores,
+            cpuThreads: computerToSave.cpuThreads,
+            memoryTotal: computerToSave.memoryTotal,
+            memoryUsed: computerToSave.memoryUsed,
+            storageTotal: computerToSave.storageTotal,
+            storageUsed: computerToSave.storageUsed,
+            storageDrives: computerToSave.storageDrives,
+            ipAddress: computerToSave.ipAddress,
+            macAddress: computerToSave.macAddress,
+            networkType: computerToSave.networkType,
+            wifiSSID: computerToSave.wifiSSID,
+            isWifiEnabled: computerToSave.isWifiEnabled,
+            isBluetoothEnabled: computerToSave.isBluetoothEnabled,
+            agentVersion: computerToSave.agentVersion,
+            agentInstalledAt: computerToSave.agentInstalledAt,
+            lastHeartbeat: now,
+            loggedInUser: computerToSave.loggedInUser,
+            assignedDeviceUserId: computerToSave.assignedDeviceUserId,
+            complianceStatus: computerToSave.complianceStatus,
+            antivirusInstalled: computerToSave.antivirusInstalled,
+            antivirusEnabled: computerToSave.antivirusEnabled,
+            antivirusName: computerToSave.antivirusName,
+            firewallEnabled: computerToSave.firewallEnabled,
+            encryptionEnabled: computerToSave.encryptionEnabled,
+            latitude: computerToSave.latitude,
+            longitude: computerToSave.longitude,
+            locationAccuracy: computerToSave.locationAccuracy,
+            lastLocationUpdate: computerToSave.lastLocationUpdate,
+            restrictions: computerToSave.restrictions,
+            installedPrograms: computerToSave.installedPrograms,
+            installedProgramsCount: computerToSave.installedPrograms?.length || 0
+        };
+        
+        // Notificar clientes web
+        console.log(`📤 Notificando clientes web sobre atualização do computador ${computerId} (status: online)`);
+        notifyWebClients({
+            type: 'computer_status_update',
+            computerId: computerId,
+            computer: computerForClient,
+            timestamp: now
+        });
+        
+        // Enviar confirmação para o computador
+        ws.send(JSON.stringify({
+            type: 'computer_status_ack',
+            computerId: computerId,
+            timestamp: now
+        }));
+        
+    } catch (error) {
+        console.error('Erro ao processar status do computador:', error);
+    }
+}
+
+async function handleUEMRemoteAction(ws, data) {
+    const { computerId, action, params } = data;
+    
+    if (!computerId || !action) {
+        console.warn('⚠️ handleUEMRemoteAction: computerId ou action ausente', { computerId, action });
+        return;
+    }
+    
+    // Buscar WebSocket do computador (usar connectedComputers, não connectedDevices)
+    const computerWs = connectedComputers.get(computerId);
+    
+    if (!computerWs) {
+        console.warn(`⚠️ Computador ${computerId} não encontrado na lista de computadores conectados`);
+        const connectedIds = Array.from(connectedComputers.keys());
+        console.warn(`   Computadores conectados (${connectedIds.length}):`, connectedIds.join(', ') || 'nenhum');
+        return;
+    }
+    
+    if (computerWs.readyState !== WebSocket.OPEN) {
+        console.warn(`⚠️ Computador ${computerId} WebSocket não está aberto. Estado: ${computerWs.readyState}`);
+        return;
+    }
+    
+    // Enviar comando para o computador
+    try {
+        const message = {
+            type: 'uem_remote_action',
+            action: action,
+            params: params || {},
+            timestamp: Date.now()
+        };
+        const messageStr = JSON.stringify(message);
+        computerWs.send(messageStr);
+    } catch (error) {
+        console.error(`❌ Erro ao enviar comando ${action} para computador ${computerId}:`, error);
+    }
+    
+    // Notificar clientes web que o comando foi enviado (opcional, pode ser removido se não for necessário)
+    // notifyWebClients({
+    //     type: 'uem_remote_action_sent',
+    //     computerId: computerId,
+    //     action: action,
+    //     timestamp: Date.now()
+    // });
+}
+
+// Exportar connectedDevices e connectedComputers para uso em API routes
+// Handlers para desktop remoto
+const desktopSessions = new Map(); // sessionId -> { computerId, clientWs }
+const webrtcSessions = new Map(); // sessionId -> { computerId, clientWs, computerWs }
+
+async function handleDesktopFrame(ws, data) {
+    const { sessionId, frame, timestamp } = data;
+    
+    // Não logar cada frame recebido (são muitos)
+    if (!sessionId || !frame) {
+        return;
+    }
+
+    // Buscar sessão ativa
+    const session = desktopSessions.get(sessionId);
+    if (!session) {
+        // Sessão não encontrada - cliente já desconectou
+        // Enviar comando para o agente parar a captura (ws é o próprio WebSocket do computador)
+        if (ws.computerId && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'uem_remote_action',
+                action: 'stop_remote_desktop',
+                params: {},
+                timestamp: Date.now()
+            }));
+        }
+        return;
+    }
+    
+    // Enviar frame para o cliente web que está visualizando
+    if (session.clientWs && session.clientWs.readyState === WebSocket.OPEN) {
+        // Se é o primeiro frame, enviar confirmação de que a sessão está ativa
+        if (!session.firstFrameSent) {
+            session.firstFrameSent = true;
+            session.clientWs.send(JSON.stringify({
+                type: 'session_active',
+                sessionId: sessionId,
+                message: 'Sessão de desktop remoto ativa'
+            }));
+            console.log(`✅ Sessão ${sessionId} confirmada como ativa (primeiro frame enviado)`);
+        }
+        
+        session.clientWs.send(JSON.stringify({
+            type: 'desktop_frame',
+            sessionId: sessionId,
+            frame: frame, // Base64 encoded JPEG
+            timestamp: timestamp || Date.now()
+        }));
+    } else {
+        // Cliente desconectou - remover sessão e parar captura no agente
+        desktopSessions.delete(sessionId);
+        const computerWs = connectedComputers.get(session.computerId);
+        if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+            computerWs.send(JSON.stringify({
+                type: 'uem_remote_action',
+                action: 'stop_remote_desktop',
+                params: {},
+                timestamp: Date.now()
+            }));
+        }
+    }
+}
+
+function handleRegisterDesktopSession(ws, data) {
+    const { sessionId, computerId } = data;
+    
+    console.log(`📥 register_desktop_session recebido:`, {
+        sessionId: sessionId,
+        computerId: computerId,
+        connectedComputersCount: connectedComputers.size,
+        connectedComputerIds: Array.from(connectedComputers.keys())
+    });
+    
+    if (!sessionId || !computerId) {
+        console.warn(`⚠️ register_desktop_session inválido: sessionId=${sessionId}, computerId=${computerId}`);
+        return;
+    }
+
+    // Registrar cliente web na sessão
+    const session = desktopSessions.get(sessionId);
+    if (session) {
+        console.log(`📝 Sessão ${sessionId} já existe, atualizando cliente web`);
+        session.clientWs = ws;
+    } else {
+        console.log(`🆕 Criando nova sessão: ${sessionId} para computador ${computerId}`);
+        // Criar nova sessão se não existir
+        startDesktopSession(sessionId, computerId, ws);
+        
+        // Iniciar sessão no agente (computador)
+        const computerWs = connectedComputers.get(computerId);
+        
+        console.log(`🔍 Procurando computador ${computerId} na lista de conectados...`, {
+            computerWsExists: !!computerWs,
+            wsReadyState: computerWs?.readyState,
+            wsConnectionId: computerWs?.connectionId
+        });
+        
+        if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+            const command = {
+                type: 'uem_remote_action',
+                action: 'start_remote_desktop',
+                params: { sessionId: sessionId },
+                timestamp: Date.now()
+            };
+            const commandStr = JSON.stringify(command);
+            computerWs.send(commandStr);
+            console.log(`🖥️ Acesso remoto iniciado - Computer: ${computerId}`, {
+                sessionId: sessionId,
+                commandSize: commandStr.length,
+                wsReadyState: computerWs.readyState,
+                wsConnectionId: computerWs.connectionId
+            });
+        } else {
+            console.warn(`⚠️ Não foi possível iniciar acesso remoto - Computer: ${computerId}`, {
+                computerWsExists: !!computerWs,
+                wsReadyState: computerWs?.readyState,
+                sessionId: sessionId,
+                availableComputerIds: Array.from(connectedComputers.keys())
+            });
+            
+            // Enviar erro para o cliente web
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'desktop_session_error',
+                    sessionId: sessionId,
+                    error: 'Computador não está online. Verifique se o agente está rodando e conectado ao servidor.',
+                    computerId: computerId
+                }));
+            }
+        }
+    }
+}
+
+function startDesktopSession(sessionId, computerId, clientWs) {
+    desktopSessions.set(sessionId, {
+        computerId: computerId,
+        clientWs: clientWs,
+        startedAt: Date.now(),
+        firstFrameSent: false // Flag para enviar confirmação apenas uma vez
+    });
+    // Log apenas quando sessão é criada (já logado em handleRegisterDesktopSession)
+}
+
+function stopDesktopSession(sessionId) {
+    const session = desktopSessions.get(sessionId);
+    if (!session) {
+        return;
+    }
+    
+    // Enviar comando para o computador parar a sessão
+    const computerWs = connectedComputers.get(session.computerId);
+    if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+        computerWs.send(JSON.stringify({
+            type: 'uem_remote_action',
+            action: 'stop_remote_desktop',
+            params: {},
+            timestamp: Date.now()
+        }));
+        console.log(`⏹️ Acesso remoto encerrado - Computer: ${session.computerId}`);
+    }
+    
+    // Remover sessão
+    desktopSessions.delete(sessionId);
+}
+
+// Handlers para WebRTC
+function handleRegisterWebRTCSession(ws, data) {
+    const { sessionId, computerId } = data;
+    
+    if (!sessionId || !computerId) {
+        console.error('❌ Sessão WebRTC inválida: falta sessionId ou computerId');
+        return;
+    }
+
+    const computerWs = connectedComputers.get(computerId);
+    if (!computerWs || computerWs.readyState !== WebSocket.OPEN) {
+        console.error(`❌ Computador ${computerId} não está online para sessão WebRTC`);
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'webrtc_error',
+                sessionId: sessionId,
+                error: 'Computador não está online'
+            }));
+        }
+        return;
+    }
+
+    // Registrar ou atualizar sessão WebRTC
+    if (webrtcSessions.has(sessionId)) {
+        webrtcSessions.get(sessionId).clientWs = ws;
+        console.log(`✅ Cliente web registrado na sessão WebRTC: ${sessionId}`);
+    } else {
+        webrtcSessions.set(sessionId, {
+            computerId: computerId,
+            clientWs: ws,
+            computerWs: computerWs,
+            startedAt: Date.now()
+        });
+        console.log(`✅ Nova sessão WebRTC criada: ${sessionId} para computador ${computerId}`);
+        
+        // Iniciar sessão WebRTC no agente
+        computerWs.send(JSON.stringify({
+            type: 'uem_remote_action',
+            action: 'start_webrtc_session',
+            params: { sessionId: sessionId },
+            timestamp: Date.now()
+        }));
+        console.log(`📤 Comando para iniciar sessão WebRTC enviado ao computador ${computerId}`);
+    }
+}
+
+function handleWebRTCOffer(ws, data) {
+    const { sessionId, offer, computerId } = data;
+    
+    if (!sessionId || !offer) {
+        console.error('❌ Offer WebRTC inválido: falta sessionId ou offer');
+        return;
+    }
+
+    const session = webrtcSessions.get(sessionId);
+    if (!session) {
+        console.warn(`⚠️ Sessão WebRTC não encontrada: ${sessionId}`);
+        return;
+    }
+
+    // Se o offer vem do cliente web, enviar para o agente
+    if (ws === session.clientWs) {
+        const computerWs = connectedComputers.get(session.computerId);
+        if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+            computerWs.send(JSON.stringify({
+                type: 'webrtc_offer',
+                sessionId: sessionId,
+                offer: offer,
+                timestamp: Date.now()
+            }));
+            console.log(`📤 Offer WebRTC encaminhado do cliente para o agente: ${sessionId}`);
+        }
+    } else if (ws === session.computerWs) {
+        // Se o offer vem do agente, enviar para o cliente web
+        if (session.clientWs && session.clientWs.readyState === WebSocket.OPEN) {
+            session.clientWs.send(JSON.stringify({
+                type: 'webrtc_offer',
+                sessionId: sessionId,
+                offer: offer,
+                timestamp: Date.now()
+            }));
+            console.log(`📤 Offer WebRTC encaminhado do agente para o cliente: ${sessionId}`);
+        }
+    }
+}
+
+function handleWebRTCAnswer(ws, data) {
+    const { sessionId, answer, computerId } = data;
+    
+    if (!sessionId || !answer) {
+        console.error('❌ Answer WebRTC inválido: falta sessionId ou answer');
+        return;
+    }
+
+    const session = webrtcSessions.get(sessionId);
+    if (!session) {
+        console.warn(`⚠️ Sessão WebRTC não encontrada: ${sessionId}`);
+        return;
+    }
+
+    // Se o answer vem do cliente web, enviar para o agente
+    if (ws === session.clientWs) {
+        const computerWs = connectedComputers.get(session.computerId);
+        if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+            computerWs.send(JSON.stringify({
+                type: 'webrtc_answer',
+                sessionId: sessionId,
+                answer: answer,
+                timestamp: Date.now()
+            }));
+            console.log(`📤 Answer WebRTC encaminhado do cliente para o agente: ${sessionId}`);
+        }
+    } else if (ws === session.computerWs) {
+        // Se o answer vem do agente, enviar para o cliente web
+        if (session.clientWs && session.clientWs.readyState === WebSocket.OPEN) {
+            session.clientWs.send(JSON.stringify({
+                type: 'webrtc_answer',
+                sessionId: sessionId,
+                answer: answer,
+                timestamp: Date.now()
+            }));
+            console.log(`📤 Answer WebRTC encaminhado do agente para o cliente: ${sessionId}`);
+        }
+    }
+}
+
+function handleWebRTCIceCandidate(ws, data) {
+    const { sessionId, candidate, computerId } = data;
+    
+    if (!sessionId || !candidate) {
+        console.error('❌ ICE candidate WebRTC inválido: falta sessionId ou candidate');
+        return;
+    }
+
+    const session = webrtcSessions.get(sessionId);
+    if (!session) {
+        console.warn(`⚠️ Sessão WebRTC não encontrada: ${sessionId}`);
+        return;
+    }
+
+    // Se o candidate vem do cliente web, enviar para o agente
+    if (ws === session.clientWs) {
+        const computerWs = connectedComputers.get(session.computerId);
+        if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+            computerWs.send(JSON.stringify({
+                type: 'webrtc_ice_candidate',
+                sessionId: sessionId,
+                candidate: candidate,
+                timestamp: Date.now()
+            }));
+        }
+    } else if (ws === session.computerWs) {
+        // Se o candidate vem do agente, enviar para o cliente web
+        if (session.clientWs && session.clientWs.readyState === WebSocket.OPEN) {
+            session.clientWs.send(JSON.stringify({
+                type: 'webrtc_ice_candidate',
+                sessionId: sessionId,
+                candidate: candidate,
+                timestamp: Date.now()
+            }));
+        }
+    }
+}
+
+function stopWebRTCSession(sessionId) {
+    const session = webrtcSessions.get(sessionId);
+    if (!session) {
+        console.warn(`⚠️ Sessão WebRTC ${sessionId} não encontrada para parar`);
+        return;
+    }
+    
+    // Enviar comando para o computador parar a sessão WebRTC
+    const computerWs = connectedComputers.get(session.computerId);
+    if (computerWs && computerWs.readyState === WebSocket.OPEN) {
+        computerWs.send(JSON.stringify({
+            type: 'uem_remote_action',
+            action: 'stop_webrtc_session',
+            params: { sessionId: sessionId },
+            timestamp: Date.now()
+        }));
+        console.log(`📤 Comando para parar sessão WebRTC enviado ao computador ${session.computerId}`);
+    }
+    
+    // Remover sessão
+    webrtcSessions.delete(sessionId);
+    console.log(`✅ Sessão WebRTC parada: ${sessionId}`);
+}
+
 module.exports = {
-    connectedDevices
+    connectedDevices, // For mobile devices
+    connectedComputers, // For UEM computers
+    desktopSessions,
+    webrtcSessions,
+    startDesktopSession,
+    stopDesktopSession,
+    stopWebRTCSession
 };

@@ -13,6 +13,7 @@ import UserSelectionModal from './components/UserSelectionModal'
 import UserConflictModal from './components/UserConflictModal'
 import ConfigModal from './components/ConfigModal'
 import PoliciesPage from './policies/page'
+import UEMPage from './uem/page'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
 
@@ -87,7 +88,16 @@ export default function Home() {
 
   // WebSocket connection
   useEffect(() => {
+    let websocket: WebSocket | null = null
+    let reconnectTimeout: NodeJS.Timeout | null = null
+    let isMounted = true
+
     const connectWebSocket = () => {
+      // Evitar múltiplas conexões
+      if (websocket && (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN)) {
+        return
+      }
+
       try {
         // Detectar automaticamente o host correto
         // Se acessando de localhost/127.0.0.1, usar localhost
@@ -100,10 +110,14 @@ export default function Home() {
         const wsUrl = `ws://${wsHost}:3002`
         console.log('🔌 Conectando ao WebSocket:', wsUrl)
         
-        const websocket = new WebSocket(wsUrl)
+        websocket = new WebSocket(wsUrl)
         
         websocket.onopen = () => {
-          console.log('WebSocket conectado')
+          if (!isMounted) {
+            websocket?.close()
+            return
+          }
+          console.log('✅ WebSocket conectado para UEM')
           setIsConnected(true)
           setWs(websocket)
           
@@ -115,15 +129,18 @@ export default function Home() {
           
           // Aguardar um pouco antes de solicitar a senha
           setTimeout(() => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
             // Solicitar senha de administrador atual
             websocket.send(JSON.stringify({
               type: 'get_admin_password',
               timestamp: Date.now()
             }))
+            }
           }, 500)
         }
 
         websocket.onmessage = (event) => {
+          if (!isMounted) return
           try {
             const message = JSON.parse(event.data)
             handleWebSocketMessage(message)
@@ -132,16 +149,29 @@ export default function Home() {
           }
         }
 
-        websocket.onclose = () => {
-          console.log('WebSocket desconectado')
+        websocket.onclose = (event) => {
+          if (!isMounted) return
+          console.log('WebSocket desconectado', event.code, event.reason)
           setIsConnected(false)
           setWs(null)
           
-          // Tentar reconectar após 3 segundos
-          setTimeout(connectWebSocket, 3000)
+          // Limpar timeout anterior se existir
+          if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout)
+          }
+          
+          // Tentar reconectar após 3 segundos apenas se não foi fechado intencionalmente
+          if (event.code !== 1000 && isMounted) {
+            reconnectTimeout = setTimeout(() => {
+              if (isMounted) {
+                connectWebSocket()
+              }
+            }, 3000)
+          }
         }
 
         websocket.onerror = (error) => {
+          if (!isMounted) return
           console.error('Erro WebSocket:', error)
           setIsConnected(false)
         }
@@ -154,9 +184,30 @@ export default function Home() {
     connectWebSocket()
 
     return () => {
-      if (ws) {
-        ws.close()
+      isMounted = false
+      
+      // Limpar timeout de reconexão
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
       }
+      
+      // Fechar WebSocket se estiver aberto
+      if (websocket) {
+        // Remover listeners para evitar chamadas após desmontagem
+        websocket.onopen = null
+        websocket.onmessage = null
+        websocket.onerror = null
+        websocket.onclose = null
+        
+        // Fechar conexão
+        if (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN) {
+          websocket.close(1000, 'Component unmounting')
+      }
+        websocket = null
+      }
+      
+      setWs(null)
+      setIsConnected(false)
     }
   }, [])
 
@@ -166,9 +217,17 @@ export default function Home() {
         console.log('Lista de dispositivos recebida:', message.devices)
         const newDevices = message.devices || []
         
+        // Filtrar apenas dispositivos móveis (Android) - excluir computadores
+        const mobileDevices = newDevices.filter((d: Device) => 
+          d.deviceType !== 'computer' && 
+          d.osType !== 'Windows' && 
+          d.osType !== 'Linux' && 
+          d.osType !== 'macOS'
+        )
+        
         // Debug: verificar dados específicos
-        if (newDevices.length > 0) {
-          const firstDevice = newDevices[0]
+        if (mobileDevices.length > 0) {
+          const firstDevice = mobileDevices[0]
           console.log('Primeiro dispositivo da lista:', {
             deviceId: firstDevice.deviceId,
             name: firstDevice.name,
@@ -180,15 +239,23 @@ export default function Home() {
           })
         }
         
-        syncWithServer(newDevices, message.adminPassword)
+        syncWithServer(mobileDevices, message.adminPassword)
         break
       case 'devices_status':
         console.log('Status dos dispositivos atualizado:', message.devices)
         const updatedDevices = message.devices || []
         
+        // Filtrar apenas dispositivos móveis (Android) - excluir computadores
+        const mobileUpdatedDevices = updatedDevices.filter((d: Device) => 
+          d.deviceType !== 'computer' && 
+          d.osType !== 'Windows' && 
+          d.osType !== 'Linux' && 
+          d.osType !== 'macOS'
+        )
+        
         // Debug: verificar dados específicos
-        if (updatedDevices.length > 0) {
-          const firstDevice = updatedDevices[0]
+        if (mobileUpdatedDevices.length > 0) {
+          const firstDevice = mobileUpdatedDevices[0]
           console.log('Primeiro dispositivo do status:', {
             deviceId: firstDevice.deviceId,
             name: firstDevice.name,
@@ -200,10 +267,21 @@ export default function Home() {
           })
         }
         
-        syncWithServer(updatedDevices)
+        syncWithServer(mobileUpdatedDevices)
         break
       case 'device_status':
         console.log('Status do dispositivo atualizado:', message.device)
+        
+        // Ignorar computadores - apenas processar dispositivos móveis
+        if (message.device && (
+          message.device.deviceType === 'computer' ||
+          message.device.osType === 'Windows' ||
+          message.device.osType === 'Linux' ||
+          message.device.osType === 'macOS'
+        )) {
+          console.log('💻 Computador ignorado na página de dispositivos:', message.device.deviceId)
+          break
+        }
         
         // Debug: verificar dados específicos
         if (message.device) {
@@ -244,6 +322,17 @@ export default function Home() {
         break
       case 'device_connected':
         console.log('🔌 === MENSAGEM DEVICE_CONNECTED RECEBIDA ===')
+        
+        // Ignorar computadores - apenas processar dispositivos móveis
+        if (message.device && (
+          message.device.deviceType === 'computer' ||
+          message.device.osType === 'Windows' ||
+          message.device.osType === 'Linux' ||
+          message.device.osType === 'macOS'
+        )) {
+          console.log('💻 Computador ignorado na página de dispositivos:', message.device.deviceId)
+          break
+        }
         
         // Debug: verificar dados específicos
         if (message.device) {
@@ -470,8 +559,14 @@ export default function Home() {
           )
         }
         break
+      case 'computer_status_update':
+        // Mensagens de atualização de computadores são tratadas em /uem/page.tsx
+        // Ignorar silenciosamente aqui
+        break
       default:
-        console.log('Mensagem WebSocket não reconhecida:', message)
+        // Ignorar mensagens desconhecidas silenciosamente (evitar spam de logs)
+        // console.log('Mensagem WebSocket não reconhecida:', message)
+        break
     }
   }, [updateDevices, updateAdminPassword, syncWithServer])
 
@@ -863,6 +958,8 @@ export default function Home() {
         return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} />
       case 'policies':
         return <PoliciesPage />
+      case 'uem':
+        return <UEMPage />
       case 'devices':
         return (
           <div className="p-6">

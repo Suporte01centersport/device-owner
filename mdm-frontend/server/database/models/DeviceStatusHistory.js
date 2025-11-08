@@ -112,14 +112,34 @@ class DeviceStatusHistory {
     static async getDailyOnlineCounts(startDate, endDate) {
         try {
             const queryText = `
+                WITH device_daily AS (
+                    SELECT 
+                        dsh.status_date,
+                        COUNT(DISTINCT dsh.device_id) AS devices_online
+                    FROM device_status_history dsh
+                    INNER JOIN devices dv ON dv.device_id = dsh.device_id
+                    WHERE dsh.status_date >= $1
+                      AND dsh.status_date <= $2
+                      AND dsh.status = 'online'
+                    GROUP BY dsh.status_date
+                ),
+                computer_daily AS (
+                    SELECT 
+                        DATE(last_seen) AS status_date,
+                        COUNT(DISTINCT computer_id) AS computers_online
+                    FROM computers
+                    WHERE last_seen IS NOT NULL
+                      AND DATE(last_seen) >= $1
+                      AND DATE(last_seen) <= $2
+                    GROUP BY DATE(last_seen)
+                )
                 SELECT 
-                    status_date,
-                    COUNT(DISTINCT device_id) as devices_online
-                FROM device_status_history 
-                WHERE status_date >= $1 
-                AND status_date <= $2
-                AND status = 'online'
-                GROUP BY status_date
+                    COALESCE(dd.status_date, cd.status_date) AS status_date,
+                    COALESCE(dd.devices_online, 0) + COALESCE(cd.computers_online, 0) AS devices_online,
+                    COALESCE(dd.devices_online, 0) AS mobile_online,
+                    COALESCE(cd.computers_online, 0) AS computers_online
+                FROM device_daily dd
+                FULL OUTER JOIN computer_daily cd ON dd.status_date = cd.status_date
                 ORDER BY status_date ASC
             `;
             

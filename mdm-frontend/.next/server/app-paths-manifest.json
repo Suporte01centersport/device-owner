@@ -1,4 +1,4 @@
 {
-  "/api/support-messages/route": "app/api/support-messages/route.js",
+  "/api/uem/computers/route": "app/api/uem/computers/route.js",
   "/page": "app/page.js"
 }
