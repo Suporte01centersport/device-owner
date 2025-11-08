@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 export const runtime = 'nodejs'
-// @ts-ignore
-require('dotenv').config()
+import '../../../../../server/load-env.js'
 import DeviceGroupModel from '../../../../../server/database/models/DeviceGroup.js'
 
 // GET /api/groups/[groupId]/restrictions - Obter restrições do grupo

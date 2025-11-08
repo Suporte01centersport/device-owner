@@ -1,5 +1,5 @@
-// Carregar variáveis de ambiente do arquivo .env
-require('dotenv').config();
+// Carregar variáveis de ambiente (respeita DOTENV_CONFIG_PATH)
+require('./load-env');
 
 const WebSocket = require('ws');
 const http = require('http');

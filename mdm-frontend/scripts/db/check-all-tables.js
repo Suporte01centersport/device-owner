@@ -1,5 +1,5 @@
 // Script para verificar se todas as tabelas necessárias existem no banco de dados
-require('dotenv').config();
+require('../../server/load-env');
 const { query } = require('../../server/database/config');
 
 // Lista completa de tabelas esperadas (do schema.sql e migrations)
