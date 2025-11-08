@@ -2,7 +2,7 @@ namespace UEMAgent.Data;
 
 public class AppSettings
 {
-    public string ServerUrl { get; set; } = "ws://localhost:3002";
+    public string ServerUrl { get; set; } = "ws://192.168.2.100:3002";
     public string ComputerId { get; set; } = "";
     public int UpdateInterval { get; set; } = 30000;
     public int LocationUpdateInterval { get; set; } = 300000;
