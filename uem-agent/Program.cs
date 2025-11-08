@@ -14,6 +14,12 @@ internal static class Program
 {
     static void Main(string[] args)
     {
+#if DEBUG
+        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Development");
+#else
+        Environment.SetEnvironmentVariable("DOTNET_ENVIRONMENT", "Production");
+#endif
+
         try
         {
             // Verificar se deve rodar como serviço

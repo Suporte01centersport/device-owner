@@ -21,16 +21,13 @@ Agente de gerenciamento unificado de endpoints (UEM) para computadores Windows q
 
 ## Configuração
 
-Edite o arquivo `appsettings.json`:
+Há três arquivos de configuração na raiz do projeto:
 
-```json
-{
-  "ServerUrl": "ws://seu-servidor:3002",
-  "ComputerId": "auto-generated",
-  "UpdateInterval": 30000,
-  "LocationUpdateInterval": 300000
-}
-```
+- `appsettings.json`: valores padrão compartilhados.
+- `appsettings.Development.json`: usado automaticamente em builds **Debug** (aponta para o servidor local `ws://localhost:3002`).
+- `appsettings.Production.json`: usado automaticamente em builds **Release** (aponta para o servidor Linux `ws://192.168.2.100:3002`).
+
+O agente define `DOTNET_ENVIRONMENT=Development` nos builds de teste e `DOTNET_ENVIRONMENT=Production` nos builds finais, portanto não é necessário alterar manualmente durante o desenvolvimento. Caso seu IP público de produção mude, atualize `appsettings.Production.json` antes de gerar o instalador.
 
 ## Funcionalidades
 
