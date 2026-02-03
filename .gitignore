@@ -6,8 +6,12 @@ yarn-error.log*
 
 # Next.js
 .next/
+.next/cache/
+**/.next/cache/
 out/
 build/
+*.pack.gz
+*.pack.gz.old
 
 # Environment variables
 .env
@@ -100,6 +104,15 @@ temp/
 .Trashes
 ehthumbs.db
 Thumbs.db
+# Windows
+Desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msix
+*.msm
+*.msp
+*.lnk
 
 # Android specific
 *.apk
@@ -167,3 +180,74 @@ out/
 # Server logs
 server/logs/
 server/*.log
+
+# OpenUEM - Pastas de análise e estudo (não fazem parte do projeto)
+openuem-agent-*/
+openuem-console-*/
+openuem-*
+
+# ============================================
+# MDM Frontend - Arquivos específicos
+# ============================================
+# Next.js build e cache (NUNCA versionar - artefatos de build)
+mdm-frontend/.next
+mdm-frontend/.next/
+mdm-frontend/.next/cache/
+mdm-frontend/.next/**/*
+mdm-frontend/**/*.pack.gz
+mdm-frontend/**/*.pack.gz.old
+# Downloads de APKs
+mdm-frontend/server/downloads/
+# Arquivos de dados temporários/sensíveis
+mdm-frontend/server/admin_password.json
+mdm-frontend/server/notifications.json
+mdm-frontend/server/support_messages.json
+# APKs de debug
+mdm-frontend/app/api/apk/debug/
+
+# ============================================
+# MDM Owner (Android) - Arquivos específicos
+# ============================================
+# Configurações do Eclipse
+mdm-owner/.settings/
+mdm-owner/.project
+mdm-owner/.classpath
+# Arquivos do Eclipse em qualquer lugar
+**/.project
+**/.classpath
+# Keystore de release (manter apenas debug.keystore)
+mdm-owner/app/release.keystore
+mdm-owner/release.keystore
+# Binários compilados (já coberto por build/, mas sendo explícito)
+mdm-owner/bin/
+mdm-owner/app/bin/
+
+# ============================================
+# MDM UEM (Go) - Arquivos específicos
+# ============================================
+# Binários compilados (todos os arquivos dentro de bin/)
+mdm-uem/bin/
+mdm-uem/bin/**/*
+# Executáveis na raiz
+mdm-uem/*.exe
+# Instaladores MSI (em qualquer lugar)
+mdm-uem/**/*.msi
+# Arquivos de debug do WiX
+mdm-uem/**/*.wixpdb
+# Arquivos temporários do build
+mdm-uem/*.tmp
+
+# Go - Arquivos gerados e temporários
+# Binários de teste
+*.test
+# Arquivos de cobertura
+*.out
+# Diretório vendor (se usado)
+vendor/
+# Arquivos de depuração
+*.dSYM/
+# Arquivos de build do Go
+*.exe~
+# Arquivos de cache do Go
+go.work
+go.work.sum
