@@ -6,7 +6,7 @@ Guia completo de configuração e deploy para ambientes de **Produção** (Ubunt
 > - Caminhos como `/opt/mdm-owner` são **exemplos**. Use o caminho onde você clonou o projeto.
 > - Nome do banco de dados (`mdm_owner`) é padrão. Verifique seu arquivo de ambiente (ex.: `.env.production`) se for diferente.
 > - Este guia serve tanto para **servidor Linux de produção** quanto **localhost para testes**.
-> 
+>
 > **📦 Estrutura de Arquivos:**
 > ```
 > device-owner/
