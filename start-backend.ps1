@@ -1,48 +1,38 @@
-# Caminho do backend - altere para onde seu mdm-server realmente está
-$backendPath = "C:\Desenvolvimento\device-owner\mdm-uem"
+# Script para iniciar APENAS o Backend (WebSocket Server)
+# Para o ambiente completo, use start-dev-windows.bat
 
-# Porta que o backend usa
+$frontendPath = "$PSScriptRoot\mdm-frontend"
 $port = 3002
 
-# 1️⃣ Matar qualquer processo que esteja usando a porta
+# 1. Verificar porta
 $processes = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess
 if ($processes) {
     foreach ($pid in $processes) {
-        Write-Host "Matando processo PID $pid que estava usando a porta $port..."
-        Stop-Process -Id $pid -Force
+        Write-Host "Matando processo PID $pid na porta $port..."
+        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
     }
-} else {
-    Write-Host "Porta $port está livre."
 }
 
-# 2️⃣ Verificar se a pasta do backend existe
-if (-Not (Test-Path $backendPath)) {
-    Write-Host "❌ A pasta do backend não existe: $backendPath"
-    Write-Host "Verifique o caminho antes de continuar."
+# 2. Verificar caminho
+if (-Not (Test-Path $frontendPath)) {
+    Write-Host "❌ Pasta mdm-frontend não encontrada!"
     exit
 }
 
-# 3️⃣ Ir para a pasta do backend
-Set-Location $backendPath
+Set-Location $frontendPath
 
-# 4️⃣ Instalar dependências (se houver package.json)
-if (Test-Path "package.json") {
+# 3. Verificar .env
+if (-Not (Test-Path ".env.development")) {
+    Write-Host "Criando .env.development..."
+    Copy-Item "env.development.example" ".env.development"
+}
+
+# 4. Instalar dependências se necessário
+if (-Not (Test-Path "node_modules")) {
     Write-Host "Instalando dependências..."
     npm install
-} else {
-    Write-Host "package.json não encontrado, pulando npm install."
 }
 
-# 5️⃣ Iniciar o backend em nova janela do PowerShell
-Write-Host "Iniciando backend $backendPath na porta $port..."
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "npm start"
-
-# 6️⃣ Esperar 5 segundos e testar se o backend subiu
-Start-Sleep -Seconds 5
-Write-Host "Testando conexão com http://localhost:$port/api/health ..."
-try {
-    $response = Invoke-WebRequest -Uri "http://localhost:$port/api/health" -UseBasicParsing -TimeoutSec 5
-    Write-Host "✅ Backend online! Resposta:" $response.Content
-} catch {
-    Write-Host "❌ Não foi possível conectar ao backend. Confira se npm start rodou corretamente."
-}
+# 5. Iniciar WebSocket Server
+Write-Host "Iniciando WebSocket Server na porta $port..."
+npm run dev:websocket
