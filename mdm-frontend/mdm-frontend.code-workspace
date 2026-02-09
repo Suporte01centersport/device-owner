@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../mdm-owner"
+		},
+		{
+			"path": "../mdm-uem"
+		}
+	]
+}
