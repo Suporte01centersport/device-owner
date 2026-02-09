@@ -16,7 +16,7 @@ class AppChangeReceiver : BroadcastReceiver() {
         Log.d(TAG, "Mudança de pacote detectada: ${intent.action} -> $packageName")
         
         // Solicitar atualização de status do dispositivo
-        val serviceIntent = Intent(context, com.mdm.launcher.service.WebSocketService::class.java).apply {
+        val serviceIntent = Intent(context, com.mdm.launcher.service.::class.java).apply {
             action = "com.mdm.launcher.SEND_DEVICE_STATUS"
         }
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {

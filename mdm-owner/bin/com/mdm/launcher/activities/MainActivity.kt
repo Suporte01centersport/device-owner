@@ -22,7 +22,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.mdm.launcher.R
 import com.mdm.launcher.data.AppInfo
-import com.mdm.launcher.service.WebSocketService
+import com.mdm.launcher.service.
 import com.mdm.launcher.ui.AppAdapter
 import com.mdm.launcher.ui.ConfigDialogFragment
 import com.mdm.launcher.utils.AppMonitor
@@ -99,7 +99,7 @@ class MainActivity : AppCompatActivity() {
         setupRecyclerView()
         setupConfigButton()
         loadAndDisplayApps()
-        startWebSocketService()
+        start()
         registerBroadcastReceivers()
         loadingProgress.visibility = View.GONE
         
@@ -220,8 +220,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun startWebSocketService() {
-        val intent = Intent(this, WebSocketService::class.java)
+    private fun start() {
+        val intent = Intent(this, ::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent) else startService(intent)
         
         // Iniciar serviço de localização também

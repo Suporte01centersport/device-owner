@@ -6,13 +6,13 @@ import android.os.Build
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.mdm.launcher.service.WebSocketService
+import com.mdm.launcher.service.
 
 /**
  * Worker para verificação periódica da saúde da conexão
  * 
  * Executado pelo WorkManager em background, mesmo quando o app está fechado
- * Garante que o WebSocketService esteja sempre rodando e conectado
+ * Garante que o  esteja sempre rodando e conectado
  */
 class ConnectionHealthWorker(
     context: Context,
@@ -33,10 +33,10 @@ class ConnectionHealthWorker(
             val timeSinceLastConnection = currentTime - lastConnectedTime
             
             if (!isConnected || timeSinceLastConnection > 120000) {
-                val isServiceRunning = isServiceRunning(WebSocketService::class.java)
+                val isServiceRunning = isServiceRunning(::class.java)
                 
                 if (!isServiceRunning) {
-                    startWebSocketService()
+                    start()
                 } else {
                     sendReconnectBroadcast()
                 }
@@ -57,17 +57,17 @@ class ConnectionHealthWorker(
         }
     }
     
-    private fun startWebSocketService() {
+    private fun start() {
         try {
-            val serviceIntent = Intent(applicationContext, WebSocketService::class.java)
+            val serviceIntent = Intent(applicationContext, ::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 applicationContext.startForegroundService(serviceIntent)
             } else {
                 applicationContext.startService(serviceIntent)
             }
-            Log.d(TAG, "✅ WebSocketService iniciado pelo Worker")
+            Log.d(TAG, "✅  iniciado pelo Worker")
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao iniciar WebSocketService", e)
+            Log.e(TAG, "❌ Erro ao iniciar ", e)
         }
     }
     

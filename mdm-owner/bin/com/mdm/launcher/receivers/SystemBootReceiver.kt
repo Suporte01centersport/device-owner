@@ -7,7 +7,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import com.mdm.launcher.service.WebSocketService
+import com.mdm.launcher.service.
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -90,15 +90,15 @@ class SystemBootReceiver : BroadcastReceiver() {
                 return
             }
             
-            val isServiceRunning = isServiceRunning(context, WebSocketService::class.java)
+            val isServiceRunning = isServiceRunning(context, ::class.java)
             if (!isServiceRunning) {
-                val serviceIntent = Intent(context, WebSocketService::class.java)
+                val serviceIntent = Intent(context, ::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent)
                 } else {
                     context.startService(serviceIntent)
                 }
-                Log.d(TAG, "WebSocketService iniciado após boot")
+                Log.d(TAG, " iniciado após boot")
             }
             
         } catch (e: Exception) {
@@ -122,14 +122,14 @@ class SystemBootReceiver : BroadcastReceiver() {
                     .putLong("last_network_change", System.currentTimeMillis())
                     .apply()
                 
-                val isServiceRunning = isServiceRunning(context, WebSocketService::class.java)
+                val isServiceRunning = isServiceRunning(context, ::class.java)
                 
                 if (isServiceRunning) {
                     val reconnectIntent = Intent("com.mdm.launcher.NETWORK_CHANGE")
                     reconnectIntent.setPackage(context.packageName)
                     context.sendBroadcast(reconnectIntent)
                 } else {
-                    val serviceIntent = Intent(context, WebSocketService::class.java)
+                    val serviceIntent = Intent(context, ::class.java)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                         context.startForegroundService(serviceIntent)
                     } else {
@@ -150,14 +150,14 @@ class SystemBootReceiver : BroadcastReceiver() {
                 .putLong("last_package_update", System.currentTimeMillis())
                 .apply()
             
-            val serviceIntent = Intent(context, WebSocketService::class.java)
+            val serviceIntent = Intent(context, ::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(serviceIntent)
             } else {
                 context.startService(serviceIntent)
             }
             
-            Log.d(TAG, "WebSocketService reiniciado após atualização")
+            Log.d(TAG, " reiniciado após atualização")
             
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao reiniciar serviço após atualização", e)
@@ -171,10 +171,10 @@ class SystemBootReceiver : BroadcastReceiver() {
                 .putLong("last_power_connected", System.currentTimeMillis())
                 .apply()
             
-            val isServiceRunning = isServiceRunning(context, WebSocketService::class.java)
+            val isServiceRunning = isServiceRunning(context, ::class.java)
             
             if (!isServiceRunning) {
-                val serviceIntent = Intent(context, WebSocketService::class.java)
+                val serviceIntent = Intent(context, ::class.java)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                     context.startForegroundService(serviceIntent)
                 } else {
