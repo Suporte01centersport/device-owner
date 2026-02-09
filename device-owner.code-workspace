@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "mdm-frontend"
+		},
+		{
+			"path": "mdm-owner"
+		},
+		{
+			"path": "uem-agent"
+		}
+	],
+	"settings": {}
+}
