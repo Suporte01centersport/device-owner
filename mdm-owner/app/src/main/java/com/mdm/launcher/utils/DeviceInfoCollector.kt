@@ -256,7 +256,7 @@ object DeviceInfoCollector {
         
         // Filtrar apenas apps relevantes primeiro (otimização)
         val relevantPackages = packages.filter { packageInfo ->
-            val appInfo = packageInfo.applicationInfo
+            val appInfo = packageInfo.applicationInfo ?: return@filter false
             val isEnabled = appInfo.enabled
             val hasLaunchIntent = packageManager.getLaunchIntentForPackage(packageInfo.packageName) != null
             val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
@@ -270,7 +270,7 @@ object DeviceInfoCollector {
         
         // Processar apenas apps relevantes
         for (packageInfo in relevantPackages) {
-            val appInfo = packageInfo.applicationInfo
+            val appInfo = packageInfo.applicationInfo ?: continue
             val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
             val isEnabled = appInfo.enabled
@@ -499,7 +499,7 @@ object DeviceInfoCollector {
         val defaultLauncherApps = mutableListOf<String>()
         
         for (packageInfo in packages) {
-            val appInfo = packageInfo.applicationInfo
+            val appInfo = packageInfo.applicationInfo ?: continue
             val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
             val isEnabled = appInfo.enabled
@@ -770,7 +770,7 @@ object DeviceInfoCollector {
     private fun getAppVersion(context: Context): String {
         return try {
             val packageInfo = context.packageManager.getPackageInfo(context.packageName, 0)
-            packageInfo.versionName
+            packageInfo.versionName ?: "1.0.0"
         } catch (e: Exception) {
             "1.0.0"
         }

@@ -291,7 +291,7 @@ class AppUsageTracker(private val context: Context) {
                 val gson = com.google.gson.Gson()
                 val jsonMessage = gson.toJson(message)
                 
-                val serviceIntent = Intent(context, com.mdm.launcher.service.::class.java).apply {
+                val serviceIntent = Intent(context, com.mdm.launcher.service.WebSocketService::class.java).apply {
                     putExtra("usage_data", jsonMessage)
                     action = "com.mdm.launcher.SEND_USAGE_DATA"
                 }

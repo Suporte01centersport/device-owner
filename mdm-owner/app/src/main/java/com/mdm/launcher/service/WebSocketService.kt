@@ -1,4 +1,4 @@
-﻿package com.mdm.launcher.service
+package com.mdm.launcher.service
 
 import android.app.*
 import android.content.Intent
@@ -6,12 +6,20 @@ import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.gson.Gson
 import com.mdm.launcher.R
+import com.mdm.launcher.data.DeviceInfo
 import kotlinx.coroutines.*
 import okhttp3.*
 import java.util.concurrent.TimeUnit
 
 class WebSocketService : Service() {
+
+    inner class LocalBinder : android.os.Binder() {
+        fun getService(): WebSocketService = this@WebSocketService
+    }
+
+    private val binder = LocalBinder()
 
     companion object {
         private const val TAG = "MDM-WebSocket"
@@ -23,9 +31,36 @@ class WebSocketService : Service() {
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val gson = Gson()
 
     private var webSocket: WebSocket? = null
     private lateinit var client: OkHttpClient
+    private var isScreenActive = true
+
+    fun isConnected(): Boolean = webSocket != null
+
+    fun sendMessage(message: String) {
+        webSocket?.send(message)
+    }
+
+    fun sendDeviceStatus(deviceInfo: DeviceInfo? = null) {
+        if (!isConnected()) return
+        val data = deviceInfo ?: return
+        val message = mapOf("type" to "device_status", "data" to data)
+        sendMessage(gson.toJson(message))
+    }
+
+    fun setScreenActive(active: Boolean) {
+        isScreenActive = active
+    }
+
+    fun onNetworkChanged() {
+        serviceScope.launch {
+            webSocket?.close(1000, "Network changed")
+            delay(1000)
+            connectWebSocket()
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -48,10 +83,7 @@ class WebSocketService : Service() {
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        // NUNCA BINDA
-        return null
-}
+    override fun onBind(intent: Intent?): IBinder? = binder
 
     // ==============================
     // FOREGROUND
@@ -71,7 +103,7 @@ class WebSocketService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MDM ativo")
             .setContentText("Conectando ao servidor...")
-            .setSmallIcon(R.drawable.ic_notification) // QUALQUER ÍCONE
+            .setSmallIcon(R.drawable.ic_service_notification)
             .setOngoing(true)
             .build()
 
@@ -152,7 +184,7 @@ class WebSocketService : Service() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("MDM ativo")
             .setContentText(text)
-            .setSmallIcon(R.drawable.ic_notification)
+            .setSmallIcon(R.drawable.ic_service_notification)
             .setOngoing(true)
             .build()
 

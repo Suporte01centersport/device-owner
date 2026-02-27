@@ -6,7 +6,7 @@ import android.os.Build
 import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.mdm.launcher.service.
+import com.mdm.launcher.service.WebSocketService
 
 /**
  * Worker para verificação periódica da saúde da conexão
@@ -33,7 +33,7 @@ class ConnectionHealthWorker(
             val timeSinceLastConnection = currentTime - lastConnectedTime
             
             if (!isConnected || timeSinceLastConnection > 120000) {
-                val isServiceRunning = isServiceRunning(::class.java)
+                val isServiceRunning = isServiceRunning(WebSocketService::class.java)
                 
                 if (!isServiceRunning) {
                     start()
@@ -59,7 +59,7 @@ class ConnectionHealthWorker(
     
     private fun start() {
         try {
-            val serviceIntent = Intent(applicationContext, ::class.java)
+            val serviceIntent = Intent(applicationContext, WebSocketService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 applicationContext.startForegroundService(serviceIntent)
             } else {
