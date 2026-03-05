@@ -516,8 +516,16 @@ class MainActivity : AppCompatActivity() {
                 allowedApps = emptyList()
             }
         } else {
-            Log.d(TAG, "Nenhum app permitido salvo, lista vazia")
-            allowedApps = emptyList()
+            // Fallback: se kiosk_app está setado (modo kiosk), usar como único permitido
+            val kioskApp = sharedPreferences.getString("kiosk_app", null)
+            if (!kioskApp.isNullOrEmpty()) {
+                allowedApps = listOf(kioskApp)
+                sharedPreferences.edit().putString("allowed_apps", gson.toJson(allowedApps)).apply()
+                Log.d(TAG, "Fallback: usando kiosk_app como permitido: $kioskApp")
+            } else {
+                Log.d(TAG, "Nenhum app permitido salvo, lista vazia")
+                allowedApps = emptyList()
+            }
         }
         
         // Carregar nome personalizado do dispositivo

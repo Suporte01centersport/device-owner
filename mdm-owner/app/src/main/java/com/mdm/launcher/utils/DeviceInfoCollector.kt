@@ -35,7 +35,7 @@ object DeviceInfoCollector {
         val storageInfo = getStorageInfo()
         val memoryInfo = getMemoryInfo(context)
         val networkInfo = getNetworkInfo(context)
-        val installedApps = getInstalledApps(packageManager)
+        val installedApps = getInstalledApps(context, packageManager)
         val locationInfo = getLocationInfo(context)
         
         val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(context.packageName)
@@ -248,11 +248,20 @@ object DeviceInfoCollector {
         return Triple(networkType, wifiSSID, isWifiEnabled)
     }
     
-    private fun getInstalledApps(packageManager: PackageManager): List<AppInfo> {
+    private fun getInstalledApps(context: Context, packageManager: PackageManager): List<AppInfo> {
         val packages = packageManager.getInstalledPackages(0)
         val apps = mutableListOf<AppInfo>()
         
-        Log.d("DeviceInfoCollector", "Carregando ${packages.size} pacotes instalados...")
+        // Apps permitidos pelo MDM - sempre incluir na lista mesmo se filtrados
+        val allowedApps = try {
+            val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val json = prefs.getString("allowed_apps", "[]") ?: "[]"
+            com.google.gson.Gson().fromJson(json, object : com.google.gson.reflect.TypeToken<List<String>>() {}.type) as? List<String> ?: emptyList()
+        } catch (e: Exception) {
+            emptyList<String>()
+        }
+        
+        Log.d("DeviceInfoCollector", "Carregando ${packages.size} pacotes instalados (allowedApps: ${allowedApps.size})...")
         
         // Filtrar apenas apps relevantes primeiro (otimização)
         val relevantPackages = packages.filter { packageInfo ->
@@ -261,7 +270,12 @@ object DeviceInfoCollector {
             val hasLaunchIntent = packageManager.getLaunchIntentForPackage(packageInfo.packageName) != null
             val isSystemApp = (appInfo.flags and ApplicationInfo.FLAG_SYSTEM) != 0
             val isUpdatedSystemApp = (appInfo.flags and ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0
+            val isAllowedApp = allowedApps.contains(packageInfo.packageName)
             
+            // Sempre incluir apps permitidos pelo MDM (ex: WMS kiosk)
+            if (isAllowedApp && hasLaunchIntent && isEnabled) return@filter true
+            // Whitelist de apps kiosk conhecidos (aparecem na web e no celular)
+            if (packageInfo.packageName == "com.centersporti.wmsmobile" && hasLaunchIntent && isEnabled) return@filter true
             // Critérios otimizados para inclusão
             hasLaunchIntent && isEnabled && (!isSystemApp || isUpdatedSystemApp || isCommonLauncherSystemApp(packageInfo.packageName))
         }

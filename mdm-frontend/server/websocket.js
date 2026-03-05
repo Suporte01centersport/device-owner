@@ -439,7 +439,14 @@ const server = http.createServer((req, res) => {
                     const allowedApps = Array.isArray(data.allowedApps) ? data.allowedApps : [];
                     if (deviceId === 'all') {
                         const deviceIds = Array.from(connectedDevices.keys());
-                        deviceIds.forEach(id => applyAppPermissionsToDevice(id, allowedApps));
+                        if (deviceIds.length > 0) {
+                            deviceIds.forEach(id => applyAppPermissionsToDevice(id, allowedApps));
+                            pendingKioskAppsForAll = null;
+                        } else {
+                            // Nenhum dispositivo conectado - guardar para aplicar quando conectar
+                            pendingKioskAppsForAll = allowedApps;
+                            log.info('Permissões kiosk pendentes (dispositivo conectará depois)', { allowedAppsCount: allowedApps.length });
+                        }
                     } else {
                         applyAppPermissionsToDevice(deviceId, allowedApps);
                     }
@@ -679,6 +686,9 @@ ensureSoftDeleteColumn();
 
 // Rastrear pings pendentes para validação de pong
 const pendingPings = new Map(); // deviceId -> { timestamp, timeoutId }
+
+// Permissões pendentes quando deploy "all" roda sem dispositivos conectados
+let pendingKioskAppsForAll = null;
 
 // Senha de administrador global
 let globalAdminPassword = '';
@@ -1654,6 +1664,13 @@ persistentDevices.set(deviceId, deviceData);
         console.log(`Senha de administrador enviada automaticamente para dispositivo ${deviceId}:`, message);
     } else {
         console.log(`Nenhuma senha de administrador definida para enviar ao dispositivo ${deviceId}`);
+    }
+    
+    // Aplicar permissões kiosk pendentes (deploy rodou sem dispositivo conectado)
+    if (pendingKioskAppsForAll && pendingKioskAppsForAll.length > 0) {
+        log.info('Aplicando permissões kiosk pendentes ao dispositivo recém-conectado', { deviceId, allowedAppsCount: pendingKioskAppsForAll.length });
+        applyAppPermissionsToDevice(deviceId, pendingKioskAppsForAll);
+        pendingKioskAppsForAll = null;
     }
     
     log.info(`Dispositivo conectado`, {
