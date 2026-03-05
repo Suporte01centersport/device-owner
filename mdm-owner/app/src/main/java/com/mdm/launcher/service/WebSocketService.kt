@@ -89,19 +89,21 @@ class WebSocketService : Service() {
                     val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                     val kioskApp = prefs.getString("kiosk_app", null)
                     if (!kioskApp.isNullOrEmpty()) {
-                        try {
-                            val launchIntent = packageManager.getLaunchIntentForPackage(kioskApp)
-                            if (launchIntent != null) {
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                                startActivity(launchIntent)
-                                Log.d(TAG, "App kiosk aberto ao ligar tela: $kioskApp")
+                        handler.postDelayed({
+                            try {
+                                val launchIntent = packageManager.getLaunchIntentForPackage(kioskApp)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+                                    startActivity(launchIntent)
+                                    Log.d(TAG, "App kiosk aberto ao ligar tela: $kioskApp")
+                                }
+                            } catch (e: Exception) {
+                                Log.e(TAG, "Erro ao abrir app kiosk", e)
                             }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Erro ao abrir app kiosk", e)
-                        }
+                        }, 1500)
                     }
                 }
             }
