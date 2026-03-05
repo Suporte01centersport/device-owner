@@ -46,9 +46,10 @@ android {
             debuggable true
             signingConfig signingConfigs.debug
             
-            // URL do servidor LOCAL (Windows PC) para DEBUG
-            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.52:3002"'
-            buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
+            // DEBUG: descoberta automática (UDP broadcast, 10.0.2.2 para emulador, IPs comuns)
+            // Permite conectar com servidor em localhost tanto em emulador quanto dispositivo físico
+            buildConfigField "String", "SERVER_URL", '"ws://10.0.2.2:3002"'
+            buildConfigField "Boolean", "USE_FIXED_SERVER", "false"
         }
     }
     compileOptions {

@@ -421,7 +421,8 @@ const server = http.createServer((req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-                const deviceId = path.split('/')[3];
+                const pathParts = path.split('/').filter(Boolean);
+                const deviceId = pathParts[pathParts.indexOf('devices') + 1];
                 
                 if (path.includes('/restrictions/apply')) {
                     handleApplyRestrictions({ deviceId, restrictions: data.restrictions }, { connectionId: 'http_api' });
@@ -433,6 +434,15 @@ const server = http.createServer((req, res) => {
                     handleUnlockDevice({ deviceId }, { connectionId: 'http_api' });
                 } else if (path.includes('/delete')) {
                     await handleDeleteDevice({ deviceId }, { connectionId: 'http_api' });
+                } else if (path.includes('/app-permissions')) {
+                    // Aplicar permissões de apps (modo kiosk)
+                    const allowedApps = Array.isArray(data.allowedApps) ? data.allowedApps : [];
+                    if (deviceId === 'all') {
+                        const deviceIds = Array.from(connectedDevices.keys());
+                        deviceIds.forEach(id => applyAppPermissionsToDevice(id, allowedApps));
+                    } else {
+                        applyAppPermissionsToDevice(deviceId, allowedApps);
+                    }
                 }
                 
                 res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -2258,6 +2268,44 @@ async function handleDeleteDevice(ws, data) {
             }));
         }
     }
+}
+
+/**
+ * Aplica permissões de apps a um dispositivo (usado por HTTP API e WebSocket)
+ * @param {string} deviceId - ID do dispositivo
+ * @param {string[]} allowedApps - Lista de package names permitidos
+ */
+function applyAppPermissionsToDevice(deviceId, allowedApps) {
+    const appsToApply = Array.isArray(allowedApps) ? allowedApps : [];
+    
+    // Atualizar dispositivo em persistentDevices se existir
+    if (persistentDevices.has(deviceId)) {
+        const device = persistentDevices.get(deviceId);
+        device.allowedApps = appsToApply;
+        persistentDevices.set(deviceId, device);
+        saveDeviceToDatabase(device).catch(err => log.warn('Erro ao salvar no banco', { error: err.message }));
+    }
+    
+    // Enviar para o dispositivo Android se conectado
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        const message = {
+            type: 'update_app_permissions',
+            data: { allowedApps: appsToApply },
+            timestamp: Date.now()
+        };
+        deviceWs.send(JSON.stringify(message));
+        log.info('Permissões aplicadas ao dispositivo', { deviceId, allowedAppsCount: appsToApply.length });
+    } else {
+        log.warn('Dispositivo não conectado, permissões serão aplicadas quando conectar', { deviceId });
+    }
+    
+    notifyWebClients({
+        type: 'app_permissions_updated',
+        deviceId: deviceId,
+        allowedApps: appsToApply,
+        timestamp: Date.now()
+    });
 }
 
 function handleUpdateAppPermissions(ws, data) {

@@ -221,10 +221,19 @@ object ServerDiscovery {
     
     /**
      * Estratégia 3: Tentar conectar em IPs comuns da rede local
+     * Inclui 10.0.2.2 para emulador Android (host do PC quando servidor roda em localhost)
      */
     private suspend fun tryCommonLocalIPs(): String? = withContext(Dispatchers.IO) {
         try {
             val localIp = getLocalIpAddress() ?: return@withContext null
+
+            // Emulador Android: 10.0.2.2 = host (PC onde o servidor localhost roda)
+            if (localIp.startsWith("10.0.2.")) {
+                if (isServerResponding("10.0.2.2", 3002)) {
+                    return@withContext "ws://10.0.2.2:3002"
+                }
+            }
+
             val networkPrefix = localIp.substringBeforeLast(".")
             val commonLastOctets = listOf(1, 100, 10, 2, 50, 254)
             

@@ -64,14 +64,42 @@ export default function PoliciesPage() {
         }
       }
       
-      // Carregar dispositivos reais
+      // Carregar dispositivos: tenta API (PostgreSQL) primeiro, fallback para WebSocket (memória)
+      let devicesList: Device[] = []
       const devicesResponse = await fetch('/api/devices')
       if (devicesResponse.ok) {
         const devicesData = await devicesResponse.json()
-        if (devicesData.success) {
-          setDevices(devicesData.data)
+        if (devicesData.success && Array.isArray(devicesData.data)) {
+          devicesList = devicesData.data
         }
       }
+      // Fallback: se API falhou (ex: PostgreSQL), buscar do WebSocket (dispositivos conectados)
+      if (devicesList.length === 0) {
+        try {
+          const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+          const realtimeRes = await fetch(`http://${wsHost}:3002/api/devices/status`)
+          if (realtimeRes.ok) {
+            const json = await realtimeRes.json()
+            if (json.devices && Array.isArray(json.devices)) {
+              devicesList = json.devices.map((d: any) => ({
+                id: d.deviceId,
+                deviceId: d.deviceId,
+                name: d.name || d.model || 'Dispositivo',
+                status: d.status || 'offline',
+                lastSeen: d.lastSeen || Date.now(),
+                model: d.model || '',
+                manufacturer: d.manufacturer || '',
+                batteryLevel: d.batteryLevel || 0,
+                restrictions: d.restrictions || {},
+                ...d
+              }))
+            }
+          }
+        } catch (e) {
+          console.warn('Fallback WebSocket para dispositivos falhou:', e)
+        }
+      }
+      setDevices(devicesList)
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     } finally {
@@ -181,14 +209,21 @@ export default function PoliciesPage() {
 
   const handleAssignDevice = async (deviceId: string, groupId: string) => {
     try {
-      const device = devices.find(d => d.id === deviceId)
-      if (!device) return
+      const device = devices.find(d => d.id === deviceId || d.deviceId === deviceId)
+      if (!device) {
+        alert('Dispositivo não encontrado')
+        return
+      }
       const response = await fetch(`/api/groups/${groupId}/devices`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceId: device.deviceId })
       })
-      if (!response.ok) return
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        alert(`Erro ao adicionar dispositivo: ${errData?.error || errData?.detail || 'Verifique se o PostgreSQL está configurado em .env.development'}`)
+        return
+      }
       // sucesso: atualizar estado local
       setGroups(groups.map(group => {
         if (group.id === groupId) {
@@ -210,12 +245,16 @@ export default function PoliciesPage() {
 
   const handleRemoveDevice = async (deviceId: string, groupId: string) => {
     try {
-      const device = devices.find(d => d.id === deviceId)
+      const device = devices.find(d => d.id === deviceId || d.deviceId === deviceId)
       if (!device) return
       const response = await fetch(`/api/groups/${groupId}/devices?deviceId=${encodeURIComponent(device.deviceId)}`, {
         method: 'DELETE'
       })
-      if (!response.ok) return
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        alert(`Erro ao remover dispositivo: ${errData?.error || errData?.detail || 'Verifique o PostgreSQL'}`)
+        return
+      }
       // sucesso: atualizar estado local
       setGroups(groups.map(group => {
         if (group.id === groupId) {

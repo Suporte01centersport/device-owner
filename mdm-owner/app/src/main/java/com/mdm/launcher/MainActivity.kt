@@ -2049,7 +2049,12 @@ class MainActivity : AppCompatActivity() {
                     
                     saveData() // Salvar dados recebidos da web
                     Log.d(TAG, "✅ Dados salvos em SharedPreferences")
-                    
+
+                    // Se apenas 1 app permitido (modo kiosk), ativar: sem bloqueio, power abre app, desligar→reiniciar
+                    if (allowedApps.size == 1) {
+                        setKioskMode(allowedApps[0], true)
+                    }
+
                     // FORÇAR RECARGA dos apps instalados se lista estiver vazia ou desatualizada
                     if (installedApps.isEmpty()) {
                         Log.w(TAG, "⚠️ Lista de apps instalados está vazia! Recarregando...")
@@ -3098,6 +3103,65 @@ class MainActivity : AppCompatActivity() {
         }
         Log.d(TAG, "=== FIM lockDevice ===")
     }
+
+    /**
+     * Desabilita bloqueio de tela (PIN/senha) para modo kiosk.
+     * Permite que ao pressionar power a tela abra direto sem pedir senha.
+     */
+    private fun disableLockScreen() {
+        Log.d(TAG, "=== INÍCIO disableLockScreen ===")
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+
+            if (!dpm.isDeviceOwnerApp(packageName)) {
+                Log.w(TAG, "Não é Device Owner - não pode desabilitar bloqueio")
+                return
+            }
+
+            // Método 1: Settings.Secure (WRITE_SECURE_SETTINGS)
+            try {
+                Settings.Secure.putInt(contentResolver, "lockscreen.disabled", 1)
+                Log.d(TAG, "lockscreen.disabled = 1 via Settings.Secure")
+            } catch (e: Exception) {
+                try {
+                    Settings.Secure.putInt(contentResolver, "lockscreen_disabled", 1)
+                    Log.d(TAG, "lockscreen_disabled = 1 via Settings.Secure")
+                } catch (e2: Exception) {
+                    Log.w(TAG, "Settings.Secure não disponível: ${e2.message}")
+                }
+            }
+
+            // Método 2: DevicePolicyManager - permitir "Nenhum" como tipo de bloqueio
+            try {
+                dpm.setPasswordQuality(adminComponent, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
+                dpm.setPasswordMinimumLength(adminComponent, 0)
+                Log.d(TAG, "PasswordQuality = UNSPECIFIED")
+            } catch (e: Exception) {
+                Log.w(TAG, "setPasswordQuality falhou: ${e.message}")
+            }
+
+            // Método 3: Limpar senha existente com token (Android 7+)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                try {
+                    val token = ByteArray(32)
+                    java.security.SecureRandom().nextBytes(token)
+                    if (dpm.setResetPasswordToken(adminComponent, token)) {
+                        if (dpm.resetPasswordWithToken(adminComponent, "", token, 0)) {
+                            Log.d(TAG, "Senha limpa com resetPasswordWithToken")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "resetPasswordWithToken falhou: ${e.message}")
+                }
+            }
+
+            Log.d(TAG, "✅ Bloqueio de tela desabilitado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desabilitar bloqueio", e)
+        }
+        Log.d(TAG, "=== FIM disableLockScreen ===")
+    }
     
     private fun wipeDevice(confirmCode: String?) {
         Log.d(TAG, "=== INÍCIO wipeDevice ===")
@@ -3754,6 +3818,9 @@ class MainActivity : AppCompatActivity() {
                 val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
                 prefs.edit().putString("kiosk_app", packageName).apply()
                 Log.d(TAG, "App salvo no SharedPreferences")
+
+                // Desabilitar bloqueio de tela para modo kiosk
+                disableLockScreen()
                 
                 // Verificar se somos Device Owner
                 if (isDeviceOwner()) {

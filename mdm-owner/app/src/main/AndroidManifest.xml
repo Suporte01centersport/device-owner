@@ -164,6 +164,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Intercepta desligamento e força reinício (modo kiosk) -->
+        <receiver
+            android:name=".receivers.ShutdownReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.ACTION_SHUTDOWN" />
+            </intent-filter>
+        </receiver>
+
         <!-- Broadcast Receiver para eventos do sistema (BOOT, NETWORK, etc) -->
         <!-- DESABILITADO para evitar boot loops - app inicia automaticamente como launcher padrão -->
         <receiver
