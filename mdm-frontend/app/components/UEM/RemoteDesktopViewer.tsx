@@ -60,8 +60,8 @@ export default function RemoteDesktopViewer({
     const wsUrl = websocket 
       ? null 
       : (typeof window !== 'undefined' 
-          ? `ws://${window.location.hostname}:3002`
-          : 'ws://localhost:3002')
+          ? `ws://${window.location.hostname}:3001`
+          : 'ws://localhost:3001')
     
     const ws = websocket || (wsUrl ? new WebSocket(wsUrl) : null)
     if (!ws) {
@@ -608,7 +608,7 @@ export default function RemoteDesktopViewer({
               <ol className="list-decimal list-inside space-y-1 ml-4">
                 <li>Certifique-se de que o servidor WebSocket está rodando</li>
                 <li>Execute: <code className="bg-black bg-opacity-50 px-2 py-1 rounded">npm run websocket</code></li>
-                <li>Verifique se a porta 3002 está disponível</li>
+                <li>Verifique se a porta 3001 está disponível</li>
                 <li>Confirme que o computador remoto está online e conectado</li>
               </ol>
             </div>
@@ -625,7 +625,7 @@ export default function RemoteDesktopViewer({
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p>Conectando ao computador remoto...</p>
-            <p className="text-sm text-gray-400 mt-2">Aguardando conexão WebSocket na porta 3002</p>
+            <p className="text-sm text-gray-400 mt-2">Aguardando conexão WebSocket na porta 3001</p>
           </div>
         )}
         

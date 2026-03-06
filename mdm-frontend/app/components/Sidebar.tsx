@@ -22,6 +22,12 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Gerenciar dispositivos'
     },
     {
+      id: 'allowed-apps',
+      label: 'Apps liberados Celular',
+      icon: '📲',
+      description: 'Habilitar apps nos celulares'
+    },
+    {
       id: 'uem',
       label: 'UEM',
       icon: '💻',
@@ -60,7 +66,7 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
               <span className="text-white text-xl font-bold">M</span>
             </div>
             <div>
-              <h1 className="text-lg font-bold text-primary">MDM Pro</h1>
+              <h1 className="text-lg font-bold text-primary">MDM Center</h1>
               <p className="text-xs text-secondary">Device Management</p>
             </div>
           </div>

@@ -121,7 +121,9 @@ export async function POST(request: NextRequest) {
 
     // 7. Aplicar modo kiosk via API
     try {
-      const kioskRes = await fetch('http://localhost:3002/api/devices/all/app-permissions', {
+      const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+      const wsPort = process.env.WEBSOCKET_PORT || '3001'
+      const kioskRes = await fetch(`http://${wsHost}:${wsPort}/api/devices/all/app-permissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ allowedApps: ['com.centersporti.wmsmobile'] })

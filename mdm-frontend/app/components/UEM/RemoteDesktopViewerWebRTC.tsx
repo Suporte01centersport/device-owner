@@ -54,7 +54,7 @@ export default function RemoteDesktopViewerWebRTC({
     // WebSocket para sinalização
     const wsUrl = websocket 
       ? null 
-      : `ws://${window.location.hostname}:3002`
+      : `ws://${window.location.hostname}:3001`
     
     const ws = websocket || (wsUrl ? new WebSocket(wsUrl) : null)
     

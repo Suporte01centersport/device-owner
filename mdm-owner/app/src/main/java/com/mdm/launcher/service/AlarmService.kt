@@ -153,26 +153,27 @@ class AlarmService : Service() {
     }
 
     /**
-     * Gera e toca sirene de polícia (frequência oscilando entre 600Hz e 1500Hz).
+     * Buzzer alarme irritante - onda quadrada alta frequência, pulsos rápidos.
+     * Som que incomoda de verdade para desencorajar ações não autorizadas.
      */
     private fun startPoliceSiren() {
         val sampleRate = 44100
-        val cycleDurationSec = 1.2f  // duração de um ciclo completo (subir + descer)
-        val lowFreq = 600f
-        val highFreq = 1500f
-        val cycleSamples = (sampleRate * cycleDurationSec).toInt()
+        val freq = 3200f  // Hz - frequência alta e irritante
+        val beepOnMs = 80   // ms de som
+        val beepOffMs = 80  // ms de silêncio
+        val cycleSamples = (sampleRate * (beepOnMs + beepOffMs) / 1000).toInt()
         val buffer = ShortArray(cycleSamples)
+        val onSamples = (sampleRate * beepOnMs / 1000).toInt()
         var phase = 0.0
 
         for (i in 0 until cycleSamples) {
-            val progress = i.toFloat() / cycleSamples
-            val f = if (progress < 0.5f) {
-                lowFreq + (highFreq - lowFreq) * (progress * 2f)
+            val sample = if (i < onSamples) {
+                phase += 2.0 * Math.PI * freq / sampleRate
+                val square = if (Math.sin(phase) > 0) 1.0 else -1.0
+                (square * 32767 * 0.9).toInt().coerceIn(-32768, 32767)
             } else {
-                highFreq - (highFreq - lowFreq) * ((progress - 0.5f) * 2f)
+                0
             }
-            phase += 2.0 * Math.PI * f / sampleRate
-            val sample = (Math.sin(phase) * 32767 * 0.85).toInt().coerceIn(-32768, 32767)
             buffer[i] = sample.toShort()
         }
 
@@ -201,7 +202,7 @@ class AlarmService : Service() {
                 play()
             }
         sendBroadcast(Intent("com.mdm.launcher.ALARM_STARTED").setPackage(packageName))
-        Log.d(TAG, "Sirene de polícia iniciada")
+        Log.d(TAG, "Buzzer alarme iniciado")
     }
 
     private fun startToneGeneratorFallback() {
@@ -209,13 +210,13 @@ class AlarmService : Service() {
             toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
             toneRunnable = object : Runnable {
                 override fun run() {
-                    toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 800)
-                    handler.postDelayed(this, 1000)
+                    toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
+                    handler.postDelayed(this, 500)
                 }
             }
             handler.post(toneRunnable!!)
             sendBroadcast(Intent("com.mdm.launcher.ALARM_STARTED").setPackage(packageName))
-            Log.d(TAG, "Alarme iniciado com ToneGenerator (fallback)")
+            Log.d(TAG, "Buzzer alarme iniciado (fallback)")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao iniciar ToneGenerator", e)
         }

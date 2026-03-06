@@ -50,7 +50,9 @@ export async function POST(request: NextRequest) {
     console.log('Versão:', version || 'latest');
     
     try {
-      const wsResponse = await fetch('http://localhost:3002/api/update-app', {
+      const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+      const wsPort = process.env.WEBSOCKET_PORT || '3001'
+      const wsResponse = await fetch(`http://${wsHost}:${wsPort}/api/update-app`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -86,7 +88,7 @@ export async function POST(request: NextRequest) {
       console.error('Erro ao comunicar com servidor WebSocket:', error);
       return NextResponse.json({
         success: false,
-        error: 'Erro ao comunicar com servidor WebSocket. Verifique se o servidor está rodando na porta 3002.'
+        error: 'Erro ao comunicar com servidor WebSocket. Verifique se o servidor está rodando na porta 3001.'
       }, { status: 500 });
     }
 

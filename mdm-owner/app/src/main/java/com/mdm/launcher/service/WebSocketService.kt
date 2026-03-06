@@ -9,6 +9,7 @@ import android.os.PowerManager
 import android.util.Log
 import com.mdm.launcher.MainActivity
 import com.mdm.launcher.R
+import com.mdm.launcher.UpdateProgressActivity
 import com.mdm.launcher.data.DeviceInfo
 import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.utils.ConnectionStateManager
@@ -62,7 +63,7 @@ class WebSocketService : Service() {
         private const val TAG = "WebSocketService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "websocket_service_channel"
-        private const val CHANNEL_NAME = "MDM Launcher Service"
+        private const val CHANNEL_NAME = "MDM Center Service"
         private const val CHANNEL_DESCRIPTION = "Mantém conexão com servidor MDM"
     }
 
@@ -93,29 +94,11 @@ class WebSocketService : Service() {
     }
 
     private fun registerKioskScreenReceiver() {
+        // Desabilitado: WMS e outros apps iniciam apenas quando o usuário clicar.
+        // Tela fixa é o MDM launcher; não há auto-abertura ao ligar a tela.
         screenOnReceiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context, intent: Intent) {
-                if (intent.action == Intent.ACTION_SCREEN_ON) {
-                    val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-                    val kioskApp = prefs.getString("kiosk_app", null)
-                    if (!kioskApp.isNullOrEmpty()) {
-                        handler.postDelayed({
-                            try {
-                                val launchIntent = packageManager.getLaunchIntentForPackage(kioskApp)
-                                if (launchIntent != null) {
-                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
-                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-                                    startActivity(launchIntent)
-                                    Log.d(TAG, "App kiosk aberto ao ligar tela: $kioskApp")
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Erro ao abrir app kiosk", e)
-                            }
-                        }, 1500)
-                    }
-                }
+                // Não abrir app automaticamente - usuário clica para abrir WMS
             }
         }
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
@@ -124,7 +107,7 @@ class WebSocketService : Service() {
         } else {
             registerReceiver(screenOnReceiver, filter)
         }
-        Log.d(TAG, "Receiver de tela (kiosk) registrado")
+        Log.d(TAG, "Receiver de tela registrado (sem auto-abertura de apps)")
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -213,7 +196,7 @@ class WebSocketService : Service() {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         return Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("MDM Launcher")
+            .setContentTitle("MDM Center")
             .setContentText("Conectado ao servidor")
             .setSmallIcon(R.drawable.ic_service_notification)
             .setContentIntent(pendingIntent)
@@ -238,6 +221,13 @@ class WebSocketService : Service() {
                     ConnectionStateManager.saveConnectionState(this@WebSocketService, connected)
                     if (connected) {
                         sendDeviceStatusWithRealData()
+                        // Retry após 2s (caso o primeiro envio falhe ou se perca)
+                        serviceScope.launch {
+                            kotlinx.coroutines.delay(2000L)
+                            if (webSocketClient?.isConnected() == true) {
+                                sendDeviceStatusWithRealData()
+                            }
+                        }
                         // Aplicar políticas ao conectar (desbloqueio, Settings, Quick Settings)
                         com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this@WebSocketService)
                         sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
@@ -278,9 +268,9 @@ class WebSocketService : Service() {
                 }
                 "show_notification" -> {
                     val dataMap = jsonObject["data"] as? Map<*, *> ?: jsonObject
-                    val title = dataMap["title"] as? String ?: "MDM Launcher"
+                    val title = dataMap["title"] as? String ?: "MDM Center"
                     val body = dataMap["body"] as? String ?: "Nova notificação"
-                    MessageManager.saveMessage(this, if (title != "MDM Launcher") "$title\n$body" else body)
+                    MessageManager.saveMessage(this, if (title != "MDM Center") "$title\n$body" else body)
                     showBackgroundNotification(title, body)
                     webSocketClient?.sendMessage(gson.toJson(mapOf("type" to "notification_received", "deviceId" to DeviceIdManager.getDeviceId(this), "timestamp" to System.currentTimeMillis())))
                 }
@@ -299,15 +289,39 @@ class WebSocketService : Service() {
 
                     if (!apkUrl.isNullOrEmpty()) {
                         Log.d(TAG, "Comando de atualização recebido: $apkUrl (versão: ${version ?: "N/A"})")
+                        val updateIntent = Intent(this@WebSocketService, UpdateProgressActivity::class.java).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(updateIntent)
                         serviceScope.launch {
+                            kotlinx.coroutines.delay(800)
+                            sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_PROGRESS).apply {
+                                setPackage(packageName)
+                                putExtra(UpdateProgressActivity.EXTRA_PROGRESS, 0)
+                                putExtra(UpdateProgressActivity.EXTRA_STATUS, "Preparando...")
+                            })
                             com.mdm.launcher.utils.ApkInstaller.installApkFromUrl(
                                 context = this@WebSocketService,
                                 apkUrl = apkUrl,
                                 version = version,
                                 onProgress = { progress ->
                                     Log.d(TAG, "Progresso da atualização: $progress%")
+                                    val status = when {
+                                        progress < 20 -> "Preparando..."
+                                        progress < 80 -> "Baixando atualização..."
+                                        progress < 95 -> "Instalando..."
+                                        else -> "Finalizando..."
+                                    }
+                                    sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_PROGRESS).apply {
+                                        setPackage(packageName)
+                                        putExtra(UpdateProgressActivity.EXTRA_PROGRESS, progress)
+                                        putExtra(UpdateProgressActivity.EXTRA_STATUS, status)
+                                    })
                                 },
                                 onComplete = { success, error ->
+                                    sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
+                                        setPackage(packageName)
+                                    })
                                     if (success) {
                                         Log.d(TAG, "Atualização concluída com sucesso")
                                         webSocketClient?.sendMessage(gson.toJson(mapOf(
@@ -332,7 +346,7 @@ class WebSocketService : Service() {
                         Log.e(TAG, "Comando de atualização recebido sem URL do APK")
                     }
                 }
-                "support_message_received" -> showBackgroundNotification("Mensagem Enviada", "Sua mensagem foi recebida pelo servidor!")
+                "support_message_received" -> { /* Silencioso - usuário não deve saber que a mensagem foi recebida/lida */ }
                 "support_message_error" -> showBackgroundNotification("Erro", "Não foi possível enviar a mensagem")
                 "apply_device_policies" -> {
                     Log.d(TAG, "Aplicando políticas de dispositivo (bloqueio, Settings, Quick Settings)")
@@ -370,7 +384,7 @@ class WebSocketService : Service() {
                             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                             val admin = android.content.ComponentName(this@WebSocketService, com.mdm.launcher.DeviceAdminReceiver::class.java)
                             if (dpm.isDeviceOwnerApp(packageName)) {
-                                showBackgroundNotification("MDM Launcher", "Dispositivo será reiniciado em 3 segundos...")
+                                showBackgroundNotification("MDM Center", "Dispositivo será reiniciado em 3 segundos...")
                                 kotlinx.coroutines.delay(3000)
                                 try {
                                     webSocketClient?.sendMessage(gson.toJson(mapOf(
@@ -379,6 +393,11 @@ class WebSocketService : Service() {
                                         "success" to true,
                                         "timestamp" to System.currentTimeMillis()
                                     )))
+                                    // Marcar antes de reboot para ShutdownReceiver não causar boot loop
+                                    getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                                        .edit()
+                                        .putLong(com.mdm.launcher.receivers.ShutdownReceiver.PREF_LAST_REBOOT_INITIATED, System.currentTimeMillis())
+                                        .apply()
                                     dpm.reboot(admin)
                                     Log.d(TAG, "Comando de reinicialização executado")
                                 } catch (e: Exception) {
@@ -414,16 +433,26 @@ class WebSocketService : Service() {
                     }
                 }
                 "lock_device" -> {
-                    Log.d(TAG, "Comando lock_device recebido - bloqueando dispositivo")
+                    Log.d(TAG, "Comando lock_device recebido - bloqueando dispositivo (tela preta com cadeado)")
                     try {
                         val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                         if (dpm.isDeviceOwnerApp(packageName)) {
+                            // Desabilitar bloqueio padrão do Android - só usamos a tela MDM
+                            com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
+                            // OBRIGATÓRIO: setLockTaskPackages antes de startLockTask na LockScreenActivity
+                            val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            try {
+                                dpm.setLockTaskPackages(adminComponent, arrayOf(packageName))
+                                Log.d(TAG, "Lock task packages definidos para tela de bloqueio")
+                            } catch (e: Exception) {
+                                Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
+                            }
                             val lockIntent = Intent(this, com.mdm.launcher.LockScreenActivity::class.java).apply {
-                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                             }
                             startActivity(lockIntent)
-                            dpm.lockNow()
-                            Log.d(TAG, "Dispositivo bloqueado com sucesso")
+                            // NÃO usa lockNow() - LockScreenActivity usa Lock Task Mode e fica até unlock_device
+                            Log.d(TAG, "Tela de bloqueio iniciada - permanece até desbloqueio pelo painel MDM")
                             webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
                                 "type" to "lock_device_confirmed",
                                 "deviceId" to DeviceIdManager.getDeviceId(this),
@@ -450,6 +479,20 @@ class WebSocketService : Service() {
                             "timestamp" to System.currentTimeMillis()
                         )))
                     }
+                }
+                "unlock_device" -> {
+                    Log.d(TAG, "Comando unlock_device recebido - desbloqueando dispositivo")
+                    val unlockIntent = Intent(com.mdm.launcher.LockScreenActivity.ACTION_UNLOCK).apply {
+                        setPackage(packageName)
+                    }
+                    sendBroadcast(unlockIntent)
+                    webSocketClient?.sendMessage(gson.toJson(mapOf(
+                        "type" to "unlock_device_confirmed",
+                        "deviceId" to DeviceIdManager.getDeviceId(this),
+                        "success" to true,
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                    Log.d(TAG, "Comando de desbloqueio enviado para LockScreenActivity")
                 }
                 else -> {
                     // Encaminhar comandos não tratados para MainActivity (lock_device, reboot_device, etc)
@@ -492,7 +535,7 @@ class WebSocketService : Service() {
         val intent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = Notification.Builder(this, CHANNEL_ID)
-            .setContentTitle("MDM Launcher")
+            .setContentTitle("MDM Center")
             .setContentText(if (isConnected) "Conectado ao servidor" else "Desconectado do servidor")
             .setSmallIcon(R.drawable.ic_service_notification)
             .setContentIntent(pendingIntent)
@@ -505,7 +548,7 @@ class WebSocketService : Service() {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "mdm_notifications"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "MDM Launcher Notifications", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(channelId, "MDM Center Notifications", NotificationManager.IMPORTANCE_HIGH)
             notificationManager.createNotificationChannel(channel)
         }
         val intent = Intent(this, MainActivity::class.java).apply {

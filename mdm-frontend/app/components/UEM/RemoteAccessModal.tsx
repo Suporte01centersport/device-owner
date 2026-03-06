@@ -388,7 +388,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
 
               {/* Instructions */}
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                <h4 className="font-semibold text-primary mb-2">📋 Instruções</h4>
+                <h4 className="font-bold text-red-600 mb-2">📋 Instruções</h4>
                 <ul className="text-sm text-secondary space-y-1 list-disc list-inside">
                   <li><strong>Acesso Remoto Integrado:</strong> Clique no botão acima para conectar e controlar o computador diretamente no navegador</li>
                   <li>AnyDesk: Instale o AnyDesk no computador e use o ID acima para conectar</li>

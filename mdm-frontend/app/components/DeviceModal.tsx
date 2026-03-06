@@ -12,13 +12,19 @@ interface DeviceModalProps {
   device: Device
   onClose: () => void
   onDelete: (deviceId: string) => void
+  onUpdate?: () => void
   sendMessage: (message: any) => void
   onUnlinkUser?: () => void
+  initialTab?: string
 }
 
-export default function DeviceModal({ device, onClose, onDelete, sendMessage, onUnlinkUser }: DeviceModalProps) {
-  const [activeTab, setActiveTab] = useState('overview')
+export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendMessage, onUnlinkUser, initialTab = 'overview' }: DeviceModalProps) {
+  const [activeTab, setActiveTab] = useState(initialTab)
   const [assignedUser, setAssignedUser] = useState<any>(null)
+
+  useEffect(() => {
+    setActiveTab(initialTab)
+  }, [initialTab, device.deviceId])
   const [loadingUser, setLoadingUser] = useState(false)
   
   // Buscar dados completos do usuário da API
@@ -245,7 +251,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
       // Mostrar notificação local de confirmação
       if ('Notification' in window && Notification.permission === 'granted') {
         try {
-          new Notification('MDM Launcher', {
+          new Notification('MDM Center', {
             body: `Mensagem enviada para ${device.name}`,
             icon: '/icon-192.png',
             tag: 'message-sent'
@@ -412,23 +418,35 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                 <h2 className="text-2xl font-bold text-primary">
                   {device.assignedUserName ? `${device.name} • ${device.assignedUserName}` : device.name}
                 </h2>
-                <p className="text-secondary">{device.model} • {device.manufacturer}</p>
+                <p className="text-black">{device.model} • {device.manufacturer}</p>
                 <div className="flex items-center gap-4 mt-2">
                   <div className={`status-dot ${
                     device.status === 'online' ? 'status-dot-online' : 'status-dot-offline'
                   }`} />
-                  <span className="text-sm text-secondary">{device.status}</span>
-                  <span className="text-sm text-muted">•</span>
-                  <span className="text-sm text-muted">{formatLastSeen(device.lastSeen)}</span>
+                  <span className="text-sm text-black">{device.status}</span>
+                  <span className="text-sm text-gray-700">•</span>
+                  <span className="text-sm text-gray-700">{formatLastSeen(device.lastSeen)}</span>
                 </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-2">
+              {onUpdate && (
+                <button
+                  onClick={onUpdate}
+                  className="btn btn-sm btn-success"
+                  title="Atualizar APK do dispositivo"
+                >
+                  <span>📥</span>
+                  Atualizar
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="w-8 h-8 flex items-center justify-center text-black hover:text-primary transition-colors rounded-lg hover:bg-border-light"
+              >
+                ✕
+              </button>
+            </div>
           </div>
         </div>
 
@@ -442,7 +460,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'border-primary text-primary bg-blue-50'
-                    : 'border-transparent text-secondary hover:text-primary hover:bg-border-light'
+                    : 'border-transparent text-black hover:text-primary hover:bg-border-light'
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -464,7 +482,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       <span className="text-white">🔋</span>
                     </div>
                     <div>
-                      <div className="text-sm text-secondary">Bateria</div>
+                      <div className="text-sm text-black">Bateria</div>
                       {isDataLoading() ? (
                         <div className="text-xl font-bold text-gray-500">
                           Carregando...
@@ -476,7 +494,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-muted">
+                  <div className="text-xs text-gray-700">
                     {isDataLoading() ? 'aguarde' : (device.isCharging ? 'Carregando' : device.batteryStatus)}
                   </div>
                 </div>
@@ -487,7 +505,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       <span className="text-white">💾</span>
                     </div>
                     <div>
-                      <div className="text-sm text-secondary">Armazenamento</div>
+                      <div className="text-sm text-black">Armazenamento</div>
                       {isDataLoading() ? (
                         <div className="text-xl font-bold text-gray-500">
                           Carregando...
@@ -499,7 +517,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-muted">
+                  <div className="text-xs text-gray-700">
                     {isDataLoading() ? 'aguarde' : `${formatStorage(device.storageUsed)} / ${formatStorage(device.storageTotal)}`}
                   </div>
                 </div>
@@ -510,7 +528,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       <span className="text-white">📱</span>
                     </div>
                     <div>
-                      <div className="text-sm text-secondary">Apps</div>
+                      <div className="text-sm text-black">Apps</div>
                       {isDataLoading() ? (
                         <div className="text-xl font-bold text-gray-500">
                           Carregando...
@@ -522,7 +540,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-muted">
+                  <div className="text-xs text-gray-700">
                     {isDataLoading() ? 'aguarde' : 'Instalados'}
                   </div>
                 </div>
@@ -533,13 +551,13 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       <span className="text-white">✅</span>
                     </div>
                     <div>
-                      <div className="text-sm text-secondary">Apps Permitidos</div>
+                      <div className="text-sm text-black">Apps Permitidos</div>
                       <div className="text-xl font-bold text-info">
                         {device.allowedApps?.length || 0}
                       </div>
                     </div>
                   </div>
-                  <div className="text-xs text-muted">No Launcher</div>
+                  <div className="text-xs text-gray-700">No Launcher</div>
                 </div>
               </div>
 
@@ -551,12 +569,12 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     {assignedUser ? (
                       <div className="space-y-2">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-secondary font-semibold">👤 Usuário</span>
+                          <span className="text-black font-semibold">👤 Usuário</span>
                         </div>
                         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                           <div className="flex flex-col gap-1">
                             <span className="text-primary font-semibold">{assignedUser.name}</span>
-                            <span className="text-sm text-secondary">CPF: {assignedUser.cpf}</span>
+                            <span className="text-sm text-black">CPF: {assignedUser.cpf}</span>
                           </div>
                         </div>
                       </div>
@@ -569,7 +587,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                       </div>
                     )}
                     <div className="flex justify-between">
-                      <span className="text-secondary">Versão do App</span>
+                      <span className="text-black">Versão do App</span>
                       <span className="text-primary">{device.appVersion}</span>
                     </div>
                   </div>
@@ -579,25 +597,25 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                   <h3 className="text-lg font-semibold text-primary">Status do Sistema</h3>
                   <div className="space-y-3">
                     <div className="flex justify-between">
-                      <span className="text-secondary">Wi-Fi</span>
+                      <span className="text-black">Wi-Fi</span>
                       <span className={`badge ${device.isWifiEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isWifiEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Bluetooth</span>
+                      <span className="text-black">Bluetooth</span>
                       <span className={`badge ${device.isBluetoothEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isBluetoothEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Localização</span>
+                      <span className="text-black">Localização</span>
                       <span className={`badge ${device.isLocationEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isLocationEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Modo Desenvolvedor</span>
+                      <span className="text-black">Modo Desenvolvedor</span>
                       <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
                         {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
@@ -618,23 +636,23 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Sistema Operacional</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-secondary">OS Type</span>
+                        <span className="text-black">OS Type</span>
                         <span className="text-primary">{device.osType || 'Android'}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Versão Android</span>
+                        <span className="text-black">Versão Android</span>
                         <span className="text-primary">{device.androidVersion}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">API Level</span>
+                        <span className="text-black">API Level</span>
                         <span className="text-primary">{device.apiLevel}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Fabricante</span>
+                        <span className="text-black">Fabricante</span>
                         <span className="text-primary">{device.manufacturer}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Modelo</span>
+                        <span className="text-black">Modelo</span>
                         <span className="text-primary">{device.model}</span>
                       </div>
                     </div>
@@ -644,15 +662,15 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Identificadores</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between gap-2">
-                        <span className="text-secondary flex-shrink-0">Device ID</span>
+                        <span className="text-black flex-shrink-0">Device ID</span>
                         <span className="font-mono text-xs text-primary truncate">{device.deviceId}</span>
                       </div>
                       <div className="flex justify-between gap-2">
-                        <span className="text-secondary flex-shrink-0">IMEI</span>
+                        <span className="text-black flex-shrink-0">IMEI</span>
                         <span className="font-mono text-xs text-primary truncate">{device.imei || 'N/A'}</span>
                       </div>
                       <div className="flex justify-between gap-2">
-                        <span className="text-secondary flex-shrink-0">MEID</span>
+                        <span className="text-black flex-shrink-0">MEID</span>
                         <span className="font-mono text-xs text-primary truncate">{device.meid || 'N/A'}</span>
                       </div>
                     </div>
@@ -668,7 +686,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Processador</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-secondary">Arquitetura</span>
+                        <span className="text-black">Arquitetura</span>
                         <span className="text-primary">{device.cpuArchitecture}</span>
                       </div>
                     </div>
@@ -678,11 +696,11 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Tela</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-secondary">Resolução</span>
+                        <span className="text-black">Resolução</span>
                         <span className="text-primary">{device.screenResolution}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Densidade</span>
+                        <span className="text-black">Densidade</span>
                         <span className="text-primary">{device.screenDensity} DPI</span>
                       </div>
                     </div>
@@ -692,15 +710,15 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Memória</h4>
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <span className="text-secondary">Total</span>
+                        <span className="text-black">Total</span>
                         <span className="text-primary">{formatStorage(device.memoryTotal)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Usada</span>
+                        <span className="text-black">Usada</span>
                         <span className="text-primary">{formatStorage(device.memoryUsed)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-secondary">Livre</span>
+                        <span className="text-black">Livre</span>
                         <span className="text-primary">{formatStorage(device.memoryTotal - device.memoryUsed)}</span>
                       </div>
                     </div>
@@ -716,7 +734,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Status de Conformidade</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">Compliance Status</span>
+                        <span className="text-black">Compliance Status</span>
                         <span className={`badge ${
                           device.complianceStatus === 'compliant' ? 'badge-success' : 
                           device.complianceStatus === 'non_compliant' ? 'badge-warning' : 
@@ -728,13 +746,13 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">Device Owner</span>
+                        <span className="text-black">Device Owner</span>
                         <span className={`badge ${device.isDeviceOwner ? 'badge-success' : 'badge-error'}`}>
                           {device.isDeviceOwner ? 'Sim' : 'Não'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">Profile Owner</span>
+                        <span className="text-black">Profile Owner</span>
                         <span className={`badge ${device.isProfileOwner ? 'badge-success' : 'badge-error'}`}>
                           {device.isProfileOwner ? 'Sim' : 'Não'}
                         </span>
@@ -746,19 +764,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <h4 className="font-semibold text-primary mb-3">Configurações do Sistema</h4>
                     <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">Opções de Desenvolvedor</span>
+                        <span className="text-black">Opções de Desenvolvedor</span>
                         <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
                           {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">ADB</span>
+                        <span className="text-black">ADB</span>
                         <span className={`badge ${device.isAdbEnabled ? 'badge-warning' : 'badge-gray'}`}>
                           {device.isAdbEnabled ? 'Habilitado' : 'Desabilitado'}
                         </span>
                       </div>
                       <div className="flex justify-between items-center">
-                        <span className="text-secondary">Fontes Desconhecidas</span>
+                        <span className="text-black">Fontes Desconhecidas</span>
                         <span className={`badge ${device.isUnknownSourcesEnabled ? 'badge-warning' : 'badge-gray'}`}>
                           {device.isUnknownSourcesEnabled ? 'Habilitado' : 'Desabilitado'}
                         </span>
@@ -778,19 +796,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                   <h4 className="font-semibold text-primary mb-3">Conexão Atual</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-secondary">Tipo de Rede</span>
+                      <span className="text-black">Tipo de Rede</span>
                       <span className="text-primary">{device.networkType}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Wi-Fi SSID</span>
+                      <span className="text-black">Wi-Fi SSID</span>
                       <span className="text-primary">{device.wifiSSID || 'N/A'}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">IP Address</span>
+                      <span className="text-black">IP Address</span>
                       <span className="font-mono text-sm text-primary">{device.ipAddress}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">MAC Address</span>
+                      <span className="text-black">MAC Address</span>
                       <span className="font-mono text-sm text-primary">{device.macAddress}</span>
                     </div>
                   </div>
@@ -800,19 +818,19 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                   <h4 className="font-semibold text-primary mb-3">Configurações de Rede</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between">
-                      <span className="text-secondary">Wi-Fi</span>
+                      <span className="text-black">Wi-Fi</span>
                       <span className={`badge ${device.isWifiEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isWifiEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Bluetooth</span>
+                      <span className="text-black">Bluetooth</span>
                       <span className={`badge ${device.isBluetoothEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isBluetoothEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-secondary">Localização</span>
+                      <span className="text-black">Localização</span>
                       <span className={`badge ${device.isLocationEnabled ? 'badge-success' : 'badge-error'}`}>
                         {device.isLocationEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
@@ -828,7 +846,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-primary">Aplicações Instaladas</h3>
                 <div className="flex items-center gap-4">
-                  <div className="text-sm text-secondary">
+                  <div className="text-sm text-black">
                     Total: {isDataLoading() ? 'Carregando...' : `${device.installedApps?.length || 0} aplicações`}
                   </div>
                   <div className="text-sm text-primary">
@@ -853,7 +871,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <span className="text-3xl">📱</span>
                   </div>
                   <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma aplicação encontrada</h4>
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-gray-700">
                     As aplicações instaladas serão exibidas aqui quando disponíveis
                   </p>
                 </div>
@@ -900,7 +918,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                           <span className="text-2xl">🔍</span>
                         </div>
                         <h4 className="text-lg font-semibold text-primary mb-1">Nenhuma aplicação encontrada</h4>
-                        <p className="text-sm text-muted">
+                        <p className="text-sm text-gray-700">
                           Tente ajustar os filtros ou termo de busca
                         </p>
                       </div>
@@ -945,7 +963,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                                 <div className="flex items-center gap-2">
                                   <h4 className="font-semibold text-primary text-lg">{app.appName || 'Nome não disponível'}</h4>
                                 </div>
-                                <p className="text-sm text-secondary font-mono">{app.packageName || 'Package não disponível'}</p>
+                                <p className="text-sm text-black font-mono">{app.packageName || 'Package não disponível'}</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v{app.versionName || 'N/A'}</span>
                                   {app.isSystemApp && (
@@ -977,10 +995,10 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
 
                   {/* Botões de ação */}
                   <div className="flex justify-between items-center pt-4 border-t border-border">
-                    <div className="text-sm text-secondary">
+                    <div className="text-sm text-black">
                       {selectedApps.length} de {getFilteredApps().length} aplicações selecionadas
                       {getFilteredApps().length !== (device.installedApps?.length || 0) && (
-                        <span className="text-muted ml-1">
+                        <span className="text-gray-700 ml-1">
                           (filtradas de {device.installedApps?.length || 0} total)
                         </span>
                       )}
@@ -1089,7 +1107,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
               <h3 className="text-lg font-semibold text-primary">Enviar Mensagem</h3>
               <button
                 onClick={handleCloseMessageModal}
-                className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
+                className="w-8 h-8 flex items-center justify-center text-black hover:text-primary transition-colors rounded-lg hover:bg-border-light"
               >
                 ✕
               </button>
@@ -1097,7 +1115,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Mensagem para {device.name}
                 </label>
                 <textarea
@@ -1109,10 +1127,10 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                   maxLength={500}
                 />
                 <div className="flex justify-between items-center mt-1">
-                  <span className="text-xs text-muted">
+                  <span className="text-xs text-gray-700">
                     {messageText.length}/500 caracteres
                   </span>
-                  <span className="text-xs text-muted">
+                  <span className="text-xs text-gray-700">
                     {500 - messageText.length} restantes
                   </span>
                 </div>
@@ -1147,7 +1165,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
               <h3 className="text-lg font-semibold text-primary">Histórico de Mensagens</h3>
               <button
                 onClick={handleCloseHistoryModal}
-                className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
+                className="w-8 h-8 flex items-center justify-center text-black hover:text-primary transition-colors rounded-lg hover:bg-border-light"
               >
                 ✕
               </button>
@@ -1160,7 +1178,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                     <span className="text-3xl">📋</span>
                   </div>
                   <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma mensagem enviada</h4>
-                  <p className="text-sm text-muted">
+                  <p className="text-sm text-gray-700">
                     As mensagens enviadas para este dispositivo aparecerão aqui
                   </p>
                 </div>
@@ -1175,12 +1193,12 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
                             {msg.deviceName}
                           </span>
                         </div>
-                        <span className="text-xs text-muted">
+                        <span className="text-xs text-gray-700">
                           {formatMessageTimestamp(msg.timestamp)}
                         </span>
                       </div>
                       <div className="bg-gray-50 rounded-lg p-3">
-                        <p className="text-sm text-secondary whitespace-pre-wrap">
+                        <p className="text-sm text-black whitespace-pre-wrap">
                           {msg.message}
                         </p>
                       </div>
@@ -1192,7 +1210,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
             
             <div className="p-6 border-t border-border">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-muted">
+                <span className="text-sm text-gray-700">
                   {messageHistory.length} mensagem{messageHistory.length !== 1 ? 's' : ''} enviada{messageHistory.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex gap-3">

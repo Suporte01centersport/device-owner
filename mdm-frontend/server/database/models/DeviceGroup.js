@@ -5,9 +5,20 @@ class DeviceGroupModel {
     // Criar grupo
     static async create(groupData, organizationId = null) {
         try {
-            // Se não especificou organização, usar padrão
+            // Se não especificou organização, usar ou criar padrão
             if (!organizationId) {
-                const orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                let orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                if (orgResult.rows.length === 0) {
+                    // Criar organização padrão se não existir
+                    await query(`
+                        INSERT INTO organizations (name, slug, description)
+                        VALUES ($1, $2, $3)
+                    `, ['Organização Padrão', 'default', 'Organização padrão do sistema MDM']);
+                    orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                }
+                if (orgResult.rows.length === 0) {
+                    throw new Error('Não foi possível obter ou criar organização padrão');
+                }
                 organizationId = orgResult.rows[0].id;
             }
 
@@ -498,6 +509,42 @@ class DeviceGroupModel {
             });
         } catch (error) {
             console.error('Erro ao remover política de app:', error);
+            throw error;
+        }
+    }
+
+    // Substituir todas as políticas de apps do grupo (bulk)
+    static async replaceAppPolicies(groupId, apps, organizationId = null) {
+        try {
+            return await transaction(async (client) => {
+                let groupQuery = 'SELECT id, organization_id FROM device_groups WHERE id = $1';
+                const groupParams = [groupId];
+                if (organizationId) {
+                    groupQuery += ' AND organization_id = $2';
+                    groupParams.push(organizationId);
+                }
+                const groupResult = await client.query(groupQuery, groupParams);
+                if (groupResult.rows.length === 0) {
+                    throw new Error('Grupo não encontrado');
+                }
+                const orgId = groupResult.rows[0].organization_id;
+
+                await client.query('DELETE FROM app_policies WHERE group_id = $1', [groupId]);
+
+                const appsList = Array.isArray(apps) ? apps : [];
+                for (const app of appsList) {
+                    const pkg = app.packageName || app.package_name;
+                    const name = app.appName || app.app_name || pkg;
+                    if (!pkg) continue;
+                    await client.query(`
+                        INSERT INTO app_policies (organization_id, group_id, package_name, app_name, policy_type)
+                        VALUES ($1, $2, $3, $4, $5)
+                    `, [orgId, groupId, pkg, name, app.policyType || app.policy_type || 'allow']);
+                }
+                return { success: true };
+            });
+        } catch (error) {
+            console.error('Erro ao substituir políticas de app:', error);
             throw error;
         }
     }

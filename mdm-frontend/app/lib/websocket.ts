@@ -4,7 +4,7 @@ import { useMessageQueue } from './message-queue';
 
 // Detectar automaticamente o host correto para WebSocket
 const getWebSocketURL = () => {
-  if (typeof window === 'undefined') return 'ws://localhost:3002';
+  if (typeof window === 'undefined') return 'ws://localhost:3001';
   
   // Se há variável de ambiente configurada, usar ela
   if (process.env.NEXT_PUBLIC_WEBSOCKET_URL) {
@@ -17,13 +17,13 @@ const getWebSocketURL = () => {
   
   // Se for localhost/127.0.0.1, sempre usar localhost
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'ws://localhost:3002';
+    return 'ws://localhost:3001';
   }
   
   // Para qualquer outro host (IP ou domínio), usar o mesmo host
   // Extrair apenas hostname (sem porta se houver)
   const wsHost = hostname;
-  return `${protocol}//${wsHost}:3002`;
+  return `${protocol}//${wsHost}:3001`;
 };
 
 const WEBSOCKET_URL = getWebSocketURL();

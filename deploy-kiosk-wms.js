@@ -10,7 +10,7 @@ const data = JSON.stringify({ allowedApps });
 
 const req = http.request({
   hostname: 'localhost',
-  port: 3002,
+  port: 3001,
   path: '/api/devices/all/app-permissions',
   method: 'POST',
   headers: {

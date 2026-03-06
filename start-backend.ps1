@@ -2,14 +2,14 @@
 # Para o ambiente completo, use start-dev-windows.bat
 
 $frontendPath = "$PSScriptRoot\mdm-frontend"
-$port = 3002
+$port = 3001
 
 # 1. Verificar porta
 $processes = Get-NetTCPConnection -LocalPort $port -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess
 if ($processes) {
-    foreach ($pid in $processes) {
-        Write-Host "Matando processo PID $pid na porta $port..."
-        Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+    foreach ($processId in $processes) {
+        Write-Host "Matando processo PID $processId na porta $port..."
+        Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
     }
 }
 

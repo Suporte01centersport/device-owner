@@ -180,9 +180,9 @@ export default function ConnectionDebug({
                   <span className="text-gray-300 font-mono">
                     {typeof window !== 'undefined' 
                       ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-                        ? 'ws://localhost:3002'
-                        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:3002`
-                      : 'ws://localhost:3002'
+                        ? 'ws://localhost:3001'
+                        : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.hostname}:3001`
+                      : 'ws://localhost:3001'
                     }
                   </span>
                 </div>
@@ -191,9 +191,9 @@ export default function ConnectionDebug({
                   <span className="text-gray-300 font-mono">
                     {typeof window !== 'undefined'
                       ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
-                        ? 'http://localhost:3002/api'
-                        : `${window.location.protocol}//${window.location.hostname}:3002/api`
-                      : 'http://localhost:3002/api'
+                        ? 'http://localhost:3001/api'
+                        : `${window.location.protocol}//${window.location.hostname}:3001/api`
+                      : 'http://localhost:3001/api'
                     }
                   </span>
                 </div>

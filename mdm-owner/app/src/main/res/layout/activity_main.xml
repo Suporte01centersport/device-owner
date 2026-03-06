@@ -82,6 +82,8 @@
             android:layout_height="wrap_content"
             android:src="@android:drawable/ic_menu_preferences"
             android:contentDescription="Configurações"
+            app:backgroundTint="@color/primary_color"
+            app:tint="@color/white"
             app:elevation="0dp"
             app:borderWidth="0dp" />
         

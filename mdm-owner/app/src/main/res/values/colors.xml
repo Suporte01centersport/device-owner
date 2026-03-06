@@ -26,14 +26,24 @@
     <color name="md_grey_800">#424242</color>
     <color name="md_grey_900">#212121</color>
     
-    <color name="md_green_500">#4CAF50</color>
+    <!-- MDM verde - paleta principal -->
+    <color name="md_green_50">#ECFDF5</color>
+    <color name="md_green_100">#D1FAE5</color>
+    <color name="md_green_200">#A7F3D0</color>
+    <color name="md_green_300">#6EE7B7</color>
+    <color name="md_green_400">#34D399</color>
+    <color name="md_green_500">#10B981</color>
+    <color name="md_green_600">#059669</color>
+    <color name="md_green_700">#047857</color>
+    <color name="md_green_800">#065F46</color>
+    <color name="md_green_900">#064E3B</color>
     <color name="md_red_500">#F44336</color>
     <color name="md_orange_500">#FF9800</color>
     
-    <!-- Launcher specific colors -->
+    <!-- Launcher specific colors - MDM verde -->
     <color name="launcher_background">#F5F5F5</color>
     <color name="app_card_background">#FFFFFF</color>
-    <color name="primary_color">#2196F3</color>
+    <color name="primary_color">#10B981</color>
     <color name="connection_connected">#4CAF50</color>
     <color name="connection_disconnected">#F44336</color>
     <color name="connection_connecting">#FF9800</color>

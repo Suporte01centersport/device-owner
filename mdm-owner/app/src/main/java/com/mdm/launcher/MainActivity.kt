@@ -372,6 +372,9 @@ class MainActivity : AppCompatActivity() {
         // NÃO iniciar serviços aqui - aguardar permissões em onPermissionsComplete()
         Log.d(TAG, "⏳ Aguardando permissões antes de iniciar serviços...")
         
+        // Config inicial via intent (add-device: dispositivo novo ainda não está no WebSocket)
+        handleInitialConfigIntent()
+        
         // Carregar dados salvos
         loadSavedData()
         
@@ -386,7 +389,59 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         Log.d(TAG, "📨 onNewIntent() chamado - processando novo intent sem recriar Activity")
         setIntent(intent)
+        handleInitialConfigIntent()
         handleNotificationIntent()
+    }
+    
+    /**
+     * Config inicial via intent (add-device): dispositivo novo ainda não está conectado ao WebSocket.
+     * Salva allowedApps e aplica políticas para modo kiosk.
+     */
+    private fun handleInitialConfigIntent() {
+        val intent = intent ?: return
+        // Salvar server_url do add-device (IP do PC para WebSocket) - prioridade máxima
+        intent.getStringExtra("server_url")?.takeIf { it.isNotBlank() }?.let { url ->
+            sharedPreferences.edit().putString("server_url", url).apply()
+            ServerDiscovery.saveDiscoveredServerUrl(this, url)
+            ServerDiscovery.invalidateCache()
+            Log.d(TAG, "📡 server_url do add-device salvo: $url")
+            // Reiniciar WebSocketService para conectar ao novo servidor
+            startWebSocketService()
+        }
+        val initialAllowed = intent.getStringExtra("initial_allowed_apps") ?: return
+        if (initialAllowed.isBlank()) return
+        
+        Log.d(TAG, "📥 Config inicial via intent: $initialAllowed")
+        val apps = initialAllowed.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+        if (apps.isEmpty()) return
+        
+        // Salvar em SharedPreferences
+        sharedPreferences.edit()
+            .putString("allowed_apps", gson.toJson(apps))
+            .apply()
+        allowedApps = apps
+        Log.d(TAG, "✅ allowedApps salvos: $allowedApps")
+        
+        // Aplicar políticas de Device Owner (ocultar Settings, etc)
+        com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this)
+        
+        // Atualizar AppMonitor (lista usada quando o monitor iniciar ou já estiver rodando)
+        com.mdm.launcher.utils.AppMonitor.updateAllowedApps(this, apps)
+        
+        // Iniciar AppMonitor imediatamente - não esperar permissões (bloqueio deve funcionar desde o início)
+        com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
+        Log.d(TAG, "✅ AppMonitor iniciado via config inicial (add-device)")
+        
+        // Marcar para ativar kiosk após permissões (evita chamar setKioskMode antes do app estar pronto)
+        if (apps.size == 1) {
+            sharedPreferences.edit().putBoolean("apply_kiosk_on_ready", true).apply()
+        }
+        
+        // Definir launcher padrão imediatamente (add-device: usuário não deve conseguir sair)
+        setAsDefaultLauncher()
+        
+        // Remover extra para não processar novamente
+        intent.removeExtra("initial_allowed_apps")
     }
     
     private fun handleNotificationIntent() {
@@ -446,7 +501,7 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Nosso package name: ${packageName}")
             
             if (currentLauncher != packageName) {
-                Log.w(TAG, "MDM Launcher não é o launcher padrão! Atual: $currentLauncher")
+                Log.w(TAG, "MDM Center não é o launcher padrão! Atual: $currentLauncher")
                 
                 // Verificar se já mostramos a mensagem recentemente
                 val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
@@ -459,22 +514,22 @@ class MainActivity : AppCompatActivity() {
                     if (isDeviceOwner()) {
                         try {
                             setAsDefaultLauncher()
-                            Log.d(TAG, "Tentativa de definir MDM Launcher como padrão via Device Owner")
+                            Log.d(TAG, "Tentativa de definir MDM Center como padrão via Device Owner")
                         } catch (e: Exception) {
                             Log.w(TAG, "Não foi possível definir como padrão automaticamente", e)
                             // Mostrar toast informativo apenas se passou o cooldown
-                            Log.d(TAG, "Configure o MDM Launcher como padrão nas configurações")
+                            Log.d(TAG, "Configure o MDM Center como padrão nas configurações")
                         }
                     } else {
                         // Log informativo apenas se passou o cooldown
-                        Log.d(TAG, "Configure o MDM Launcher como padrão nas configurações")
+                        Log.d(TAG, "Configure o MDM Center como padrão nas configurações")
                     }
                     
                     // Salvar timestamp da última mensagem
                     prefs.edit().putLong("last_launcher_warning", currentTime).apply()
                 }
             } else {
-                Log.d(TAG, "MDM Launcher é o launcher padrão ✓")
+                Log.d(TAG, "MDM Center é o launcher padrão ✓")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao verificar status do launcher padrão", e)
@@ -839,10 +894,10 @@ class MainActivity : AppCompatActivity() {
             
             val channel = NotificationChannel(
                 "mdm_notifications",
-                "MDM Launcher Notifications",
+                "MDM Center Notifications",
                 NotificationManager.IMPORTANCE_HIGH
             ).apply {
-                description = "Notificações do MDM Launcher"
+                description = "Notificações do MDM Center"
                 enableLights(true)
                 enableVibration(true)
                 setShowBadge(true)
@@ -1039,6 +1094,15 @@ class MainActivity : AppCompatActivity() {
         
         // Carregar dados salvos
         loadSavedData()
+        
+        // Aplicar kiosk se veio do add-device (config inicial via intent)
+        if (sharedPreferences.getBoolean("apply_kiosk_on_ready", false)) {
+            sharedPreferences.edit().putBoolean("apply_kiosk_on_ready", false).apply()
+            if (allowedApps.size == 1) {
+                setKioskMode(allowedApps[0], true)
+                Log.d(TAG, "✅ Modo kiosk aplicado: ${allowedApps[0]}")
+            }
+        }
         
         Log.d(TAG, "✅ App inicializado com sucesso")
     }
@@ -1776,23 +1840,21 @@ class MainActivity : AppCompatActivity() {
             val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
             
             if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                // ❌ REMOVIDO: addPersistentPreferredActivity - bloqueia apps recentes
-                // O launcher já está configurado no AndroidManifest.xml
-                // val launcherComponent = ComponentName(this, MainActivity::class.java)
-                // val intentFilter = IntentFilter(Intent.ACTION_MAIN).apply {
-                //     addCategory(Intent.CATEGORY_HOME)
-                // }
-                // devicePolicyManager.addPersistentPreferredActivity(
-                //     adminComponent,
-                //     intentFilter,
-                //     launcherComponent
-                // )
-                
-                Log.d(TAG, "MDM Launcher é o padrão (configurado via AndroidManifest)")
+                // Definir nosso launcher como padrão para HOME - essencial para modo kiosk
+                val launcherComponent = ComponentName(this, MainActivity::class.java)
+                val intentFilter = IntentFilter(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                }
+                devicePolicyManager.addPersistentPreferredActivity(
+                    adminComponent,
+                    intentFilter,
+                    launcherComponent
+                )
+                Log.d(TAG, "✅ MDM Center definido como padrão (addPersistentPreferredActivity)")
                 
                 // Mostrar mensagem de confirmação
                 runOnUiThread {
-                    Toast.makeText(this, "✅ Launcher MDM ativo como padrão", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this, "✅ MDM Center ativo como padrão", Toast.LENGTH_SHORT).show()
                 }
             } else {
                 Log.w(TAG, "App não é Device Owner, não é possível definir como launcher padrão automaticamente")
@@ -1893,7 +1955,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "VERIFIQUE:")
                 Log.e(TAG, "  1. Servidor WebSocket está rodando? (node mdm-frontend/server/websocket.js)")
                 Log.e(TAG, "  2. Dispositivo está na mesma rede WiFi do servidor?")
-                Log.e(TAG, "  3. Firewall não está bloqueando a porta 3002?")
+                Log.e(TAG, "  3. Firewall não está bloqueando a porta 3001?")
                 Log.e(TAG, "  4. Discovery server está respondendo na porta 3003?")
                 Log.e(TAG, "")
                 
@@ -2134,15 +2196,7 @@ class MainActivity : AppCompatActivity() {
                     initializeLocationTracking()
                 }
                 "support_message_received" -> {
-                    Log.d(TAG, "═══════════════════════════════════════")
-                    Log.d(TAG, "✅ CONFIRMAÇÃO DE MENSAGEM RECEBIDA")
-                    Log.d(TAG, "MessageId: ${jsonObject["messageId"]}")
-                    Log.d(TAG, "Status: ${jsonObject["status"]}")
-                    Log.d(TAG, "═══════════════════════════════════════")
-                    // Mensagem confirmada pelo servidor
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "✅ Mensagem recebida pelo servidor!", Toast.LENGTH_SHORT).show()
-                    }
+                    // Silencioso - usuário não deve saber que a mensagem foi recebida/lida
                 }
                 "support_message_error" -> {
                     Log.e(TAG, "❌ Erro ao enviar mensagem de suporte: ${jsonObject["error"]}")
@@ -3014,7 +3068,7 @@ class MainActivity : AppCompatActivity() {
                 
                 // Mostrar notificação antes de reiniciar
                 showNotification(
-                    "MDM Launcher", 
+                    "MDM Center", 
                     "Dispositivo será reiniciado em 3 segundos..."
                 )
                 
@@ -3022,6 +3076,11 @@ class MainActivity : AppCompatActivity() {
                 scope.launch {
                     delay(3000)
                     try {
+                        // Marcar antes de reboot para ShutdownReceiver não causar boot loop
+                        getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+                            .edit()
+                            .putLong(com.mdm.launcher.receivers.ShutdownReceiver.PREF_LAST_REBOOT_INITIATED, System.currentTimeMillis())
+                            .apply()
                         devicePolicyManager.reboot(adminComponent)
                         Log.d(TAG, "Comando de reinicialização executado")
                     } catch (e: Exception) {
@@ -3061,14 +3120,23 @@ class MainActivity : AppCompatActivity() {
             val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             
             if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                // Iniciar tela de bloqueio com cadeado antes de travar
+                // Desabilitar bloqueio padrão do Android - só usamos a tela MDM com cadeado
+                com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
+                // OBRIGATÓRIO: setLockTaskPackages antes de startLockTask na LockScreenActivity
+                val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+                try {
+                    devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
+                    Log.d(TAG, "Lock task packages definidos para tela de bloqueio")
+                } catch (e: Exception) {
+                    Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
+                }
+                // Tela preta com cadeado - Lock Task Mode mantém até desbloqueio pelo painel MDM
                 val intent = Intent(this, LockScreenActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 }
                 startActivity(intent)
-                // Bloquear tela imediatamente (a LockScreenActivity ficará visível com setShowWhenLocked)
-                devicePolicyManager.lockNow()
-                Log.d(TAG, "✅ Dispositivo bloqueado com tela de cadeado")
+                // NÃO usa lockNow() - LockScreenActivity usa Lock Task Mode e fica até unlock_device
+                Log.d(TAG, "✅ Tela de bloqueio iniciada - permanece até desbloqueio pelo painel MDM")
             } else {
                 Log.w(TAG, "❌ Não é Device Owner - não pode bloquear dispositivo")
             }
@@ -3415,7 +3483,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 
                 // SEMPRE desabilitar outros launchers, não apenas quando o launcher muda
-                // Isso garante que o MDM Launcher seja o único disponível
+                // Isso garante que o MDM Center seja o único disponível
                 try {
                     val allLaunchers = packageManager.queryIntentActivities(
                         homeIntent,
@@ -3446,7 +3514,7 @@ class MainActivity : AppCompatActivity() {
                         Log.d(TAG, "ℹ️ $alreadyHiddenCount launcher(s) já estavam desabilitados")
                     }
                     if (hiddenCount == 0 && alreadyHiddenCount == 0 && allLaunchers.size == 1) {
-                        Log.d(TAG, "✅ MDM Launcher é o único launcher disponível no sistema")
+                        Log.d(TAG, "✅ MDM Center é o único launcher disponível no sistema")
                     }
                     
                 } catch (e: Exception) {
@@ -3751,11 +3819,24 @@ class MainActivity : AppCompatActivity() {
                     val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                     val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
                     
-                    // REMOVIDO: Lock Task Mode - causava problemas no Realme UI
-                    // devicePolicyManager.setLockTaskPackages(adminComponent, arrayOf(packageName))
-                    Log.d(TAG, "ℹ️ Lock Task Mode desabilitado para Realme UI")
+                    // Whitelist: nosso launcher + app kiosk (Device Owner pode pinar apps de terceiros)
+                    val lockPackages = arrayOf(this.packageName, packageName)
+                    try {
+                        devicePolicyManager.setLockTaskPackages(adminComponent, lockPackages)
+                        Log.d(TAG, "Lock Task packages definidos: ${lockPackages.joinToString()}")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "setLockTaskPackages falhou (alguns dispositivos): ${e.message}")
+                    }
                     
-                    // Iniciar o app
+                    // Lock Task ANTES de iniciar o app: assim o sistema só permite nosso launcher e o app kiosk
+                    try {
+                        startLockTask()
+                        Log.d(TAG, "Lock Task Mode ativado - apenas MDM e $packageName permitidos")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "startLockTask falhou: ${e.message}")
+                    }
+                    
+                    // Iniciar o app kiosk
                     val intent = packageManager.getLaunchIntentForPackage(packageName)
                     if (intent != null) {
                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -3764,13 +3845,6 @@ class MainActivity : AppCompatActivity() {
                         
                         Log.d(TAG, "Iniciando app: $packageName")
                         startActivity(intent)
-                        
-                        // ❌ REMOVIDO: Lock Task Mode - bloqueia apps recentes
-                        // Log.d(TAG, "Ativando Lock Task Mode...")
-                        // startLockTask()
-                        // Log.d(TAG, "Lock Task Mode ativado - app travado!")
-                        
-                        Log.d(TAG, "App $packageName iniciado normalmente (sem lock)")
                         return
                     }
                 } else {

@@ -11,8 +11,8 @@ android {
         applicationId "com.mdm.launcher"
         minSdk 24
         targetSdk 35
-        versionCode 1
-        versionName "1.0"
+        versionCode 2
+        versionName "1.1"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -38,7 +38,7 @@ android {
             signingConfig signingConfigs.release
             
             // URL do servidor de PRODUÇÃO (Linux)
-            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.100:3002"'
+            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.100:3001"'
             buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
         }
         debug {
@@ -48,7 +48,7 @@ android {
             
             // DEBUG: descoberta automática (UDP broadcast, 10.0.2.2 para emulador, IPs comuns)
             // Permite conectar com servidor em localhost tanto em emulador quanto dispositivo físico
-            buildConfigField "String", "SERVER_URL", '"ws://10.0.2.2:3002"'
+            buildConfigField "String", "SERVER_URL", '"ws://10.0.2.2:3001"'
             buildConfigField "Boolean", "USE_FIXED_SERVER", "false"
         }
     }

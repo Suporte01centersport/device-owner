@@ -42,7 +42,7 @@ class SetupActivity : AppCompatActivity() {
         setupInstructionsText = findViewById(R.id.setup_instructions_text)
         deviceOwnerStatusText = findViewById(R.id.device_owner_status_text)
         
-        sharedPreferences = getSharedPreferences("mdm_config", Context.MODE_PRIVATE)
+        sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
     }
     
     private fun setupClickListeners() {
@@ -52,7 +52,7 @@ class SetupActivity : AppCompatActivity() {
     }
     
     private fun loadCurrentSettings() {
-        val serverUrl = sharedPreferences.getString("server_url", "ws://192.168.1.100:3002")
+        val serverUrl = sharedPreferences.getString("server_url", "ws://192.168.1.100:3001")
         val deviceId = sharedPreferences.getString("device_id", Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID))
         
         serverUrlEditText.setText(serverUrl)
@@ -86,7 +86,11 @@ class SetupActivity : AppCompatActivity() {
             .putString("device_id", deviceId)
             .apply()
         
-        Toast.makeText(this, "Configurações salvas com sucesso", Toast.LENGTH_SHORT).show()
+        // Forçar redescoberta com a nova URL
+        com.mdm.launcher.utils.ServerDiscovery.saveDiscoveredServerUrl(this, serverUrl)
+        com.mdm.launcher.utils.ServerDiscovery.invalidateCache()
+        
+        Toast.makeText(this, "Configurações salvas. Reconectando...", Toast.LENGTH_SHORT).show()
         
         // Voltar para MainActivity
         val intent = Intent(this, MainActivity::class.java)

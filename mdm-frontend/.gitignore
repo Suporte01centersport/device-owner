@@ -25,6 +25,7 @@ dist/
 
 # Variaveis de ambiente
 .env
+.env.development
 .env.local
 .env.development.local
 .env.test.local

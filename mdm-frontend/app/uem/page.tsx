@@ -310,7 +310,7 @@ export default function UEMPage() {
   useEffect(() => {
     const hostname = window.location.hostname
     const wsHost = hostname === 'localhost' || hostname === '127.0.0.1' ? 'localhost' : hostname
-    const wsUrl = `ws://${wsHost}:3002`
+    const wsUrl = `ws://${wsHost}:3001`
     const socket = new WebSocket(wsUrl)
 
     const handleOpen = () => {

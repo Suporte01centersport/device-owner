@@ -96,6 +96,72 @@ async function getPublicIp() {
     return null;
 }
 
+/**
+ * Obtém URL do APK acessível de qualquer rede (WiFi diferente do servidor).
+ * Prioridade: MDM_PUBLIC_URL > IP público > IP local
+ */
+async function getApkUrlForAnyNetwork() {
+    // 1. URL pública configurada (domínio, IP público, ngrok, etc.)
+    const publicBase = process.env.MDM_PUBLIC_URL;
+    if (publicBase && publicBase.trim()) {
+        const base = publicBase.trim().replace(/\/$/, '');
+        const apkUrl = `${base}/apk/mdm.apk`;
+        console.log('📡 APK URL (MDM_PUBLIC_URL):', apkUrl);
+        return apkUrl;
+    }
+
+    // 2. IP público detectado automaticamente
+    const publicIp = await getPublicIp();
+    if (publicIp) {
+        const apkUrl = `http://${publicIp}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
+        console.log('📡 APK URL (IP público):', apkUrl);
+        return apkUrl;
+    }
+
+    // 3. Fallback: IP local (apenas mesma rede)
+    const interfaces = os.networkInterfaces();
+    let serverIp = 'localhost';
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                serverIp = iface.address;
+                break;
+            }
+        }
+        if (serverIp !== 'localhost') break;
+    }
+    const apkUrl = `http://${serverIp}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
+    console.log('📡 APK URL (IP local - mesma rede):', apkUrl);
+    return apkUrl;
+}
+
+/** URL do WebSocket para clientes conectarem (celular e web em redes diferentes) */
+async function getWebSocketUrlForClients() {
+    const port = process.env.WEBSOCKET_PORT || '3001';
+    const protocol = process.env.MDM_PUBLIC_URL?.startsWith('https') ? 'wss' : 'ws';
+    if (process.env.MDM_PUBLIC_URL) {
+        try {
+            const u = new URL(process.env.MDM_PUBLIC_URL);
+            const wsUrl = `${protocol}://${u.hostname}:${port}`;
+            return wsUrl;
+        } catch (_) {}
+    }
+    const publicIp = await getPublicIp();
+    if (publicIp) return `ws://${publicIp}:${port}`;
+    const interfaces = os.networkInterfaces();
+    let serverIp = 'localhost';
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            if (iface.family === 'IPv4' && !iface.internal) {
+                serverIp = iface.address;
+                break;
+            }
+        }
+        if (serverIp !== 'localhost') break;
+    }
+    return `ws://${serverIp}:${port}`;
+}
+
 // Classes de otimização integradas
 class PingThrottler {
     constructor(maxPingsPerMinute = 60) {
@@ -250,6 +316,37 @@ const server = http.createServer((req, res) => {
     }
     
     // Rota para enviar comando de atualização de APK
+    // API HTTP para enviar notificação ao dispositivo (fallback quando WebSocket falha)
+    if (req.method === 'POST' && req.url === '/api/devices/send-notification') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const parsed = JSON.parse(body || '{}');
+                const deviceId = parsed.deviceId || parsed.device_id;
+                const message = parsed.message || parsed.body || '';
+                if (!deviceId || !message) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'deviceId e message são obrigatórios' }));
+                    return;
+                }
+                const deviceWs = connectedDevices.get(deviceId);
+                if (!deviceWs || deviceWs.readyState !== WebSocket.OPEN) {
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Dispositivo não conectado' }));
+                    return;
+                }
+                handleSendTestNotification({ connectionId: 'http_api' }, { deviceId, message });
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, message: 'Notificação enviada' }));
+            } catch (e) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: e.message }));
+            }
+        });
+        return;
+    }
+
     if (req.method === 'POST' && req.url === '/api/update-app') {
         let body = '';
         
@@ -294,6 +391,18 @@ const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const path = parsedUrl.pathname;
     
+    // Raiz: indicar que o servidor está rodando (evitar "Endpoint não encontrado" ao acessar localhost:3001)
+    if ((path === '/' || path === '') && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            ok: true,
+            service: 'MDM WebSocket',
+            message: 'Servidor rodando. Use ws://localhost:3001 para conexão WebSocket.',
+            endpoints: ['/api/websocket-url', '/api/apk-url', '/apk/mdm.apk']
+        }));
+        return;
+    }
+    
     // Servir APK do MDM para download via WiFi (dispositivos na mesma rede)
     if (path === '/apk/mdm.apk' && req.method === 'GET') {
         const pathMod = require('path');
@@ -311,22 +420,35 @@ const server = http.createServer((req, res) => {
         return;
     }
     
-    // Retornar URL do APK MDM (para uso na atualização em massa via WiFi)
+    // Retornar URL do APK MDM (acessível de qualquer rede se MDM_PUBLIC_URL ou IP público)
     if (path === '/api/apk-url' && req.method === 'GET') {
-        const interfaces = os.networkInterfaces();
-        let serverIp = 'localhost';
-        for (const name of Object.keys(interfaces)) {
-            for (const iface of interfaces[name]) {
-                if (iface.family === 'IPv4' && !iface.internal) {
-                    serverIp = iface.address;
-                    break;
-                }
+        (async () => {
+            try {
+                const apkUrl = await getApkUrlForAnyNetwork();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, url: apkUrl }));
+            } catch (err) {
+                console.error('Erro ao obter APK URL:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
             }
-            if (serverIp !== 'localhost') break;
-        }
-        const apkUrl = `http://${serverIp}:3002/apk/mdm.apk`;
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, url: apkUrl }));
+        })();
+        return;
+    }
+
+    // URL do WebSocket para web e celular conectarem (mesmo em redes diferentes)
+    if (path === '/api/websocket-url' && req.method === 'GET') {
+        (async () => {
+            try {
+                const wsUrl = await getWebSocketUrlForClients();
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, url: wsUrl }));
+            } catch (err) {
+                console.error('Erro ao obter WebSocket URL:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
         return;
     }
     
@@ -352,24 +474,13 @@ const server = http.createServer((req, res) => {
                     execSync(buildCmd, { encoding: 'utf-8', timeout: 180000 });
                     console.log('✅ Build do MDM concluído');
                     
-                    const interfaces = os.networkInterfaces();
-                    let serverIp = 'localhost';
-                    for (const name of Object.keys(interfaces)) {
-                        for (const iface of interfaces[name]) {
-                            if (iface.family === 'IPv4' && !iface.internal) {
-                                serverIp = iface.address;
-                                break;
-                            }
-                        }
-                        if (serverIp !== 'localhost') break;
-                    }
-                    const apkUrl = `http://${serverIp}:3002/apk/mdm.apk`;
+                    const apkUrl = await getApkUrlForAnyNetwork();
                     
                     const result = sendAppUpdateCommand(targetIds, apkUrl, 'latest');
                     res.writeHead(200, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({
                         success: true,
-                        message: 'Build concluído e atualização enviada via WiFi',
+                        message: 'Build concluído e atualização enviada. Dispositivos podem baixar em qualquer rede.',
                         apkUrl,
                         ...result
                     }));
@@ -1339,6 +1450,12 @@ async function handleMessage(ws, data) {
         case 'web_client':
             handleWebClient(ws, data);
             break;
+        case 'request_devices_list':
+            // Cliente web solicita lista atualizada (útil quando celular conecta depois)
+            if (ws.isWebClient) {
+                handleWebClient(ws, data);
+            }
+            break;
         case 'delete_device':
             await handleDeleteDevice(ws, data);
             break;
@@ -1420,6 +1537,9 @@ async function handleMessage(ws, data) {
             break;
         case 'lock_device':
             handleLockDevice(ws, data);
+            break;
+        case 'unlock_device':
+            handleUnlockDevice(ws, data);
             break;
         case 'set_admin_password':
             handleSetAdminPassword(ws, data);
@@ -2134,6 +2254,20 @@ function handlePing(ws, data) {
     ws.lastActivity = startTime;
     ws.lastPingReceived = startTime;
     
+    // Se ping veio de dispositivo Android (tem deviceId) mas ainda não enviou device_status
+    if (data.deviceId && !ws.isDevice && !ws.isWebClient) {
+        ws.isDevice = true;
+        ws.deviceId = data.deviceId;
+        log.info('Dispositivo identificado via ping, solicitando device_status', { deviceId: data.deviceId });
+        try {
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ type: 'device_status', timestamp: Date.now() }));
+            }
+        } catch (e) {
+            log.warn('Erro ao solicitar device_status após ping', { error: e.message });
+        }
+    }
+    
     log.debug('Ping recebido', { connectionId: ws.connectionId, deviceId: ws.deviceId });
     
     // Registrar latência para timeout adaptativo
@@ -2343,6 +2477,18 @@ async function handleWebClient(ws, data) {
     if (ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify(response));
     }
+    
+    // Solicitar device_status a todos os dispositivos conectados (atualiza lista em tempo real)
+    const deviceStatusRequest = JSON.stringify({ type: 'device_status', timestamp: Date.now() });
+    connectedDevices.forEach((deviceWs, deviceId) => {
+        if (deviceWs.readyState === WebSocket.OPEN && deviceWs.isDevice) {
+            try {
+                deviceWs.send(deviceStatusRequest);
+            } catch (e) {
+                log.warn('Erro ao solicitar device_status', { deviceId, error: e.message });
+            }
+        }
+    });
 }
 
 
@@ -2371,46 +2517,37 @@ async function handleDeleteDevice(ws, data) {
         return;
     }
     
-    // Verificar se o dispositivo existe
-    if (!persistentDevices.has(deviceId)) {
-        log.warn(`Dispositivo não encontrado para deleção`, {
-            deviceId: deviceId,
-            connectionId: ws.connectionId,
-            availableDevices: Array.from(persistentDevices.keys())
-        });
-        
-        // Enviar resposta de erro para o cliente
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'delete_device_response',
-                success: false,
-                error: 'Dispositivo não encontrado no servidor',
-                deviceId: deviceId
-            }));
-        }
-        return;
-    }
+    // Obter dados do dispositivo (pode estar em memória ou só no banco)
+    const deviceData = persistentDevices.get(deviceId);
     
     try {
-        // Obter dados do dispositivo antes de deletar (para logs)
-        const deviceData = persistentDevices.get(deviceId);
-        
-        // ✅ DELETAR PERMANENTEMENTE DO BANCO DE DADOS
+        // ✅ DELETAR DO BANCO DE DADOS (dispositivos da API/PostgreSQL)
+        let dbDeleted = false;
         try {
-            // Usar o modelo Device para deletar (que remove todas as relações)
             await DeviceModel.delete(deviceId);
-            console.log(`✅ Dispositivo ${deviceId} deletado permanentemente do banco de dados`);
-            log.info(`Dispositivo deletado permanentemente`, {
-                deviceId: deviceId,
-                deviceName: deviceData?.name || 'desconhecido'
-            });
+            dbDeleted = true;
+            console.log(`✅ Dispositivo ${deviceId} deletado do banco de dados`);
         } catch (dbError) {
-            console.error(`❌ Erro ao deletar dispositivo do banco:`, dbError);
-            log.error(`Erro ao deletar dispositivo`, {
-                deviceId: deviceId,
-                error: dbError.message
-            });
-            // Continuar mesmo se falhar (não bloquear a deleção da memória)
+            if (dbError.message && dbError.message.includes('não encontrado')) {
+                // Dispositivo não está no banco - pode estar só em memória (WebSocket)
+                log.warn(`Dispositivo ${deviceId} não encontrado no banco, tentando remover da memória`);
+            } else {
+                console.error(`❌ Erro ao deletar dispositivo do banco:`, dbError);
+            }
+        }
+        
+        // Só prosseguir se deletou do banco OU se está em persistentDevices (memória)
+        if (!dbDeleted && !persistentDevices.has(deviceId)) {
+            log.warn(`Dispositivo não encontrado para deleção`, { deviceId });
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'delete_device_response',
+                    success: false,
+                    error: 'Dispositivo não encontrado no servidor nem no banco de dados',
+                    deviceId: deviceId
+                }));
+            }
+            return;
         }
         
         // Remover das listas em memória
@@ -2911,20 +3048,36 @@ function handleClearLocationHistory(ws, data) {
 }
 
 function handleSendTestNotification(ws, data) {
-    const { deviceId, message } = data;
+    const deviceId = data.deviceId || data.device_id;
+    const message = data.message || data.body || '';
     
     console.log('=== ENVIANDO NOTIFICAÇÃO DE TESTE ===');
-    console.log('Data recebida:', data);
+    console.log('Data recebida:', JSON.stringify(data));
     console.log('Device ID:', deviceId);
     console.log('Mensagem:', message);
-    console.log('Tipo da mensagem:', typeof message);
     console.log('Dispositivos conectados:', Array.from(connectedDevices.keys()));
+    
+    if (!deviceId || !message) {
+        log.warn('send_test_notification sem deviceId ou message', { data });
+        webClients.forEach(client => {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify({
+                    type: 'notification_error',
+                    deviceId: deviceId || 'unknown',
+                    title: 'Erro ao Enviar',
+                    body: 'deviceId ou message ausente',
+                    timestamp: Date.now()
+                }));
+            }
+        });
+        return;
+    }
     
     const deviceWs = connectedDevices.get(deviceId);
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         const notificationMessage = {
             type: 'show_notification',
-            title: 'MDM Launcher',
+            title: 'MDM Center',
             body: message || 'Notificação de teste',
             timestamp: Date.now()
         };
@@ -3560,15 +3713,7 @@ function handleSupportMessage(ws, data) {
         
         console.log('Mensagem de suporte salva:', supportMessage.id);
         
-        // Enviar confirmação para o dispositivo
-        if (ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'support_message_received',
-                messageId: supportMessage.id,
-                status: 'success',
-                timestamp: Date.now()
-            }));
-        }
+        // Não enviar confirmação ao dispositivo - usuário não deve saber que a mensagem foi recebida/lida
         
         // Notificar clientes web sobre nova mensagem de suporte
         webClients.forEach(client => {
@@ -3585,6 +3730,20 @@ function handleSupportMessage(ws, data) {
             deviceId: data.deviceId,
             deviceName: data.deviceName
         });
+        
+        // Garantir que o dispositivo está na lista (pode ter enviado support antes de device_status)
+        if (!persistentDevices.has(data.deviceId)) {
+            const minimalDevice = {
+                deviceId: data.deviceId,
+                name: data.deviceName || data.model || 'Dispositivo',
+                model: data.model || '',
+                status: connectedDevices.has(data.deviceId) ? 'online' : 'offline',
+                lastSeen: Date.now(),
+                androidVersion: data.androidVersion || ''
+            };
+            persistentDevices.set(data.deviceId, minimalDevice);
+            saveDeviceToDatabase(minimalDevice).catch(err => log.warn('Erro ao salvar dispositivo da mensagem', { error: err.message }));
+        }
         
     } catch (error) {
         console.error('Erro ao processar mensagem de suporte:', error);
@@ -3615,9 +3774,10 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 // Iniciar servidor HTTP
-server.listen(3002, '0.0.0.0', () => {
+const WS_PORT = parseInt(process.env.WEBSOCKET_PORT || '3001', 10);
+server.listen(WS_PORT, '0.0.0.0', () => {
     log.info('Servidor HTTP/WebSocket iniciado', {
-        port: 3002,
+        port: WS_PORT,
         host: '0.0.0.0',
         pid: process.pid,
         nodeVersion: process.version,

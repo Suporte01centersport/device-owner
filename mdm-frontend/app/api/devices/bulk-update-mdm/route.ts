@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 
+const getWsBase = () => {
+  const h = process.env.WEBSOCKET_HOST || 'localhost'
+  const p = process.env.WEBSOCKET_PORT || '3001'
+  return `http://${h}:${p}`
+}
+
 /**
  * POST /api/devices/bulk-update-mdm
  * Faz build do MDM e envia atualização para dispositivos via WiFi (sem USB).
@@ -10,7 +16,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json().catch(() => ({}))
     const { deviceIds = 'all' } = body
 
-    const res = await fetch('http://localhost:3002/api/build-and-update-mdm', {
+    const res = await fetch(`${getWsBase()}/api/build-and-update-mdm`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ deviceIds })
@@ -36,7 +42,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : 'Erro ao comunicar com o servidor. Verifique se está rodando na porta 3002.'
+        error: error instanceof Error ? error.message : 'Erro ao comunicar com o servidor. Verifique se está rodando na porta 3001.'
       },
       { status: 500 }
     )

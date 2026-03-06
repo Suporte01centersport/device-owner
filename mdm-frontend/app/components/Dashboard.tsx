@@ -572,8 +572,8 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold" style={{ color: '#1e293b' }}>Dashboard</h1>
-          <p className="text-sm mt-1" style={{ color: '#64748b' }}>
+          <h1 className="text-3xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm mt-1 text-white">
             Bem-vindo ao sistema de gerenciamento de dispositivos
           </p>
         </div>
@@ -706,8 +706,46 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                     { value: 'PCs Online', type: 'square', color: '#93c5fd' }
                   ]}
                 />
-                <Bar dataKey="celulares" fill="url(#mobileGradient)" radius={[6, 6, 0, 0]} />
-                <Bar dataKey="pcs" fill="#93c5fd" radius={[6, 6, 0, 0]} />
+                <Bar
+                  dataKey="celulares"
+                  fill="url(#mobileGradient)"
+                  radius={[6, 6, 0, 0]}
+                  label={({ value, x, y, width, height }) =>
+                    value > 0 ? (
+                      <text
+                        x={x + width / 2}
+                        y={y + height / 2}
+                        fill="white"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={14}
+                        fontWeight={600}
+                      >
+                        {value}
+                      </text>
+                    ) : null
+                  }
+                />
+                <Bar
+                  dataKey="pcs"
+                  fill="#93c5fd"
+                  radius={[6, 6, 0, 0]}
+                  label={({ value, x, y, width, height }) =>
+                    value > 0 ? (
+                      <text
+                        x={x + width / 2}
+                        y={y + height / 2}
+                        fill="#1e40af"
+                        textAnchor="middle"
+                        dominantBaseline="middle"
+                        fontSize={14}
+                        fontWeight={600}
+                      >
+                        {value}
+                      </text>
+                    ) : null
+                  }
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>

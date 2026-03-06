@@ -10,7 +10,7 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
 
   const hostname = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
   const wsHost = hostname === 'localhost' || hostname === '127.0.0.1' ? hostname : hostname
-  const serverUrl = `ws://${wsHost}:3002`
+  const serverUrl = `ws://${wsHost}:3001`
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(serverUrl)
@@ -69,7 +69,7 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
               </button>
             </div>
             <p className="text-xs text-gray-900 mt-2">
-              Em produção, use o IP ou hostname do seu servidor. Ex: ws://192.168.1.100:3002
+              Em produção, use o IP ou hostname do seu servidor. Ex: ws://192.168.1.100:3001
             </p>
           </div>
 
@@ -93,7 +93,7 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
             <h4 className="font-medium text-gray-900 mb-2">4. Após a instalação</h4>
             <p className="text-sm text-gray-900">
               O computador aparecerá automaticamente na lista quando o agente se conectar ao servidor.
-              Certifique-se de que a porta 3002 está acessível na rede.
+              Certifique-se de que a porta 3001 está acessível na rede.
             </p>
           </div>
         </div>

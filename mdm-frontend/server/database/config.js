@@ -5,8 +5,8 @@ const { Pool } = require('pg');
 const dbConfig = {
     user: process.env.DB_USER || 'postgres',
     host: process.env.DB_HOST || 'localhost',
-    database: process.env.DB_NAME || 'mdmweb',
-    password: process.env.DB_PASSWORD, // Deve ser definido no .env - não usar string vazia
+    database: process.env.DB_NAME || 'mdm_owner_dev',
+    password: process.env.DB_PASSWORD, // Definir no .env - ver SETUP-BANCO.md se falhar
     port: parseInt(process.env.DB_PORT) || 5432,
     ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     max: parseInt(process.env.DB_POOL_MAX) || 35, // Máximo de conexões no pool (padrão: 35, ajustável via env)
@@ -129,7 +129,7 @@ const insertInitialData = async () => {
             const defaultConfigs = [
                 {
                     key: 'websocket_port',
-                    value: { port: 3002 },
+                    value: { port: 3001 },
                     description: 'Porta do servidor WebSocket'
                 },
                 {

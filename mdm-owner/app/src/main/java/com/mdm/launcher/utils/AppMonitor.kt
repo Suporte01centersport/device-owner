@@ -115,6 +115,8 @@ object AppMonitor {
                             
                             // ✅ Verificar se app não é permitido e forçar retorno
                             if (!isAllowed) {
+                                Log.d(TAG, "🚫 App não permitido detectado: $foregroundPackage - forçando retorno ao launcher")
+                                forceReturnToLauncher(ctx, foregroundPackage, activityManager)
                                 currentInterval = MONITOR_INTERVAL
                             } else {
                                 currentInterval = MONITOR_INTERVAL
@@ -307,13 +309,13 @@ object AppMonitor {
         return isAllowed
     }
 
-    private fun isSystemCriticalApp(packageName: String): Boolean {
-        // ✅ CORREÇÃO: Lista mais restritiva de apps críticos do sistema
+        private fun isSystemCriticalApp(packageName: String): Boolean {
+        // Lista restritiva: apenas apps essenciais para o sistema funcionar
+        // NÃO incluir Settings - em modo kiosk deve ficar bloqueado
         val criticalSystemProcesses = listOf(
             "android", // O próprio sistema Android
             "com.android.systemui", // Barra de status, navegação
-            "com.android.settings", // Configurações
-            "com.android.permissioncontroller" // Controlador de permissões
+            "com.android.permissioncontroller" // Controlador de permissões (dialogs)
         )
         
         // ✅ CORREÇÃO: Apenas apps realmente críticos, não todos os com.android.*

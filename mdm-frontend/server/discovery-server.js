@@ -9,7 +9,7 @@ const dgram = require('dgram');
 const os = require('os');
 
 const DISCOVERY_PORT = 3003;
-const WEBSOCKET_PORT = 3002;
+const WEBSOCKET_PORT = parseInt(process.env.WEBSOCKET_PORT || '3001', 10);
 
 class DiscoveryServer {
     constructor() {

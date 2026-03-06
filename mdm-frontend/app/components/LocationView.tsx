@@ -311,7 +311,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
       // Mostrar notificação de sucesso
       if ('Notification' in window && Notification.permission === 'granted') {
         try {
-          new Notification('MDM Launcher', {
+          new Notification('MDM Center', {
             body: `Histórico de localização limpo para ${device.name}`,
             icon: '/icon-192.png',
             tag: 'history-cleared'

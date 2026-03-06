@@ -32,11 +32,11 @@ object ServerDiscovery {
     
     // 🎯 SERVIDORES CONFIGURADOS (fallback para produção)
     private val LINUX_SERVERS = listOf(
-        "ws://192.168.2.100:3002",  // Servidor principal Linux
-        "ws://192.168.2.74:3002",   // Servidor local Windows PC (debug)
-        "ws://192.168.1.100:3002",  // Servidor alternativo Linux
-        "ws://10.0.0.100:3002",    // Servidor corporativo Linux
-        "ws://172.16.0.100:3002"   // Servidor VPN Linux
+        "ws://192.168.2.100:3001",  // Servidor principal Linux
+        "ws://192.168.2.74:3001",   // Servidor local Windows PC (debug)
+        "ws://192.168.1.100:3001",  // Servidor alternativo Linux
+        "ws://10.0.0.100:3001",    // Servidor corporativo Linux
+        "ws://172.16.0.100:3001"   // Servidor VPN Linux
     )
     
     // 🔄 CONFIGURAÇÕES DE RESILIÊNCIA
@@ -46,7 +46,7 @@ object ServerDiscovery {
     
     /**
      * Descobre automaticamente o servidor MDM com resiliência máxima
-     * @return URL completa do WebSocket (ex: ws://192.168.1.100:3002)
+     * @return URL completa do WebSocket (ex: ws://192.168.1.100:3001)
      */
     suspend fun discoverServer(context: Context): String = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
@@ -56,7 +56,7 @@ object ServerDiscovery {
             // Verificar saúde do servidor em cache periodicamente
             if ((now - lastHealthCheck) > HEALTH_CHECK_INTERVAL) {
                 val serverIp = cachedServerUrl!!.substringAfter("ws://").substringBefore(":")
-                if (!isServerResponding(serverIp, 3002)) {
+                if (!isServerResponding(serverIp, 3001)) {
                     invalidateCache()
                 } else {
                     lastHealthCheck = now
@@ -82,7 +82,7 @@ object ServerDiscovery {
             
             // No RELEASE, validar se o servidor está respondendo
             val serverIp = fixedUrl.substringAfter("ws://").substringBefore(":")
-            if (isServerResponding(serverIp, 3002)) {
+            if (isServerResponding(serverIp, 3001)) {
                 cachedServerUrl = fixedUrl
                 lastDiscoveryTime = now
                 lastHealthCheck = now
@@ -91,6 +91,21 @@ object ServerDiscovery {
                 return@withContext fixedUrl
             } else {
                 registerConnectionFailure()
+            }
+        }
+        
+        // Estratégia 0.5: server_url do add-device (passado via intent - prioridade para dispositivo recém-instalado)
+        getManualServerUrl(context)?.let { manualUrl ->
+            if (!manualUrl.contains("10.0.2.2")) {
+                val serverIp = manualUrl.substringAfter("ws://").substringBefore(":")
+                if (isServerResponding(serverIp, 3001)) {
+                    cachedServerUrl = manualUrl
+                    lastDiscoveryTime = now
+                    lastHealthCheck = now
+                    saveDiscoveredServerUrl(context, manualUrl)
+                    registerConnectionSuccess()
+                    return@withContext manualUrl
+                }
             }
         }
         
@@ -161,8 +176,8 @@ object ServerDiscovery {
                 val address = InetAddress.getByName(MDM_DOMAIN)
                 val ip = address.hostAddress ?: return@withTimeout null
                 
-                if (isServerResponding(ip, 3002)) {
-                    "ws://$ip:3002"
+                if (isServerResponding(ip, 3001)) {
+                    "ws://$ip:3001"
                 } else {
                     null
                 }
@@ -204,7 +219,7 @@ object ServerDiscovery {
                 val serverIp = responsePacket.address.hostAddress
                 
                 if (response.startsWith("MDM_SERVER")) {
-                    val port = response.substringAfter(":").toIntOrNull() ?: 3002
+                    val port = response.substringAfter(":").toIntOrNull() ?: 3001
                     "ws://$serverIp:$port"
                 } else {
                     null
@@ -229,8 +244,8 @@ object ServerDiscovery {
 
             // Emulador Android: 10.0.2.2 = host (PC onde o servidor localhost roda)
             if (localIp.startsWith("10.0.2.")) {
-                if (isServerResponding("10.0.2.2", 3002)) {
-                    return@withContext "ws://10.0.2.2:3002"
+                if (isServerResponding("10.0.2.2", 3001)) {
+                    return@withContext "ws://10.0.2.2:3001"
                 }
             }
 
@@ -241,8 +256,8 @@ object ServerDiscovery {
                 val testIp = "$networkPrefix.$lastOctet"
                 if (testIp == localIp) continue
                 
-                if (isServerResponding(testIp, 3002)) {
-                    return@withContext "ws://$testIp:3002"
+                if (isServerResponding(testIp, 3001)) {
+                    return@withContext "ws://$testIp:3001"
                 }
             }
             null
@@ -259,7 +274,7 @@ object ServerDiscovery {
         try {
             for (serverUrl in LINUX_SERVERS) {
                 val serverIp = serverUrl.substringAfter("ws://").substringBefore(":")
-                if (isServerResponding(serverIp, 3002)) {
+                if (isServerResponding(serverIp, 3001)) {
                     return@withContext serverUrl
                 }
             }
@@ -404,7 +419,7 @@ object ServerDiscovery {
         
         try {
             val serverIp = currentServer.substringAfter("ws://").substringBefore(":")
-            val isHealthy = isServerResponding(serverIp, 3002)
+            val isHealthy = isServerResponding(serverIp, 3001)
             lastHealthCheck = now
             
             if (isHealthy) {

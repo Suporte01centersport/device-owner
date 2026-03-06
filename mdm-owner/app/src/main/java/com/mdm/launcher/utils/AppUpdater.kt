@@ -67,7 +67,7 @@ object AppUpdater {
             // Configurar DownloadManager
             val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val request = DownloadManager.Request(Uri.parse(apkUrl)).apply {
-                setTitle("Atualização MDM Launcher")
+                setTitle("Atualização MDM Center")
                 setDescription("Baixando nova versão...")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
                 setDestinationUri(Uri.fromFile(destinationFile))
@@ -278,7 +278,7 @@ object AppUpdater {
             }
             
             builder.setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("📥 Atualizando MDM Launcher")
+                .setContentTitle("📥 Atualizando MDM Center")
                 .setContentText(message)
                 .setOngoing(true)
                 .setAutoCancel(false)

@@ -5,9 +5,20 @@ class DeviceModel {
     // Criar ou atualizar dispositivo
     static async upsert(deviceData, organizationId = null) {
         try {
-            // Se não especificou organização, usar padrão
+            // Se não especificou organização, usar ou criar padrão
             if (!organizationId) {
-                const orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                let orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                if (orgResult.rows.length === 0) {
+                    await query(`
+                        INSERT INTO organizations (name, slug, description)
+                        VALUES ('Organização Padrão', 'default', 'Organização padrão do sistema MDM')
+                        ON CONFLICT (slug) DO NOTHING
+                    `);
+                    orgResult = await query('SELECT id FROM organizations WHERE slug = $1', ['default']);
+                }
+                if (orgResult.rows.length === 0) {
+                    throw new Error('Organização padrão não encontrada e não foi possível criar');
+                }
                 organizationId = orgResult.rows[0].id;
             }
             const result = await query(`
@@ -124,7 +135,7 @@ class DeviceModel {
                 SELECT d.*, o.name as organization_name
                 FROM devices d
                 LEFT JOIN organizations o ON d.organization_id = o.id
-                WHERE 1=1
+                WHERE d.deleted_at IS NULL
             `;
             let params = [];
             let paramCount = 0;

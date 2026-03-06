@@ -132,7 +132,10 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
   }, [loadDevices, loadAdminPassword])
 
   // Função para sincronizar com dados do servidor
-  const syncWithServer = useCallback((serverDevices: Device[], serverPassword?: string) => {
+  const syncWithServer = useCallback((serverDevices?: Device[] | null, serverPassword?: string) => {
+    if (!serverDevices || !Array.isArray(serverDevices)) {
+      return
+    }
     console.log('Sincronizando com dados do servidor:', {
       serverDevices: serverDevices.length,
       // Considera o snapshot local inicial (não renderizado) para logs de depuração

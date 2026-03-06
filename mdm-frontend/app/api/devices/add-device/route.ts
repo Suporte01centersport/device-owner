@@ -2,6 +2,34 @@ import { NextRequest, NextResponse } from 'next/server'
 import { execSync } from 'child_process'
 import path from 'path'
 import fs from 'fs'
+import os from 'os'
+
+/** Obtém IP local do PC para o celular conectar ao WebSocket (prioriza WiFi) */
+function getLocalServerIp(): string {
+  const interfaces = os.networkInterfaces()
+  // Priorizar interfaces WiFi (Ethernet, Wi-Fi) sobre WSL/Docker (vEthernet)
+  const wifiNames = ['wi-fi', 'wifi', 'ethernet', 'eth0', 'en0']
+  for (const name of Object.keys(interfaces)) {
+    const lower = name.toLowerCase()
+    if (wifiNames.some(w => lower.includes(w))) {
+      for (const iface of interfaces[name] || []) {
+        if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('169.')) {
+          return iface.address
+        }
+      }
+    }
+  }
+  // Fallback: qualquer IPv4 não-interno (exceto 169.x)
+  for (const name of Object.keys(interfaces)) {
+    if (name.toLowerCase().includes('vether') || name.toLowerCase().includes('docker')) continue
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal && !iface.address.startsWith('169.')) {
+        return iface.address
+      }
+    }
+  }
+  return '192.168.1.100' // fallback
+}
 
 /**
  * POST /api/devices/add-device
@@ -61,6 +89,17 @@ export async function POST(request: NextRequest) {
 
     steps.push('Dispositivo detectado')
 
+    // 1b. Desinstalar MDM anterior (reinstalação limpa para aplicar correções)
+    try {
+      execSync('adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver', { encoding: 'utf-8', timeout: 5000 })
+    } catch { /* ignora se não for admin */ }
+    try {
+      execSync('adb uninstall com.mdm.launcher', { encoding: 'utf-8', timeout: 10000 })
+      steps.push('OK: MDM desinstalado')
+    } catch {
+      steps.push('MDM não estava instalado (ok)')
+    }
+
     // 2. Build MDM se não existir
     if (!fs.existsSync(mdmApkPath)) {
       const mdmDir = path.join(projectRoot, 'mdm-owner')
@@ -91,6 +130,7 @@ export async function POST(request: NextRequest) {
     // 5. Permissões
     runCmd('adb shell pm grant com.mdm.launcher android.permission.WRITE_SECURE_SETTINGS', 'WRITE_SECURE_SETTINGS')
     runCmd('adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver', 'Definir Device Owner')
+    runCmd('adb shell appops set com.mdm.launcher PACKAGE_USAGE_STATS allow', 'PACKAGE_USAGE_STATS (AppMonitor)')
     runCmd('adb shell settings put secure lockscreen.disabled 1', 'Desabilitar bloqueio de tela')
     runCmd('adb shell pm grant com.centersporti.wmsmobile android.permission.READ_EXTERNAL_STORAGE', 'Permissão WMS')
     runCmd('adb shell pm grant com.centersporti.wmsmobile android.permission.WRITE_EXTERNAL_STORAGE', 'Permissão WMS')
@@ -98,10 +138,12 @@ export async function POST(request: NextRequest) {
 
     // 6. Aplicar modo kiosk via API
     try {
-      const kioskRes = await fetch('http://localhost:3002/api/devices/all/app-permissions', {
+      const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+      const wsPort = process.env.WEBSOCKET_PORT || '3001'
+      const kioskRes = await fetch(`http://${wsHost}:${wsPort}/api/devices/all/app-permissions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ allowedApps: ['com.centersporti.wmsmobile'] })
+        body: JSON.stringify({ allowedApps: ['com.mdm.launcher', 'com.centersporti.wmsmobile'] })
       })
       if (kioskRes.ok) {
         steps.push('OK: Modo kiosk aplicado')
@@ -112,14 +154,26 @@ export async function POST(request: NextRequest) {
       steps.push('AVISO: Não foi possível aplicar kiosk - servidor pode estar iniciando')
     }
 
-    // 7. Abrir apps
-    runCmd('adb shell am start -n com.mdm.launcher/.MainActivity', 'Abrir MDM')
-    await new Promise(r => setTimeout(r, 2000))
-    runCmd('adb shell am start -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n com.centersporti.wmsmobile/.MainActivity', 'Abrir WMS')
+    // 7. Definir MDM como launcher padrão (Home volta para MDM) - o app também faz via addPersistentPreferredActivity
+    try {
+      execSync('adb shell cmd package set-home-activity "com.mdm.launcher/.MainActivity"', { encoding: 'utf-8', timeout: 5000 })
+      steps.push('OK: Launcher padrão definido')
+    } catch {
+      steps.push('AVISO: set-home-activity falhou (app definirá ao abrir)')
+    }
+
+    // 8. Abrir MDM com config inicial de kiosk + URL do servidor (celular conecta ao PC na mesma rede)
+    const serverIp = getLocalServerIp()
+    const wsPort = process.env.WEBSOCKET_PORT || '3001'
+    const serverUrl = `ws://${serverIp}:${wsPort}`
+    runCmd(
+      `adb shell am start -n com.mdm.launcher/.MainActivity --es initial_allowed_apps "com.mdm.launcher,com.centersporti.wmsmobile" --es server_url "${serverUrl}"`,
+      'Abrir MDM com allowed apps (MDM + WMS) e URL do servidor'
+    )
 
     return NextResponse.json({
       success: true,
-      message: 'Dispositivo configurado com sucesso! MDM, WMS e kiosk aplicados.',
+      message: 'Dispositivo configurado com sucesso! MDM fixo, WMS abre ao clicar.',
       steps
     })
   } catch (error) {

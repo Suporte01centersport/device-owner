@@ -56,7 +56,7 @@ async function checkWebSocketServer() {
     
     return new Promise((resolve) => {
         try {
-            const ws = new WebSocket('ws://localhost:3002');
+            const ws = new WebSocket('ws://localhost:3001');
             const timeout = setTimeout(() => {
                 logError('Servidor WebSocket não responde (timeout 5s)');
                 checks.failed++;
@@ -122,7 +122,7 @@ async function checkServerDiscovery() {
 async function checkDataConsistency() {
     logSection('3. Verificando Consistência de Dados');
     
-    const ws = new WebSocket('ws://localhost:3002');
+    const ws = new WebSocket('ws://localhost:3001');
     
     return new Promise((resolve) => {
         ws.on('open', () => {

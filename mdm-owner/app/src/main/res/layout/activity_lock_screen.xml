@@ -4,7 +4,7 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:gravity="center"
-    android:background="#1a1a2e">
+    android:background="#000000">
 
     <TextView
         android:layout_width="wrap_content"
@@ -12,21 +12,4 @@
         android:text="🔒"
         android:textSize="120sp"
         android:textColor="#ffffff" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Dispositivo bloqueado"
-        android:textSize="24sp"
-        android:textColor="#ffffff"
-        android:textStyle="bold" />
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="Desbloqueie usando o padrão, PIN ou senha"
-        android:textSize="16sp"
-        android:textColor="#a0a0a0" />
 </LinearLayout>

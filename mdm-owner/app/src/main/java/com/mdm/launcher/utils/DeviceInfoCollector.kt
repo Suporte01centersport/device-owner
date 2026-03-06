@@ -352,7 +352,7 @@ object DeviceInfoCollector {
                 ),
                 AppInfo(
                     packageName = "com.mdm.launcher",
-                    appName = "MDM Launcher",
+                    appName = "MDM Center",
                     icon = null,
                     isSystemApp = false,
                     isEnabled = true,

@@ -1,4 +1,5 @@
 @echo off
+cd /d "%~dp0"
 REM ============================================
 REM SCRIPT DE DESENVOLVIMENTO PARA WINDOWS
 REM ============================================
@@ -43,14 +44,15 @@ echo [4/4] Iniciando servidores de desenvolvimento...
 echo.
 echo ========================================
 echo   SERVIDORES INICIANDO:
-echo   - WebSocket: http://localhost:3002
+echo   - WebSocket: http://localhost:3001
 echo   - Frontend:  http://localhost:3000
 echo ========================================
 echo.
+echo Se der erro de banco, veja mdm-frontend\SETUP-BANCO.md
 echo Pressione Ctrl+C para parar os servidores
 echo.
 
-REM Iniciar ambos os servidores
+set DOTENV_CONFIG_PATH=.env.development
 call npm run dev:all
 
 pause

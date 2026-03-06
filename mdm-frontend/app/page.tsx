@@ -15,8 +15,10 @@ import ConfigModal from './components/ConfigModal'
 import ConfirmModal from './components/ConfirmModal'
 import PoliciesPage from './policies/page'
 import UEMPage from './uem/page'
+import AllowedAppsPage from './components/AllowedAppsPage'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
+import { playNotificationSound } from './lib/notification-sound'
 
 // Interfaces Device e AppInfo importadas de './types/device'
 
@@ -33,6 +35,7 @@ export default function Home() {
 
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
+  const [deviceModalInitialTab, setDeviceModalInitialTab] = useState<string>('overview')
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false)
   const [supportDevice, setSupportDevice] = useState<Device | null>(null)
   const [isUpdateModalOpen, setIsUpdateModalOpen] = useState(false)
@@ -45,12 +48,14 @@ export default function Home() {
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<any>(null)
   const [isAddingDevice, setIsAddingDevice] = useState(false)
+  const [isSearchingDevices, setIsSearchingDevices] = useState(false)
+  const [justAddedDevice, setJustAddedDevice] = useState(false)
   const [showBackupConfirm, setShowBackupConfirm] = useState(false)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false)
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
-  const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3002')
+  const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3001')
   const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
   const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
   const [settingsLocationTracking, setSettingsLocationTracking] = useState(true)
@@ -86,6 +91,9 @@ export default function Home() {
   const [unreadSupportCount, setUnreadSupportCount] = useState(0)
   const [isConnected, setIsConnected] = useState(false)
   const [ws, setWs] = useState<WebSocket | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
+  const [reconnectTrigger, setReconnectTrigger] = useState(0)
+  useEffect(() => { wsRef.current = ws }, [ws])
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentView, setCurrentView] = useState('dashboard')
   const [showPassword, setShowPassword] = useState<boolean>(false)
@@ -122,28 +130,51 @@ export default function Home() {
     let reconnectTimeout: NodeJS.Timeout | null = null
     let isMounted = true
 
-    const connectWebSocket = () => {
+    const resolveWsUrl = async (): Promise<string> => {
+      try {
+        const saved = localStorage.getItem('mdm_settings')
+        if (saved) {
+          const s = JSON.parse(saved)
+          if (s?.wsUrl && typeof s.wsUrl === 'string' && s.wsUrl.startsWith('ws')) {
+            let url = s.wsUrl
+            if (url.includes(':3002')) {
+              url = url.replace(':3002', ':3001')
+              try {
+                const updated = { ...s, wsUrl: url }
+                localStorage.setItem('mdm_settings', JSON.stringify(updated))
+              } catch (_) {}
+            }
+            return url
+          }
+        }
+      } catch (_) {}
+      const hostname = window.location.hostname
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'ws://localhost:3001'
+      }
+      // Acessando de outra rede – buscar URL do servidor (celular e PC em redes diferentes)
+      try {
+        const res = await fetch('/api/websocket-url')
+        const data = await res.json()
+        if (data.success && data.url) {
+          console.log('📡 URL do WebSocket obtida do servidor:', data.url)
+          return data.url
+        }
+      } catch (e) {
+        console.warn('Não foi possível obter URL do servidor, usando hostname:', e)
+      }
+      return `ws://${hostname}:3001`
+    }
+
+    const connectWebSocket = async () => {
       // Evitar múltiplas conexões
       if (websocket && (websocket.readyState === WebSocket.CONNECTING || websocket.readyState === WebSocket.OPEN)) {
         return
       }
 
       try {
-        let wsUrl: string | undefined
-        try {
-          const saved = localStorage.getItem('mdm_settings')
-          if (saved) {
-            const s = JSON.parse(saved)
-            if (s?.wsUrl && typeof s.wsUrl === 'string' && s.wsUrl.startsWith('ws')) {
-              wsUrl = s.wsUrl
-            }
-          }
-        } catch (_) {}
-        if (!wsUrl) {
-          const hostname = window.location.hostname
-          const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') ? 'localhost' : hostname
-          wsUrl = `ws://${wsHost}:3002`
-        }
+        const wsUrl = await resolveWsUrl()
+        if (!isMounted) return
         console.log('🔌 Conectando ao WebSocket:', wsUrl)
         
         websocket = new WebSocket(wsUrl)
@@ -162,6 +193,15 @@ export default function Home() {
             type: 'web_client',
             timestamp: Date.now()
           }))
+          
+          // Solicitar lista várias vezes nos primeiros 10s (celular pode demorar a conectar após add-device)
+          const requestList = () => {
+            if (websocket && websocket.readyState === WebSocket.OPEN) {
+              websocket.send(JSON.stringify({ type: 'request_devices_list', timestamp: Date.now() }))
+            }
+          }
+          requestList()
+          ;[2000, 4000, 6000, 8000, 10000].forEach(ms => setTimeout(requestList, ms))
           
           // Aguardar um pouco antes de solicitar a senha
           setTimeout(() => {
@@ -245,7 +285,7 @@ export default function Home() {
       setWs(null)
       setIsConnected(false)
     }
-  }, [])
+  }, [reconnectTrigger])
 
   const handleWebSocketMessage = useCallback((message: any) => {
     switch (message.type) {
@@ -568,6 +608,27 @@ export default function Home() {
         // Mostrar notificação de nova mensagem de suporte
         if (message.data) {
           showSupportNotification(message.data)
+          // Dispositivo que enviou está conectado - buscar lista atualizada para exibir na tela
+          const w = wsRef.current
+          if (w && w.readyState === WebSocket.OPEN) {
+            w.send(JSON.stringify({ type: 'request_devices_list', timestamp: Date.now() }))
+          }
+          fetch('/api/devices')
+            .then(res => res.json())
+            .then(json => {
+              if (json.success && Array.isArray(json.data)) {
+                const mobile = json.data.filter((d: any) =>
+                  d.deviceType !== 'computer' && d.osType !== 'Windows' && d.osType !== 'Linux' && d.osType !== 'macOS'
+                )
+                const formatted = mobile.map((d: any) => ({
+                  ...d,
+                  lastSeen: typeof d.lastSeen === 'string' ? new Date(d.lastSeen).getTime() : (d.lastSeen || Date.now()),
+                  status: d.status || 'offline'
+                }))
+                syncWithServer(formatted)
+              }
+            })
+            .catch(() => {})
         }
         break
       case 'user_conflict_warning':
@@ -633,10 +694,27 @@ export default function Home() {
     }
   }, [updateDevices, updateAdminPassword, syncWithServer])
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback(async (message: any) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message))
       return true
+    }
+    // Fallback HTTP quando WebSocket não conectado (lock, unlock, etc.)
+    const deviceId = message.deviceId
+    if (deviceId && (message.type === 'lock_device' || message.type === 'unlock_device')) {
+      try {
+        const action = message.type === 'lock_device' ? 'lock' : 'unlock'
+        const res = await fetch(`/api/devices/${deviceId}/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId })
+        })
+        const data = await res.json().catch(() => ({}))
+        return !!data.success
+      } catch (e) {
+        console.error('Erro no fallback HTTP:', e)
+        return false
+      }
     }
     console.warn('WebSocket não conectado')
     return false
@@ -646,6 +724,7 @@ export default function Home() {
     // Se já tem usuário vinculado, abrir direto o modal do dispositivo
     if (device.assignedUserId) {
       setSelectedDevice(device)
+      setDeviceModalInitialTab('overview')
       setIsModalOpen(true)
     } else {
       // Se não tem usuário, abrir modal de seleção de usuário
@@ -708,6 +787,7 @@ export default function Home() {
         const finalDevice = updatedDevices.find(d => d.deviceId === deviceForUserAssignment.deviceId)
         if (finalDevice) {
           setSelectedDevice(finalDevice)
+          setDeviceModalInitialTab('overview')
           setIsModalOpen(true)
         }
       } else {
@@ -806,7 +886,7 @@ export default function Home() {
     setShowRestartConfirm(false)
     try {
       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
-      const res = await fetch(`http://${wsHost}:3002/api/server/restart`, { method: 'POST' })
+      const res = await fetch(`http://${wsHost}:3001/api/server/restart`, { method: 'POST' })
       if (res.ok) {
         alert('✅ Reinício solicitado. O servidor irá reconectar em alguns segundos.')
       } else {
@@ -814,7 +894,7 @@ export default function Home() {
       }
     } catch (e) {
       console.error('Erro ao reiniciar:', e)
-      alert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3002.')
+      alert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3001.')
     }
   }
 
@@ -822,7 +902,7 @@ export default function Home() {
     setShowClearCacheConfirm(false)
     try {
       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
-      const res = await fetch(`http://${wsHost}:3002/api/server/clear-cache`, { method: 'POST' })
+      const res = await fetch(`http://${wsHost}:3001/api/server/clear-cache`, { method: 'POST' })
       const data = await res.json()
       if (res.ok && data.success) {
         alert('✅ Cache limpo com sucesso!')
@@ -831,7 +911,7 @@ export default function Home() {
       }
     } catch (e) {
       console.error('Erro ao limpar cache:', e)
-      alert('❌ Erro ao limpar o cache. Verifique se o servidor WebSocket está rodando na porta 3002.')
+      alert('❌ Erro ao limpar o cache. Verifique se o servidor WebSocket está rodando na porta 3001.')
     }
   }
 
@@ -848,6 +928,39 @@ export default function Home() {
       console.error('Erro ao salvar configurações:', e)
     }
   }
+
+  /** Polling para buscar dispositivos após add-device (WebSocket + API como fallback) */
+  const pollForDevicesAfterAdd = useCallback(() => {
+    setIsSearchingDevices(true)
+    const requestViaWs = () => {
+      const w = wsRef.current
+      if (w && w.readyState === WebSocket.OPEN) {
+        w.send(JSON.stringify({ type: 'request_devices_list', timestamp: Date.now() }))
+      }
+    }
+    const requestViaApi = async () => {
+      try {
+        const res = await fetch('/api/devices')
+        const json = await res.json()
+        const mobile = (json.success && Array.isArray(json.data) ? json.data : []).filter((d: any) =>
+          d.deviceType !== 'computer' && d.osType !== 'Windows' && d.osType !== 'Linux' && d.osType !== 'macOS'
+        )
+        const formatted = mobile.map((d: any) => ({
+          ...d,
+          lastSeen: typeof d.lastSeen === 'string' ? new Date(d.lastSeen).getTime() : (d.lastSeen || Date.now()),
+          status: d.status || 'offline'
+        }))
+        syncWithServer(formatted)
+      } catch (_) {}
+    }
+    requestViaWs()
+    requestViaApi()
+    // Polling mais agressivo: 1s, 2s, 3s... até 15s, depois a cada 2s até 40s
+    ;[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 25, 30, 35, 40].forEach(s => {
+      setTimeout(() => { requestViaWs(); requestViaApi() }, s * 1000)
+    })
+    setTimeout(() => setIsSearchingDevices(false), 3000)
+  }, [syncWithServer])
 
   const handleApplySettings = () => {
     try {
@@ -869,7 +982,7 @@ export default function Home() {
     setSelectedDevice(null)
   }
 
-  const handleDeleteDevice = useCallback((deviceId: string) => {
+  const handleDeleteDevice = useCallback(async (deviceId: string) => {
     // Validar se deviceId é válido
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
       console.error('❌ DeviceId inválido para deleção:', deviceId)
@@ -877,48 +990,62 @@ export default function Home() {
       return
     }
     console.log('🗑️ Enviando requisição de deleção:', deviceId)
-    sendMessage({
+    
+    // Tentar WebSocket primeiro
+    const sent = sendMessage({
       type: 'delete_device',
       deviceId: deviceId,
       timestamp: Date.now()
     })
-  }, [sendMessage])
+    
+    // Se WebSocket não conectado, usar API como fallback
+    if (!sent) {
+      try {
+        const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
+        const result = await response.json()
+        if (result.success) {
+          updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
+          console.log('✅ Dispositivo deletado via API')
+        } else {
+          alert(`Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
+        }
+      } catch (e) {
+        console.error('Erro ao deletar via API:', e)
+        alert('Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
+      }
+    }
+  }, [sendMessage, updateDevices])
 
-  const handleUpdateApp = useCallback(async (apkUrl: string, version: string) => {
+  const handleUpdateApp = useCallback((apkUrl: string, version: string) => {
     if (!updateDevice) return
 
-    try {
-      console.log('📥 Iniciando atualização de app:', {
-        deviceId: updateDevice.deviceId,
+    const deviceName = updateDevice.name
+    const deviceId = updateDevice.deviceId
+
+    // Fechar modal imediatamente - UX rápida
+    setIsUpdateModalOpen(false)
+    setUpdateDevice(null)
+
+    // Enviar comando em background (fire-and-forget)
+    fetch('/api/devices/update-app', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        deviceIds: [deviceId],
         apkUrl,
         version
       })
-
-      const response = await fetch('/api/devices/update-app', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          deviceIds: [updateDevice.deviceId],
-          apkUrl,
-          version
-        })
+    })
+      .then(res => res.json())
+      .then(result => {
+        if (!result.success) {
+          alert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
+        }
       })
-
-      const result = await response.json()
-
-      if (result.success) {
-        alert(`✅ Atualização iniciada para ${updateDevice.name}!\n\nO dispositivo começará a baixar e instalar o APK automaticamente.\n\nAcompanhe o progresso nos logs do dispositivo.`)
-        setIsUpdateModalOpen(false)
-        setUpdateDevice(null)
-      } else {
-        alert(`❌ Erro ao enviar comando de atualização:\n${result.error || 'Erro desconhecido'}`)
-      }
-    } catch (error) {
-      console.error('Erro ao atualizar app:', error)
-      alert('❌ Erro ao enviar comando de atualização. Verifique o console para mais detalhes.')
-    }
+      .catch(err => {
+        console.error('Erro ao atualizar app:', err)
+        alert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando.`)
+      })
   }, [updateDevice])
 
   const handleBulkUpdateMdm = useCallback(async (deviceIds: string[]) => {
@@ -937,7 +1064,7 @@ export default function Home() {
       }
     } catch (error) {
       console.error('Erro ao atualizar MDM em massa:', error)
-      alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3002.')
+      alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.')
     }
   }, [])
 
@@ -986,6 +1113,8 @@ export default function Home() {
   }, [loadUnreadSupportCount])
 
   const showSupportNotification = useCallback((supportMessage: any) => {
+    // Tocar som de notificação estilo iPhone
+    playNotificationSound()
     // Adicionar notificação à lista temporária
     setSupportNotifications(prev => [...prev, {
       ...supportMessage,
@@ -1091,6 +1220,13 @@ export default function Home() {
         return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} onViewChange={setCurrentView} />
       case 'policies':
         return <PoliciesPage />
+      case 'allowed-apps':
+        return (
+          <AllowedAppsPage
+            devices={devices}
+            sendMessage={sendMessage}
+          />
+        )
       case 'uem':
         return <UEMPage />
       case 'devices':
@@ -1099,7 +1235,7 @@ export default function Home() {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-2xl font-bold text-primary">Dispositivos</h1>
-                <p className="text-secondary mt-1">Gerencie todos os dispositivos conectados</p>
+                <p className="text-white mt-1">Gerencie todos os dispositivos conectados</p>
               </div>
               <div className="flex gap-3">
                 <button 
@@ -1110,8 +1246,10 @@ export default function Home() {
                       const res = await fetch('/api/devices/add-device', { method: 'POST' })
                       const data = await res.json()
                       if (data.success) {
-                        alert('Dispositivo configurado com sucesso! MDM, WMS e kiosk instalados.')
-                        window.location.reload()
+                        setJustAddedDevice(true)
+                        setTimeout(() => setJustAddedDevice(false), 45000)
+                        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
+                        pollForDevicesAfterAdd()
                       } else {
                         alert('Erro: ' + (data.error || 'Falha ao configurar'))
                       }
@@ -1154,10 +1292,27 @@ export default function Home() {
                 <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4 shadow">
                   <span className="text-3xl">📱</span>
                 </div>
-                <h3 className="text-lg font-semibold text-primary mb-2">Nenhum dispositivo conectado</h3>
-                <p className="text-secondary mb-6">
-                  Conecte o celular via USB, habilite depuração e clique para instalar MDM + WMS
+                <h3 className="text-lg font-semibold text-primary mb-2">
+                  {justAddedDevice ? 'Aguardando dispositivo...' : 'Nenhum dispositivo conectado'}
+                </h3>
+                <p className="text-white mb-6">
+                  {justAddedDevice
+                    ? 'Buscando celular no servidor (até 40 segundos). Se não aparecer, verifique se o celular está na mesma rede WiFi que o PC e com o MDM aberto.'
+                    : 'Conecte o celular via USB, habilite depuração e clique para instalar MDM + WMS'}
                 </p>
+                {justAddedDevice && (
+                  <p className="text-sm text-white/80 mb-4 animate-pulse">Buscando a cada 2 segundos...</p>
+                )}
+                {!justAddedDevice && (
+                  <button
+                    type="button"
+                    onClick={pollForDevicesAfterAdd}
+                    disabled={isSearchingDevices}
+                    className="btn btn-secondary mb-4 !text-white disabled:opacity-70 disabled:cursor-wait"
+                  >
+                    {isSearchingDevices ? '⏳ Buscando...' : '🔄 Buscar dispositivos novamente'}
+                  </button>
+                )}
                 <button 
                   className="btn btn-primary btn-lg"
                   onClick={async () => {
@@ -1166,8 +1321,10 @@ export default function Home() {
                       const res = await fetch('/api/devices/add-device', { method: 'POST' })
                       const data = await res.json()
                       if (data.success) {
-                        alert('Dispositivo configurado! O celular aparecerá quando conectar ao servidor.')
-                        syncWithServer()
+                        setJustAddedDevice(true)
+                        setTimeout(() => setJustAddedDevice(false), 45000)
+                        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
+                        pollForDevicesAfterAdd()
                       } else {
                         alert('Erro: ' + (data.error || 'Conecte o celular via USB e habilite depuração'))
                       }
@@ -1237,7 +1394,7 @@ export default function Home() {
                         type="text"
                         value={settingsWsUrl}
                         onChange={(e) => setSettingsWsUrl(e.target.value)}
-                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
                       />
                     </div>
                     <div>
@@ -1248,7 +1405,7 @@ export default function Home() {
                         type="number"
                         value={settingsHeartbeat}
                         onChange={(e) => setSettingsHeartbeat(e.target.value)}
-                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
                       />
                     </div>
                   </div>
@@ -1326,7 +1483,7 @@ export default function Home() {
                         type="password"
                         id="adminPassword"
                         placeholder="Digite a nova senha (mín. 4 caracteres)"
-                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
                       />
                     </div>
                     <div>
@@ -1337,7 +1494,7 @@ export default function Home() {
                         type="password"
                         id="adminPasswordConfirm"
                         placeholder="Confirme a nova senha"
-                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
                       />
                     </div>
                     <div className="flex gap-3">
@@ -1362,11 +1519,11 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-white/10 border border-white/20 rounded-lg p-3">
-                      <div className="text-xs text-white">
-                        <strong>📋 Instruções:</strong>
-                        <ul className="mt-1 list-disc list-inside space-y-1">
-                          <li>A senha será salva no servidor e enviada para <strong>todos os dispositivos</strong></li>
+                    <div className="bg-white border border-red-200 rounded-lg p-3">
+                      <div className="text-xs font-bold text-red-600">
+                        <span className="font-bold text-red-600">📋 Instruções:</span>
+                        <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
+                          <li>A senha será salva no servidor e enviada para todos os dispositivos</li>
                           <li>Será necessária para alterar o nome do dispositivo</li>
                           <li>Dispositivos offline receberão a senha automaticamente quando se conectarem</li>
                           <li>Você pode definir a senha mesmo sem dispositivos conectados</li>
@@ -1406,14 +1563,14 @@ export default function Home() {
                   <div className="space-y-3">
                     <button
                       onClick={() => setShowRestartConfirm(true)}
-                      className="btn btn-secondary w-full !text-white border-white/30"
+                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30"
                     >
                       <span>🔄</span>
                       Reiniciar Servidor
                     </button>
                     <button
                       onClick={() => setShowBackupConfirm(true)}
-                      className="btn btn-secondary w-full !text-white border-white/30"
+                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30"
                     >
                       <span>💾</span>
                       Backup de Configurações
@@ -1452,13 +1609,64 @@ export default function Home() {
         <Header 
           isConnected={isConnected}
           onMenuClick={() => setSidebarOpen(true)}
+          onRefreshDevices={() => {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'request_devices_list', timestamp: Date.now() }))
+            }
+          }}
+          onReconnect={() => {
+            const w = wsRef.current
+            if (w && (w.readyState === WebSocket.CONNECTING || w.readyState === WebSocket.OPEN)) {
+              w.close(1000, 'Reconectando')
+            }
+            setWs(null)
+            setIsConnected(false)
+            setReconnectTrigger(prev => prev + 1)
+          }}
           supportNotifications={supportNotifications}
           unreadSupportCount={unreadSupportCount}
-          onSupportNotificationClick={(deviceId) => {
-            const device = devices.find(d => d.deviceId === deviceId)
-            if (device) {
-              handleSupportClick(device)
+          onSupportNotificationClick={(deviceId, deviceName) => {
+            let device = devices.find(d => d.deviceId === deviceId)
+            if (!device) {
+              device = {
+                id: deviceId,
+                deviceId,
+                name: deviceName || 'Dispositivo',
+                status: 'offline',
+                model: '',
+                manufacturer: '',
+                apiLevel: 0,
+                batteryLevel: 0,
+                batteryStatus: '',
+                isCharging: false,
+                storageTotal: 0,
+                storageUsed: 0,
+                memoryTotal: 0,
+                memoryUsed: 0,
+                cpuArchitecture: '',
+                screenResolution: '',
+                screenDensity: 0,
+                networkType: '',
+                isWifiEnabled: false,
+                isBluetoothEnabled: false,
+                isLocationEnabled: false,
+                isDeveloperOptionsEnabled: false,
+                isAdbEnabled: false,
+                isUnknownSourcesEnabled: false,
+                installedAppsCount: 0,
+                isDeviceOwner: false,
+                isProfileOwner: false,
+                appVersion: '',
+                timezone: '',
+                language: '',
+                country: '',
+                lastSeen: Date.now(),
+                restrictions: {} as any,
+                installedApps: [],
+                allowedApps: []
+              } as Device
             }
+            handleSupportClick(device)
           }}
         />
 
@@ -1481,10 +1689,18 @@ export default function Home() {
       {isModalOpen && selectedDevice && (
         <DeviceModal
           device={selectedDevice}
-          onClose={handleCloseModal}
+          onClose={() => {
+            handleCloseModal()
+            setDeviceModalInitialTab('overview')
+          }}
           onDelete={() => handleDeleteDevice(selectedDevice.deviceId)}
+          onUpdate={() => {
+            setUpdateDevice(selectedDevice)
+            setIsUpdateModalOpen(true)
+          }}
           sendMessage={sendMessage}
           onUnlinkUser={handleUnlinkUser}
+          initialTab={deviceModalInitialTab}
         />
       )}
 

@@ -81,7 +81,7 @@ export async function GET(
     let realtimeDevices: Record<string, any> = {}
     try {
       const hostname = process.env.WEBSOCKET_HOST || 'localhost'
-      const wsPort = process.env.WEBSOCKET_PORT || '3002'
+      const wsPort = process.env.WEBSOCKET_PORT || '3001'
       const realtimeRes = await fetch(`http://${hostname}:${wsPort}/api/devices/realtime`)
       if (realtimeRes.ok) {
         const realtimeData = await realtimeRes.json()

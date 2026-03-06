@@ -1,23 +1,41 @@
 @echo off
+cd /d "%~dp0"
+
 echo ========================================
-echo   MDM Owner - Modo Desenvolvimento
+echo   MDM Center - Modo Desenvolvimento
 echo ========================================
 echo.
 
+REM Verificar Node
+where node >nul 2>&1
+if errorlevel 1 (
+    echo [ERRO] Node.js nao encontrado! Instale em https://nodejs.org
+    pause
+    exit /b 1
+)
+
+echo [0/3] Se der erro de banco, veja SETUP-BANCO.md
+echo.
 echo [1/3] Instalando dependencias...
 call npm install
+if errorlevel 1 (
+    echo [ERRO] Falha ao instalar dependencias
+    pause
+    exit /b 1
+)
 
 echo.
-echo [2/3] Iniciando servidor WebSocket...
-start "WebSocket Server" cmd /k "node server/websocket.js"
-
+echo [2/3] Iniciando servidores...
 echo.
-echo [3/3] Iniciando painel web...
+echo ========================================
+echo   ACESSE: http://localhost:3000
+echo   WebSocket: ws://localhost:3001
+echo ========================================
 echo.
-echo ✅ Servidor rodando em: http://localhost:3000
-echo ✅ WebSocket rodando em: ws://localhost:3002
-echo.
-echo Pressione Ctrl+C para parar
+echo Aguarde o frontend compilar...
 echo.
 
-call npm run dev
+set DOTENV_CONFIG_PATH=.env.development
+call npm run dev:all
+
+pause

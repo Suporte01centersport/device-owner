@@ -6,12 +6,14 @@ import PersistenceStatus from './PersistenceStatus'
 interface HeaderProps {
   isConnected: boolean
   onMenuClick: () => void
+  onRefreshDevices?: () => void
+  onReconnect?: () => void
   supportNotifications?: any[]
   unreadSupportCount?: number
-  onSupportNotificationClick?: (deviceId: string) => void
+  onSupportNotificationClick?: (deviceId: string, deviceName?: string) => void
 }
 
-export default function Header({ isConnected, onMenuClick, supportNotifications = [], unreadSupportCount = 0, onSupportNotificationClick }: HeaderProps) {
+export default function Header({ isConnected, onMenuClick, onRefreshDevices, onReconnect, supportNotifications = [], unreadSupportCount = 0, onSupportNotificationClick }: HeaderProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [notifications, setNotifications] = useState(3)
   const [showSupportDropdown, setShowSupportDropdown] = useState(false)
@@ -81,9 +83,9 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
     setShowUserDashboard(!showUserDashboard)
   }
 
-  const handleNotificationClick = (deviceId: string) => {
+  const handleNotificationClick = (message: { deviceId: string; deviceName?: string }) => {
     if (onSupportNotificationClick) {
-      onSupportNotificationClick(deviceId)
+      onSupportNotificationClick(message.deviceId, message.deviceName)
     }
     setShowSupportDropdown(false)
   }
@@ -118,7 +120,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
           {/* Persistence status */}
           <PersistenceStatus />
 
-          {/* Connection status */}
+          {/* Connection status + Atualizar dispositivos */}
           <div className="flex items-center gap-2">
             <div className={`w-2 h-2 rounded-full ${
               isConnected ? 'bg-success' : 'bg-error'
@@ -126,6 +128,27 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
             <span className="text-sm text-secondary">
               {isConnected ? 'Conectado' : 'Desconectado'}
             </span>
+            {isConnected && onRefreshDevices && (
+              <button
+                onClick={onRefreshDevices}
+                title="Atualizar lista de dispositivos"
+                className="p-1.5 rounded-lg hover:bg-border-light transition-colors text-secondary hover:text-primary"
+              >
+                <span className="text-lg">🔄</span>
+              </button>
+            )}
+            {!isConnected && onReconnect && (
+              <button
+                onClick={(e) => {
+                  e.preventDefault()
+                  onReconnect()
+                }}
+                title="Reconectar ao servidor (verifique se está rodando na porta 3001)"
+                className="px-2 py-1 text-xs font-medium rounded-lg bg-primary/20 text-primary hover:bg-primary/30 transition-colors hover:bg-primary/40"
+              >
+                Reconectar
+              </button>
+            )}
           </div>
 
 
@@ -173,7 +196,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
                       <div 
                         key={message.id || index}
                         className="p-4 border-b border-gray-100 hover:bg-blue-50 cursor-pointer transition-colors group"
-                        onClick={() => handleNotificationClick(message.deviceId)}
+                        onClick={() => handleNotificationClick(message)}
                       >
                         <div className="flex items-start gap-3">
                           <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">

@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     }
 
     const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
-    const wsPort = process.env.WEBSOCKET_PORT || '3002'
+    const wsPort = process.env.WEBSOCKET_PORT || '3001'
     const url = `http://${wsHost}:${wsPort}/api/devices/${pathId}/apply-policies`
 
     const res = await fetch(url, {
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: 'Erro ao comunicar com servidor WebSocket. Verifique se o servidor está rodando na porta 3002.'
+        error: 'Erro ao comunicar com servidor WebSocket. Verifique se o servidor está rodando na porta 3001.'
       },
       { status: 500 }
     )

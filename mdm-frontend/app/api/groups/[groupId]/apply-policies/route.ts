@@ -29,7 +29,9 @@ export async function POST(
     // IMPORTANTE: Política do grupo ADICIONA aos apps já configurados individualmente
     // Mescla apps da política de grupo + apps individuais já configurados
     try {
-      const wsUrl = 'http://localhost:3002/api/groups/' + encodeURIComponent(groupId) + '/apply-policies'
+      const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+      const wsPort = process.env.WEBSOCKET_PORT || '3001'
+      const wsUrl = `http://${wsHost}:${wsPort}/api/groups/${encodeURIComponent(groupId)}/apply-policies`
       console.log('Chamando servidor WebSocket:', wsUrl)
       
       const wsResponse = await fetch(wsUrl, {

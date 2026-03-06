@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MDM Launcher"
+rootProject.name = "MDM Center"
 include ':app'

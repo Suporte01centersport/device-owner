@@ -62,6 +62,37 @@ export async function POST(
   }
 }
 
+// PUT - Substituir todas as políticas do grupo (bulk)
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { groupId: string } }
+) {
+  try {
+    const { groupId } = params
+    const body = await request.json()
+    const { apps } = body // apps: [{ packageName, appName }]
+
+    if (!groupId) {
+      return NextResponse.json(
+        { success: false, detail: 'ID do grupo é obrigatório' },
+        { status: 400 }
+      )
+    }
+
+    const appsList = Array.isArray(apps) ? apps : []
+    await DeviceGroupModel.replaceAppPolicies(groupId, appsList)
+
+    const policies = await DeviceGroupModel.getGroupPolicies(groupId)
+    return NextResponse.json({ success: true, data: policies })
+  } catch (error: any) {
+    console.error('Erro ao substituir políticas:', error?.message || error)
+    return NextResponse.json(
+      { success: false, detail: error?.message || 'Erro ao substituir políticas' },
+      { status: 500 }
+    )
+  }
+}
+
 // DELETE - Remover política de aplicativo do grupo
 export async function DELETE(
   request: NextRequest,

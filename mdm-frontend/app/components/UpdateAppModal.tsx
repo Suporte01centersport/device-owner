@@ -14,13 +14,12 @@ interface UpdateAppModalProps {
 export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: UpdateAppModalProps) {
   const [apkUrl, setApkUrl] = useState('https://github.com/suporte04centersport/qrcode/releases/download/v1/app-debug.apk')
   const [version, setVersion] = useState('1.0.1')
-  const [isLoading, setIsLoading] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
 
   // Fechar ao pressionar ESC
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isLoading) {
+      if (e.key === 'Escape' && isOpen) {
         onClose()
       }
     }
@@ -28,7 +27,7 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
       document.addEventListener('keydown', handleEsc)
       return () => document.removeEventListener('keydown', handleEsc)
     }
-  }, [isOpen, isLoading, onClose])
+  }, [isOpen, onClose])
 
   if (!isOpen || !device) return null
 
@@ -40,14 +39,9 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
     setShowConfirm(true)
   }
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     setShowConfirm(false)
-    setIsLoading(true)
-    try {
-      await onConfirm(apkUrl, version)
-    } finally {
-      setIsLoading(false)
-    }
+    onConfirm(apkUrl, version)
   }
 
   return (
@@ -58,7 +52,6 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
           <button 
             onClick={onClose}
             className="modal-close"
-            disabled={isLoading}
           >
             ✕
           </button>
@@ -88,7 +81,6 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
                 onChange={(e) => setApkUrl(e.target.value)}
                 placeholder="https://github.com/.../app-debug.apk"
                 className="input w-full"
-                disabled={isLoading}
               />
               <p className="text-xs text-muted mt-1">
                 URL direta do arquivo APK (GitHub Releases, etc)
@@ -105,7 +97,6 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
                 onChange={(e) => setVersion(e.target.value)}
                 placeholder="1.0.1"
                 className="input w-full"
-                disabled={isLoading}
               />
               <p className="text-xs text-muted mt-1">
                 Identificação da versão para controle interno
@@ -128,16 +119,15 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
           <button 
             onClick={onClose}
             className="btn btn-secondary"
-            disabled={isLoading}
           >
             Cancelar
           </button>
           <button 
             onClick={handleConfirmClick}
             className="btn btn-success"
-            disabled={isLoading || !apkUrl.trim()}
+            disabled={!apkUrl.trim()}
           >
-            {isLoading ? '📥 Enviando...' : '📥 Atualizar Agora'}
+            📥 Atualizar Agora
           </button>
         </div>
       </div>

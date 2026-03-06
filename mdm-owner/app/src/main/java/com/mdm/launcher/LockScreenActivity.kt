@@ -1,21 +1,36 @@
 package com.mdm.launcher
 
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
 import android.view.WindowManager
+import android.util.Log
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 
 /**
- * Tela de bloqueio customizada que exibe um cadeado em destaque.
- * É iniciada antes de lockNow() para mostrar o ícone de cadeado na tela bloqueada.
+ * Tela de bloqueio: tela preta com cadeado.
+ * Permanece até o admin clicar em "Desbloquear" no painel MDM.
+ * Não usa lockNow() - usa Lock Task Mode para bloquear totalmente.
  */
 class LockScreenActivity : AppCompatActivity() {
+
+    private var unlockReceiver: BroadcastReceiver? = null
+
+    companion object {
+        private const val TAG = "LockScreenActivity"
+        const val ACTION_UNLOCK = "com.mdm.launcher.UNLOCK_DEVICE"
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Mostrar sobre a tela de bloqueio e acender a tela (sem dismiss - usuário deve desbloquear)
+        // Manter tela ligada e mostrar sobre qualquer tela de bloqueio do sistema
+        // NÃO usar bloqueio padrão do Android - só a tela MDM com cadeado (estática)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -26,7 +41,80 @@ class LockScreenActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
             )
         }
+        // Nossa tela fica na frente - NÃO usar FLAG_DISMISS_KEYGUARD (evita ir para senha/PIN/padrão)
+        window.addFlags(WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED)
+        // Manter tela ligada - evita que ao desligar/ligar o sistema mostre lock padrão
+        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // Impedir screenshots e gravação
+        window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
 
         setContentView(R.layout.activity_lock_screen)
+
+        // Garantir que bloqueio padrão Android está desabilitado - só nossa tela (cadeado estático)
+        com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
+
+        // Bloquear botão voltar - não permite sair
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // Ignorar - não faz nada
+            }
+        })
+
+        // Registrar para receber comando de desbloqueio remoto
+        unlockReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action == ACTION_UNLOCK) {
+                    Log.d(TAG, "Comando de desbloqueio recebido - finalizando tela de bloqueio")
+                    finishLockScreen()
+                }
+            }
+        }
+        val filter = IntentFilter(ACTION_UNLOCK)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(unlockReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(unlockReceiver, filter)
+        }
+
+        // Lock Task Mode - impede home, recentes, troca de app. Só sai com desbloqueio remoto.
+        try {
+            startLockTask()
+            Log.d(TAG, "Lock Task Mode ativado - dispositivo travado até desbloqueio remoto")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao ativar Lock Task Mode: ${e.message}")
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Reforçar desabilitar keyguard toda vez que a tela volta (ex: usuário ligou a tela)
+        com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
+    }
+
+    /** Consumir todos os toques e gestos - impede deslizar para desbloquear */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        return true
+    }
+
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        return true
+    }
+
+    private fun finishLockScreen() {
+        try {
+            stopLockTask()
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao parar Lock Task: ${e.message}")
+        }
+        finish()
+    }
+
+    override fun onDestroy() {
+        try {
+            unlockReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao desregistrar receiver: ${e.message}")
+        }
+        super.onDestroy()
     }
 }

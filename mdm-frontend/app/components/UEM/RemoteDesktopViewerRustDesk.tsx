@@ -94,8 +94,8 @@ export default function RemoteDesktopViewerRustDesk({
     const wsUrl = websocket 
       ? null 
       : (typeof window !== 'undefined' 
-          ? `ws://${window.location.hostname}:3002`
-          : 'ws://localhost:3002')
+          ? `ws://${window.location.hostname}:3001`
+          : 'ws://localhost:3001')
     
     const ws = websocket || (wsUrl ? new WebSocket(wsUrl) : null)
     if (!ws) {

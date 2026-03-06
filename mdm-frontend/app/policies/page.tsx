@@ -25,6 +25,7 @@ export default function PoliciesPage() {
     description: '',
     color: '#3B82F6'
   })
+  const [createGroupError, setCreateGroupError] = useState<string | null>(null)
   
   const [newAppPolicy, setNewAppPolicy] = useState({
     packageName: '',
@@ -37,6 +38,11 @@ export default function PoliciesPage() {
   useEffect(() => {
     loadData()
   }, [])
+
+  // Limpar erro ao abrir modal de criar grupo
+  useEffect(() => {
+    if (isCreateModalOpen) setCreateGroupError(null)
+  }, [isCreateModalOpen])
 
   // Mapeamento de ícones por nome do grupo
   const getGroupIcon = (name: string) => {
@@ -90,7 +96,7 @@ export default function PoliciesPage() {
       if (devicesList.length === 0) {
         try {
           const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
-          const realtimeRes = await fetch(`http://${wsHost}:3002/api/devices/status`)
+          const realtimeRes = await fetch(`http://${wsHost}:3001/api/devices/status`)
           if (realtimeRes.ok) {
             const json = await realtimeRes.json()
             if (json.devices && Array.isArray(json.devices)) {
@@ -121,6 +127,7 @@ export default function PoliciesPage() {
   }
 
   const handleCreateGroup = async () => {
+    setCreateGroupError(null)
     try {
       const response = await fetch('/api/groups', {
         method: 'POST',
@@ -130,21 +137,22 @@ export default function PoliciesPage() {
         body: JSON.stringify(newGroup),
       })
 
-      if (response.ok) {
-        const result = await response.json()
-        if (result.success) {
-          setGroups([...groups, result.data])
-          setIsCreateModalOpen(false)
-          setNewGroup({ name: '', description: '', color: '#3B82F6' })
-        } else {
-          alert('Erro ao criar grupo: ' + result.error)
-        }
+      const result = await response.json().catch(() => ({}))
+      if (response.ok && result.success) {
+        setGroups([...groups, result.data])
+        setIsCreateModalOpen(false)
+        setNewGroup({ name: '', description: '', color: '#3B82F6' })
+        setCreateGroupError(null)
       } else {
-        alert('Erro ao criar grupo')
+        let msg = result.detail || result.error || 'Erro ao criar grupo'
+        if (msg.includes('autentica') && msg.includes('senha')) {
+          msg = 'Erro de conexão com o banco. Verifique DB_USER e DB_PASSWORD no arquivo .env.development (ou .env.local).'
+        }
+        setCreateGroupError(msg)
       }
     } catch (error) {
       console.error('Erro ao criar grupo:', error)
-      alert('Erro ao criar grupo')
+      setCreateGroupError('Erro ao conectar. Verifique se o servidor está rodando.')
     }
   }
 
@@ -308,7 +316,7 @@ export default function PoliciesPage() {
           <select
             value={filterGroupId}
             onChange={(e) => setFilterGroupId(e.target.value)}
-            className="px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-primary min-w-[200px]"
+            className="px-4 py-2 border border-primary rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-primary text-white min-w-[200px] font-medium"
             title="Filtrar por grupo"
           >
             <option value="">Todos os grupos</option>
@@ -385,21 +393,8 @@ export default function PoliciesPage() {
         </div>
       </div>
 
-      {/* Lista de Grupos - layout em cubos, mesma cor do botão Novo Grupo */}
+      {/* Lista de Grupos - layout em cubos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Card Novo Grupo - mesma cor dos demais grupos */}
-        {!filterGroupId && (
-          <div
-            onClick={() => setIsCreateModalOpen(true)}
-            className="card p-6 aspect-square flex flex-col justify-center items-center hover:shadow-lg cursor-pointer !bg-primary border-primary text-white"
-            role="button"
-            tabIndex={0}
-            onKeyDown={(e) => e.key === 'Enter' && setIsCreateModalOpen(true)}
-          >
-            <span className="text-4xl mb-2">➕</span>
-            <span className="text-lg font-semibold">Novo Grupo</span>
-          </div>
-        )}
         {(filterGroupId ? groups.filter((g) => g.id === filterGroupId) : groups).map((group) => (
           <div
             key={group.id}
@@ -466,24 +461,6 @@ export default function PoliciesPage() {
             </button>
           </div>
         )}
-        {groups.length === 0 && !filterGroupId && (
-          <div className="col-span-full text-center py-12">
-            <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4 shadow">
-              <span className="text-3xl">📋</span>
-            </div>
-            <h3 className="text-lg font-semibold text-primary mb-2">Nenhum grupo criado</h3>
-            <p className="text-secondary mb-6">
-              Crie grupos para organizar seus dispositivos e definir políticas de aplicativos
-            </p>
-            <button 
-              onClick={() => setIsCreateModalOpen(true)}
-              className="btn btn-primary btn-lg"
-            >
-              <span>➕</span>
-              Criar Primeiro Grupo
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Modal do Grupo */}
@@ -497,34 +474,54 @@ export default function PoliciesPage() {
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-primary mb-4">Criar Novo Grupo</h3>
+            <div className="flex justify-between items-start mb-4">
+              <h3 className="text-lg font-semibold text-black">Criar Novo Grupo</h3>
+              <button
+                onClick={() => { setIsCreateModalOpen(false); setCreateGroupError(null) }}
+                className="text-gray-500 hover:text-black text-xl leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            {createGroupError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex justify-between items-start gap-2">
+                <p className="text-sm text-red-800 flex-1">{createGroupError}</p>
+                <button
+                  onClick={() => setCreateGroupError(null)}
+                  className="text-red-600 hover:text-red-800 shrink-0"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Nome do Grupo
                 </label>
                 <input
                   type="text"
                   value={newGroup.name}
                   onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-black placeholder:text-gray-500"
                   placeholder="Ex: Dispositivos Corporativos"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Descrição
                 </label>
                 <textarea
                   value={newGroup.description}
                   onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-black placeholder:text-gray-500"
                   rows={3}
                   placeholder="Descrição do grupo..."
+                  spellCheck="false"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-secondary mb-2">
+                <label className="block text-sm font-medium text-black mb-2">
                   Cor do Grupo
                 </label>
                 <input
@@ -546,7 +543,7 @@ export default function PoliciesPage() {
               </button>
               <button 
                 onClick={() => setIsCreateModalOpen(false)}
-                className="btn btn-secondary"
+                className="btn btn-secondary text-black"
               >
                 Cancelar
               </button>

@@ -1,3 +1,4 @@
+process.env.DOTENV_CONFIG_PATH = process.env.DOTENV_CONFIG_PATH || '.env.development';
 require('../../server/load-env');
 const { query } = require('../../server/database/config');
 

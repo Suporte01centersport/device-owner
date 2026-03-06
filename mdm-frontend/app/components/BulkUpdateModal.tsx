@@ -168,7 +168,7 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdate
           <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-sm text-orange-800">
             <strong>⚠️ Atenção:</strong>
             <ul className="mt-1 list-disc list-inside space-y-1">
-              <li>Os dispositivos precisam estar <strong>online</strong> e na mesma rede do servidor.</li>
+              <li>Os dispositivos precisam estar <strong>online</strong>.</li>
               <li>O build do MDM pode levar 1–2 minutos. O download acontece depois.</li>
               <li>O download consumirá Wi-Fi dos dispositivos.</li>
             </ul>

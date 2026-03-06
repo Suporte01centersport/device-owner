@@ -53,7 +53,7 @@ class DefaultLauncherReceiver : BroadcastReceiver() {
                             }
                         }
                         Intent.ACTION_MY_PACKAGE_REPLACED -> {
-                            Log.d(TAG, "MDM Launcher foi atualizado")
+                            Log.d(TAG, "MDM Center foi atualizado")
                             delay(2000)
                             checkAndLogLauncherStatus(context)
                         }
@@ -78,7 +78,7 @@ class DefaultLauncherReceiver : BroadcastReceiver() {
             val currentLauncher = getCurrentDefaultLauncher(packageManager)
             
             if (currentLauncher == context.packageName) {
-                Log.d(TAG, "✅ MDM Launcher é o launcher padrão")
+                Log.d(TAG, "✅ MDM Center é o launcher padrão")
             } else {
                 Log.w(TAG, "⚠️ Launcher padrão: $currentLauncher (não é o MDM)")
                 Log.w(TAG, "ℹ️ O usuário precisará configurar manualmente o launcher padrão")

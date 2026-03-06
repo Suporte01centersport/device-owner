@@ -204,13 +204,22 @@
             android:exported="false"
             android:theme="@style/Theme.MDMLauncher.Setup" />
 
-        <!-- Tela de bloqueio com cadeado -->
+        <!-- Tela de carregamento durante atualização do app -->
+        <activity
+            android:name=".UpdateProgressActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MDMLauncher.UpdateProgress"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
+        <!-- Tela de bloqueio com cadeado - Lock Task Mode impede sair até desbloqueio remoto -->
         <activity
             android:name=".LockScreenActivity"
             android:exported="false"
             android:theme="@style/Theme.MDMLauncher.LockScreen"
             android:excludeFromRecents="true"
-            android:taskAffinity="" />
+            android:taskAffinity=""
+            android:lockTaskMode="always" />
 
     </application>
 

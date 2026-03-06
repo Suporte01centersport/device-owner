@@ -34,6 +34,8 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
   const [isSending, setIsSending] = useState(false)
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [alarmOn, setAlarmOn] = useState(false)
+  const [showHistoryModal, setShowHistoryModal] = useState(false)
+  const [sentHistory, setSentHistory] = useState<Array<{ id: string; message: string; timestamp: number; deviceName: string }>>([])
 
   useEffect(() => {
     if (isOpen) {
@@ -150,7 +152,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
     }
   }
 
-  const handleControlAction = (action: 'lock' | 'locate' | 'alarm' | 'reboot') => {
+  const handleControlAction = async (action: 'lock' | 'unlock' | 'locate' | 'alarm' | 'reboot') => {
     if (!sendMessage) {
       alert('Conexão não disponível')
       return
@@ -160,11 +162,24 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       return
     }
     switch (action) {
-      case 'lock':
-        if (!sendMessage?.({ type: 'lock_device', deviceId: device.deviceId, timestamp: Date.now() })) {
-          alert('Conexão não disponível. Verifique se o painel está conectado ao servidor.')
+      case 'lock': {
+        const lockOk = await sendMessage({ type: 'lock_device', deviceId: device.deviceId, timestamp: Date.now() })
+        if (!lockOk) {
+          alert('Não foi possível travar. Verifique se o servidor está rodando e o dispositivo conectado.')
+        } else {
+          alert('Comando de travar enviado!')
         }
         break
+      }
+      case 'unlock': {
+        const unlockOk = await sendMessage({ type: 'unlock_device', deviceId: device.deviceId, timestamp: Date.now() })
+        if (!unlockOk) {
+          alert('Não foi possível desbloquear. Verifique se o servidor está rodando e o dispositivo conectado.')
+        } else {
+          alert('Comando de desbloquear enviado!')
+        }
+        break
+      }
       case 'locate':
         sendMessage({ type: 'request_location', deviceId: device.deviceId, timestamp: Date.now() })
         setShowLocationModal(true)
@@ -182,20 +197,52 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         break
       case 'reboot':
         if (!confirm('Reiniciar o dispositivo agora?')) return
-        if (!sendMessage?.({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })) {
-          alert('Conexão não disponível. Verifique se o painel está conectado ao servidor.')
+        const rebootOk = await sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })
+        if (!rebootOk) {
+          alert('Não foi possível reiniciar. Verifique se o servidor está rodando e o dispositivo conectado.')
         }
         break
     }
   }
 
-  const handleSendMessage = () => {
+  const saveMessageToHistory = (messageText: string) => {
+    try {
+      const key = `messageHistory_${device.deviceId}`
+      const existing = localStorage.getItem(key)
+      const history = existing ? JSON.parse(existing) : []
+      const newMessage = {
+        id: `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        message: messageText,
+        timestamp: Date.now(),
+        deviceId: device.deviceId,
+        deviceName: device.name
+      }
+      const updated = [newMessage, ...history]
+      localStorage.setItem(key, JSON.stringify(updated))
+      setSentHistory(updated)
+    } catch (e) {
+      console.error('Erro ao salvar no histórico:', e)
+    }
+  }
+
+  const loadSentHistory = () => {
+    try {
+      const key = `messageHistory_${device.deviceId}`
+      const existing = localStorage.getItem(key)
+      setSentHistory(existing ? JSON.parse(existing) : [])
+    } catch (e) {
+      setSentHistory([])
+    }
+  }
+
+  const handleOpenHistory = () => {
+    loadSentHistory()
+    setShowHistoryModal(true)
+  }
+
+  const handleSendMessage = async () => {
     if (!outgoingMessage.trim()) {
       alert('Digite uma mensagem para enviar')
-      return
-    }
-    if (!sendMessage) {
-      alert('Conexão não disponível para enviar mensagem')
       return
     }
     if (device.status !== 'online') {
@@ -203,19 +250,49 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       return
     }
 
+    const messageText = outgoingMessage.trim()
     setIsSending(true)
     try {
-      sendMessage({
-        type: 'send_test_notification',
-        deviceId: device.deviceId,
-        message: outgoingMessage.trim(),
-        timestamp: Date.now()
+      const res = await fetch('/api/devices/send-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceId: device.deviceId, message: messageText })
       })
-      setOutgoingMessage('')
-      alert('Mensagem enviada com sucesso!')
+      const data = await res.json().catch(() => ({}))
+      if (data.success) {
+        saveMessageToHistory(messageText)
+        setOutgoingMessage('')
+        alert('Mensagem enviada com sucesso!')
+        return
+      }
+      if (sendMessage) {
+        sendMessage({
+          type: 'send_test_notification',
+          deviceId: device.deviceId,
+          message: messageText,
+          timestamp: Date.now()
+        })
+        saveMessageToHistory(messageText)
+        setOutgoingMessage('')
+        alert('Mensagem enviada via WebSocket!')
+      } else {
+        alert(`Erro: ${data.error || 'Dispositivo não conectado. Verifique se o celular está online e o servidor na porta 3001.'}`)
+      }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error)
-      alert('Erro ao enviar mensagem')
+      if (sendMessage) {
+        sendMessage({
+          type: 'send_test_notification',
+          deviceId: device.deviceId,
+          message: messageText,
+          timestamp: Date.now()
+        })
+        saveMessageToHistory(messageText)
+        setOutgoingMessage('')
+        alert('Mensagem enviada via WebSocket (API indisponível)')
+      } else {
+        alert('Erro ao enviar. Verifique se o servidor está rodando na porta 3001.')
+      }
     } finally {
       setIsSending(false)
     }
@@ -308,14 +385,22 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   <span>🎛️</span>
                   Controle do Dispositivo
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                   <button
                     onClick={() => handleControlAction('lock')}
                     className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface transition-colors"
-                    title="Travar o dispositivo"
+                    title="Travar dispositivo - tela preta com cadeado até desbloquear"
                   >
                     <span className="text-2xl">🔒</span>
                     <span className="text-xs font-medium text-primary">Travar</span>
+                  </button>
+                  <button
+                    onClick={() => handleControlAction('unlock')}
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface transition-colors"
+                    title="Desbloquear dispositivo"
+                  >
+                    <span className="text-2xl">🔓</span>
+                    <span className="text-xs font-medium text-primary">Desbloquear</span>
                   </button>
                   <button
                     onClick={() => handleControlAction('locate')}
@@ -424,7 +509,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   value={outgoingMessage}
                   onChange={(e) => setOutgoingMessage(e.target.value)}
                   placeholder="Digite sua mensagem..."
-                  className="flex-1 px-4 py-3 border border-border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-primary resize-none min-h-[80px] placeholder:text-muted"
+                  className="flex-1 px-4 py-3 border border-border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900 resize-none min-h-[80px] placeholder:text-gray-500"
                   disabled={isSending}
                   rows={3}
                 />
@@ -440,11 +525,19 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
           )}
 
           <div className="p-6 border-t border-border">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-3">
+            <div className="flex justify-between items-center flex-wrap gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-sm text-secondary">
                   {messages.length} mensagem{messages.length !== 1 ? 's' : ''} de suporte
                 </span>
+                <button
+                  onClick={handleOpenHistory}
+                  className="btn btn-sm btn-secondary flex items-center gap-2"
+                  title="Ver mensagens enviadas para o celular"
+                >
+                  <span>📋</span>
+                  Ver Histórico
+                </button>
                 {messages.length > 0 && (
                   <button
                     onClick={clearAllMessages}
@@ -466,6 +559,53 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
           </div>
         </div>
       </div>
+
+      {/* Modal de Histórico de Mensagens Enviadas */}
+      {showHistoryModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-border">
+              <h3 className="text-lg font-semibold text-primary">📋 Histórico de Mensagens Enviadas</h3>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                className="w-8 h-8 flex items-center justify-center text-secondary hover:text-primary transition-colors rounded-lg hover:bg-border-light"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {sentHistory.length === 0 ? (
+                <div className="text-center py-12">
+                  <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-3xl">📭</span>
+                  </div>
+                  <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma mensagem enviada</h4>
+                  <p className="text-sm text-secondary">
+                    As mensagens que você enviar para o celular aparecerão aqui
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {sentHistory.map((msg) => (
+                    <div key={msg.id} className="card p-4">
+                      <div className="flex justify-between items-start mb-2">
+                        <span className="text-sm font-medium text-primary">{msg.deviceName}</span>
+                        <span className="text-xs text-secondary">{formatTimestamp(msg.timestamp)}</span>
+                      </div>
+                      <p className="text-sm text-black whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{msg.message}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="p-6 border-t border-border">
+              <button onClick={() => setShowHistoryModal(false)} className="btn btn-primary w-full">
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de localização com mapa */}
       <LocationMapModal

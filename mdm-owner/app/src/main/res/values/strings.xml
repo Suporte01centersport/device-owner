@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MDM Launcher</string>
+    <string name="app_name">MDM Center</string>
     <string name="app_name_short">MDM</string>
     
     <!-- Launcher UI -->
@@ -40,7 +40,7 @@
     <string name="error_device_owner_not_set">Device Owner não configurado</string>
     
     <!-- Notifications -->
-    <string name="notification_channel_name">MDM Launcher</string>
-    <string name="notification_channel_description">Notificações do MDM Launcher</string>
+    <string name="notification_channel_name">MDM Center</string>
+    <string name="notification_channel_description">Notificações do MDM Center</string>
     <string name="notification_websocket_running">Serviço WebSocket ativo</string>
 </resources>

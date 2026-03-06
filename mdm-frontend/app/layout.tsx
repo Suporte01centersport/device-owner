@@ -1,7 +1,7 @@
 import './globals.css'
 
 export const metadata = {
-  title: 'MDM Owner - Painel de Controle',
+  title: 'MDM Center - Painel de Controle',
   description: 'Gerenciamento de dispositivos Android',
 }
 

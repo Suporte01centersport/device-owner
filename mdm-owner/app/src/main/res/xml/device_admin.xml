@@ -18,6 +18,7 @@
         
         <!-- Políticas de restrição de hardware -->
         <disable-camera />
-        <!-- REMOVIDO: disable-keyguard-features - causava problemas com navegação e botão recentes -->
+        <!-- Desabilita senha/PIN/padrão do keyguard - tela fica só no cadeado MDM -->
+        <disable-keyguard-features />
     </uses-policies>
 </device-admin>
