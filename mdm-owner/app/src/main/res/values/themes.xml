@@ -33,6 +33,14 @@
         <item name="android:windowFullscreen">false</item>
     </style>
 
+    <!-- Theme for lock screen - fullscreen, sem barra de título -->
+    <style name="Theme.MDMLauncher.LockScreen" parent="Theme.MDMLauncher">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowShowWallpaper">false</item>
+        <item name="android:windowBackground">@color/black</item>
+    </style>
+
     <!-- App card style -->
     <style name="AppCardStyle" parent="Widget.MaterialComponents.CardView">
         <item name="cardCornerRadius">12dp</item>

@@ -15,6 +15,7 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
   const [searchQuery, setSearchQuery] = useState('')
   const [notifications, setNotifications] = useState(3)
   const [showSupportDropdown, setShowSupportDropdown] = useState(false)
+  const [showUserDashboard, setShowUserDashboard] = useState(false)
   const [unreadMessages, setUnreadMessages] = useState<any[]>([])
 
   const loadUnreadMessages = useCallback(async () => {
@@ -48,13 +49,10 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
                                      target.closest('.fixed.inset-0[class*="z-50"]')
       
       if (showSupportDropdown && !target.closest('.support-dropdown-container')) {
-        // Se clicou em um modal ou acesso remoto, fechar o dropdown
-        if (isModalOrRemoteDesktop) {
-          setShowSupportDropdown(false)
-        } else {
-          // Comportamento normal: fechar ao clicar fora
         setShowSupportDropdown(false)
-        }
+      }
+      if (showUserDashboard && !target.closest('.user-dashboard-container')) {
+        setShowUserDashboard(false)
       }
     }
 
@@ -74,7 +72,13 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
   }
 
   const handleSupportClick = () => {
+    setShowUserDashboard(false)
     setShowSupportDropdown(!showSupportDropdown)
+  }
+
+  const handleUserAvatarClick = () => {
+    setShowSupportDropdown(false)
+    setShowUserDashboard(!showUserDashboard)
   }
 
   const handleNotificationClick = (deviceId: string) => {
@@ -226,15 +230,63 @@ export default function Header({ isConnected, onMenuClick, supportNotifications 
             )}
           </div>
 
-          {/* User menu */}
-          <div className="flex items-center gap-3">
-            <div className="text-right hidden sm:block">
-              <div className="text-sm font-medium text-primary">Administrador</div>
-              <div className="text-xs text-secondary">admin@mdm.com</div>
-            </div>
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
-              <span className="text-white text-sm font-semibold">A</span>
-            </div>
+          {/* User menu - avatar clicável */}
+          <div className="relative user-dashboard-container">
+            <button
+              onClick={handleUserAvatarClick}
+              className="flex items-center gap-3 p-1 rounded-lg hover:bg-border-light transition-colors"
+              title="Ver informações do usuário"
+            >
+              <div className="text-right hidden sm:block">
+                <div className="text-sm font-medium text-primary">Administrador</div>
+                <div className="text-xs text-secondary">admin@mdm.com</div>
+              </div>
+              <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center ring-2 ring-white shadow-md hover:ring-blue-200 transition-all cursor-pointer">
+                <span className="text-white text-base font-semibold">A</span>
+              </div>
+            </button>
+
+            {/* Mini dashboard do usuário */}
+            {showUserDashboard && (
+              <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-40 overflow-hidden">
+                <div className="p-4 bg-gradient-to-br from-blue-50 to-indigo-50 border-b border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg">
+                      <span className="text-white text-xl font-semibold">A</span>
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-lg">Administrador</h3>
+                      <p className="text-sm text-gray-600">admin@mdm.com</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-100 text-blue-700 text-xs font-medium rounded-full">
+                        Administrador do sistema
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Status</span>
+                    <span className={`flex items-center gap-1.5 text-sm font-medium ${isConnected ? 'text-green-600' : 'text-red-600'}`}>
+                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                      {isConnected ? 'Conectado' : 'Desconectado'}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between py-2 border-b border-gray-100">
+                    <span className="text-sm text-gray-600">Função</span>
+                    <span className="text-sm font-medium text-gray-900">Administrador MDM</span>
+                  </div>
+                  <div className="flex items-center justify-between py-2">
+                    <span className="text-sm text-gray-600">Sessão ativa</span>
+                    <span className="text-sm text-gray-700">Agora</span>
+                  </div>
+                </div>
+                <div className="p-3 bg-gray-50 border-t border-gray-200">
+                  <p className="text-xs text-center text-gray-500">
+                    Painel de gerenciamento de dispositivos
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

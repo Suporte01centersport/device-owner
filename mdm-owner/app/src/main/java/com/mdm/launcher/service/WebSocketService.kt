@@ -42,6 +42,15 @@ class WebSocketService : Service() {
                     Log.d(TAG, "Broadcast de reconexão forçada recebido")
                     forceReconnect()
                 }
+                "com.mdm.launcher.ALARM_STARTED" -> {
+                    Log.d(TAG, "Alarme iniciou no dispositivo - enviando confirmação")
+                    webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                        "type" to "alarm_confirmed",
+                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                        "success" to true,
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                }
             }
         }
     }
@@ -69,6 +78,7 @@ class WebSocketService : Service() {
         val filter = IntentFilter().apply {
             addAction("com.mdm.launcher.NETWORK_CHANGE")
             addAction("com.mdm.launcher.FORCE_RECONNECT")
+            addAction("com.mdm.launcher.ALARM_STARTED")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(commandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -226,7 +236,12 @@ class WebSocketService : Service() {
                 onConnectionChange = { connected ->
                     updateNotification(connected)
                     ConnectionStateManager.saveConnectionState(this@WebSocketService, connected)
-                    if (connected) sendDeviceStatusWithRealData()
+                    if (connected) {
+                        sendDeviceStatusWithRealData()
+                        // Aplicar políticas ao conectar (desbloqueio, Settings, Quick Settings)
+                        com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this@WebSocketService)
+                        sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
+                    }
                 }
             )
 
@@ -319,6 +334,130 @@ class WebSocketService : Service() {
                 }
                 "support_message_received" -> showBackgroundNotification("Mensagem Enviada", "Sua mensagem foi recebida pelo servidor!")
                 "support_message_error" -> showBackgroundNotification("Erro", "Não foi possível enviar a mensagem")
+                "apply_device_policies" -> {
+                    Log.d(TAG, "Aplicando políticas de dispositivo (bloqueio, Settings, Quick Settings)")
+                    com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this@WebSocketService)
+                    sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
+                }
+                "start_alarm" -> {
+                    Log.d(TAG, "Comando start_alarm recebido - iniciando alarme")
+                    val intent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
+                        action = "START"
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent)
+                    } else {
+                        startService(intent)
+                    }
+                    // alarm_confirmed será enviado pelo AlarmService quando o som iniciar
+                }
+                "stop_alarm" -> {
+                    Log.d(TAG, "Comando stop_alarm recebido - parando alarme")
+                    val intent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
+                        action = "STOP"
+                    }
+                    startService(intent)
+                    webSocketClient?.sendMessage(gson.toJson(mapOf(
+                        "type" to "alarm_stopped",
+                        "deviceId" to DeviceIdManager.getDeviceId(this),
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                }
+                "reboot_device" -> {
+                    Log.d(TAG, "Comando reboot_device recebido - reiniciando dispositivo")
+                    serviceScope.launch {
+                        try {
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                            val admin = android.content.ComponentName(this@WebSocketService, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            if (dpm.isDeviceOwnerApp(packageName)) {
+                                showBackgroundNotification("MDM Launcher", "Dispositivo será reiniciado em 3 segundos...")
+                                kotlinx.coroutines.delay(3000)
+                                try {
+                                    webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                        "type" to "reboot_device_confirmed",
+                                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                                        "success" to true,
+                                        "timestamp" to System.currentTimeMillis()
+                                    )))
+                                    dpm.reboot(admin)
+                                    Log.d(TAG, "Comando de reinicialização executado")
+                                } catch (e: Exception) {
+                                    Log.e(TAG, "Erro ao reiniciar", e)
+                                    webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                        "type" to "reboot_device_confirmed",
+                                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                                        "success" to false,
+                                        "reason" to (e.message ?: "Erro desconhecido"),
+                                        "timestamp" to System.currentTimeMillis()
+                                    )))
+                                }
+                            } else {
+                                Log.w(TAG, "Não é Device Owner - não pode reiniciar")
+                                webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                    "type" to "reboot_device_confirmed",
+                                    "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                                    "success" to false,
+                                    "reason" to "Não é Device Owner. O app precisa ser Device Owner para reiniciar.",
+                                    "timestamp" to System.currentTimeMillis()
+                                )))
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao processar reboot", e)
+                            webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                "type" to "reboot_device_confirmed",
+                                "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                                "success" to false,
+                                "reason" to (e.message ?: "Erro desconhecido"),
+                                "timestamp" to System.currentTimeMillis()
+                            )))
+                        }
+                    }
+                }
+                "lock_device" -> {
+                    Log.d(TAG, "Comando lock_device recebido - bloqueando dispositivo")
+                    try {
+                        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        if (dpm.isDeviceOwnerApp(packageName)) {
+                            val lockIntent = Intent(this, com.mdm.launcher.LockScreenActivity::class.java).apply {
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                            }
+                            startActivity(lockIntent)
+                            dpm.lockNow()
+                            Log.d(TAG, "Dispositivo bloqueado com sucesso")
+                            webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                                "type" to "lock_device_confirmed",
+                                "deviceId" to DeviceIdManager.getDeviceId(this),
+                                "success" to true,
+                                "timestamp" to System.currentTimeMillis()
+                            )))
+                        } else {
+                            Log.w(TAG, "Não é Device Owner - não pode bloquear")
+                            webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                                "type" to "lock_device_confirmed",
+                                "deviceId" to DeviceIdManager.getDeviceId(this),
+                                "success" to false,
+                                "reason" to "Não é Device Owner",
+                                "timestamp" to System.currentTimeMillis()
+                            )))
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao bloquear dispositivo", e)
+                        webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                            "type" to "lock_device_confirmed",
+                            "deviceId" to DeviceIdManager.getDeviceId(this),
+                            "success" to false,
+                            "reason" to (e.message ?: "Erro desconhecido"),
+                            "timestamp" to System.currentTimeMillis()
+                        )))
+                    }
+                }
+                else -> {
+                    // Encaminhar comandos não tratados para MainActivity (lock_device, reboot_device, etc)
+                    val intent = Intent("com.mdm.launcher.UEM_COMMAND")
+                    intent.setPackage(packageName)
+                    intent.putExtra("message", message)
+                    sendBroadcast(intent)
+                }
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar mensagem", e)

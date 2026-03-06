@@ -201,6 +201,12 @@ class MainActivity : AppCompatActivity() {
                     loadReceivedMessages()
                     updateMessageBadge()
                 }
+                "com.mdm.launcher.APPLY_DEVICE_POLICIES" -> {
+                    applyDevicePolicies()
+                    runOnUiThread {
+                        Toast.makeText(this@MainActivity, "✅ Políticas aplicadas: bloqueio desativado, Settings bloqueado, Quick Settings restritos", Toast.LENGTH_LONG).show()
+                    }
+                }
             }
         }
     }
@@ -351,6 +357,7 @@ class MainActivity : AppCompatActivity() {
                 addAction("com.mdm.launcher.UEM_COMMAND")
                 addAction("com.mdm.launcher.ADMIN_PASSWORD_CHANGED")
                 addAction("com.mdm.launcher.MESSAGE_RECEIVED")
+                addAction("com.mdm.launcher.APPLY_DEVICE_POLICIES")
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 registerReceiver(serviceMessageReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -903,69 +910,34 @@ class MainActivity : AppCompatActivity() {
             
             Log.d(TAG, "✅ $appliedCount restrições aplicadas")
             
-            // ❌ REMOVIDO: blockSettingsAccess - interfere com apps recentes
-            // blockSettingsAccess(dpm, componentName)
+            // blockSettingsAccess é aplicado via applyDevicePolicies (comando remoto)
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao aplicar restrições", e)
         }
     }
     
-    /**
-     * 🚨 BLOQUEAR ACESSO ÀS CONFIGURAÇÕES
-     * ⚠️ CUIDADO: Pode causar boot loop se aplicado incorretamente
-     * ⚠️ TESTE PRIMEIRO: Aplique apenas via comando remoto, não no boot
-     */
-    private fun blockSettingsAccess(dpm: DevicePolicyManager, componentName: ComponentName) {
-        try {
-            Log.d(TAG, "🚫 Bloqueando acesso às configurações...")
-            
-            // MÉTODO 1: Ocultar app de configurações (MAIS SEGURO)
-            try {
-                val settingsHidden = dpm.setApplicationHidden(componentName, "com.android.settings", true)
-                Log.d(TAG, "🔒 Settings oculto: $settingsHidden")
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠️ Não foi possível ocultar Settings: ${e.message}")
-            }
-            
-            // MÉTODO 2: Ocultar gerenciador de apps (CUIDADO)
-            try {
-                val packageInstallerHidden = dpm.setApplicationHidden(componentName, "com.android.packageinstaller", true)
-                Log.d(TAG, "🔒 Package Installer oculto: $packageInstallerHidden")
-            } catch (e: Exception) {
-                Log.w(TAG, "⚠️ Não foi possível ocultar Package Installer: ${e.message}")
-            }
-            
-            // MÉTODO 3: Restrições adicionais (TESTE CUIDADOSO)
-            val additionalRestrictions = listOf(
-                // android.os.UserManager.DISALLOW_CONFIG_APPLICATIONS,  // ⚠️ PODE CAUSAR BOOT LOOP
-                // android.os.UserManager.DISALLOW_CONFIG_LOCATION,      // ⚠️ PODE CAUSAR BOOT LOOP
-                android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT,   // Mais seguro
-                android.os.UserManager.DISALLOW_CONFIG_BRIGHTNESS        // Mais seguro
-            )
-            
-            for (restriction in additionalRestrictions) {
-                try {
-                    dpm.addUserRestriction(componentName, restriction)
-                    Log.d(TAG, "✅ Restrição adicional aplicada: $restriction")
-                } catch (e: Exception) {
-                    Log.w(TAG, "⚠️ Não foi possível aplicar restrição adicional: $restriction", e)
-                }
-            }
-            
-            Log.d(TAG, "✅ Bloqueio de configurações aplicado com sucesso")
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao bloquear configurações", e)
-        }
-    }
     
+    /**
+     * Aplica políticas de dispositivo: desabilita bloqueio, bloqueia Settings, restringe QS tiles.
+     * Chamado via comando remoto apply_device_policies (também executado pelo WebSocketService).
+     */
+    private fun applyDevicePolicies() {
+        com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this)
+    }
+
     /**
      * ✅ NOVO: Reabilitar Settings caso tenha sido oculto
      * Settings oculto pode bloquear funcionalidades como apps recentes
+     * NÃO é chamado quando device_policies_applied=true (usuário quer Settings bloqueado)
      */
     private fun reenableSettingsIfHidden() {
         try {
+            val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            if (prefs.getBoolean("device_policies_applied", false)) {
+                Log.d(TAG, "Políticas ativas - Settings permanece bloqueado")
+                return
+            }
             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(this, DeviceAdminReceiver::class.java)
             
@@ -2398,7 +2370,6 @@ class MainActivity : AppCompatActivity() {
     
     private fun showOptionsMenu() {
         val options = arrayOf(
-            "Mudar Nome do Dispositivo", 
             "Chat com Suporte",
             "📬 Ver Histórico de Mensagens ($unreadMessagesCount nova${if (unreadMessagesCount != 1) "s" else ""})"
         )
@@ -2408,19 +2379,10 @@ class MainActivity : AppCompatActivity() {
         builder.setItems(options) { _, which ->
             when (which) {
                 0 -> {
-                    // Mudar nome do dispositivo
-                    if (adminPassword.isEmpty()) {
-                        Log.d(TAG, "Senha de administrador vazia - configure via painel web")
-                        Toast.makeText(this, "Configure a senha de administrador via painel web", Toast.LENGTH_LONG).show()
-                        return@setItems
-                    }
-                    showPasswordDialog()
-                }
-                1 -> {
                     // Chat com suporte
                     showSupportChat()
                 }
-                2 -> {
+                1 -> {
                     // Ver histórico de mensagens
                     showMessageHistoryDialog()
                 }
@@ -3097,12 +3059,16 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "=== INÍCIO lockDevice ===")
         try {
             val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
             
             if (devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                // Bloquear tela imediatamente
+                // Iniciar tela de bloqueio com cadeado antes de travar
+                val intent = Intent(this, LockScreenActivity::class.java).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY)
+                }
+                startActivity(intent)
+                // Bloquear tela imediatamente (a LockScreenActivity ficará visível com setShowWhenLocked)
                 devicePolicyManager.lockNow()
-                Log.d(TAG, "✅ Dispositivo bloqueado")
+                Log.d(TAG, "✅ Dispositivo bloqueado com tela de cadeado")
             } else {
                 Log.w(TAG, "❌ Não é Device Owner - não pode bloquear dispositivo")
             }
@@ -3112,64 +3078,6 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "=== FIM lockDevice ===")
     }
 
-    /**
-     * Desabilita bloqueio de tela (PIN/senha) para modo kiosk.
-     * Permite que ao pressionar power a tela abra direto sem pedir senha.
-     */
-    private fun disableLockScreen() {
-        Log.d(TAG, "=== INÍCIO disableLockScreen ===")
-        try {
-            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
-
-            if (!dpm.isDeviceOwnerApp(packageName)) {
-                Log.w(TAG, "Não é Device Owner - não pode desabilitar bloqueio")
-                return
-            }
-
-            // Método 1: Settings.Secure (WRITE_SECURE_SETTINGS)
-            try {
-                Settings.Secure.putInt(contentResolver, "lockscreen.disabled", 1)
-                Log.d(TAG, "lockscreen.disabled = 1 via Settings.Secure")
-            } catch (e: Exception) {
-                try {
-                    Settings.Secure.putInt(contentResolver, "lockscreen_disabled", 1)
-                    Log.d(TAG, "lockscreen_disabled = 1 via Settings.Secure")
-                } catch (e2: Exception) {
-                    Log.w(TAG, "Settings.Secure não disponível: ${e2.message}")
-                }
-            }
-
-            // Método 2: DevicePolicyManager - permitir "Nenhum" como tipo de bloqueio
-            try {
-                dpm.setPasswordQuality(adminComponent, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
-                dpm.setPasswordMinimumLength(adminComponent, 0)
-                Log.d(TAG, "PasswordQuality = UNSPECIFIED")
-            } catch (e: Exception) {
-                Log.w(TAG, "setPasswordQuality falhou: ${e.message}")
-            }
-
-            // Método 3: Limpar senha existente com token (Android 7+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try {
-                    val token = ByteArray(32)
-                    java.security.SecureRandom().nextBytes(token)
-                    if (dpm.setResetPasswordToken(adminComponent, token)) {
-                        if (dpm.resetPasswordWithToken(adminComponent, "", token, 0)) {
-                            Log.d(TAG, "Senha limpa com resetPasswordWithToken")
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.w(TAG, "resetPasswordWithToken falhou: ${e.message}")
-                }
-            }
-
-            Log.d(TAG, "✅ Bloqueio de tela desabilitado")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao desabilitar bloqueio", e)
-        }
-        Log.d(TAG, "=== FIM disableLockScreen ===")
-    }
     
     private fun wipeDevice(confirmCode: String?) {
         Log.d(TAG, "=== INÍCIO wipeDevice ===")
@@ -3423,6 +3331,12 @@ class MainActivity : AppCompatActivity() {
             reenableSettingsIfHidden()
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao reabilitar Settings: ${e.message}")
+        }
+        // Aplicar políticas ao abrir o app (desbloqueio, Settings, Quick Settings)
+        try {
+            com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this)
+        } catch (e: Exception) {
+            Log.w(TAG, "Políticas não aplicadas em onResume: ${e.message}")
         }
         
         loadSavedData()
@@ -3828,7 +3742,7 @@ class MainActivity : AppCompatActivity() {
                 Log.d(TAG, "App salvo no SharedPreferences")
 
                 // Desabilitar bloqueio de tela para modo kiosk
-                disableLockScreen()
+                com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
                 
                 // Verificar se somos Device Owner
                 if (isDeviceOwner()) {

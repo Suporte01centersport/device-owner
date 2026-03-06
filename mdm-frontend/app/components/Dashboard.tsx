@@ -22,6 +22,7 @@ interface Device {
   isProfileOwner: boolean
   lastSeen: number
   restrictions: any
+  assignedUserName?: string | null
 }
 
 interface Computer {
@@ -29,15 +30,19 @@ interface Computer {
   name?: string
   status?: 'online' | 'offline' | string
   lastSeen?: number
+  hostname?: string
+  loggedInUser?: string
+  assignedUserName?: string | null
 }
 
 interface DashboardProps {
   devices: Device[]
   isConnected: boolean
   onMessage?: (message: any) => void
+  onViewChange?: (view: string) => void
 }
 
-export default function Dashboard({ devices, isConnected, onMessage }: DashboardProps) {
+export default function Dashboard({ devices, isConnected, onMessage, onViewChange }: DashboardProps) {
   const [currentTime, setCurrentTime] = useState<Date | null>(null)
   const [deviceHistory, setDeviceHistory] = useState<Array<{ day: string; date: string; devices: number }>>([])
   const [chartData, setChartData] = useState<Array<{ day: string; date: string; devices: number; computers: number }>>([])
@@ -51,6 +56,8 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }
   }>({})
   const [computers, setComputers] = useState<Computer[]>([])
+  const [chartPeriod, setChartPeriod] = useState<'7d' | '14d' | '30d'>('7d')
+  const [viewMode, setViewMode] = useState<'atual' | 'historico'>('atual')
 
   useEffect(() => {
     // Marcar como cliente após hidratação
@@ -89,46 +96,42 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     }
   }, [])
 
-  // ✅ NOVO: Carregar dados reais do histórico de status (apenas 7d)
+  // Carregar dados do histórico de status (com período selecionável e atualização a cada hora)
   useEffect(() => {
     const loadChartData = async () => {
       setIsLoadingChart(true)
       try {
-        const response = await fetch(`/api/devices/status-history?period=7d`)
+        const response = await fetch(`/api/devices/status-history?period=${chartPeriod}`)
         const result = await response.json()
         
         if (result.success && result.data) {
-          // Processar dados da semana (segunda a domingo)
-          const processedData = processHistoryData(result.data)
+          const processedData = processHistoryData(result.data, chartPeriod)
           setDeviceHistory(processedData)
         } else {
-          // Se não houver dados, usar valores zerados
-          setDeviceHistory(generateEmptyChartData())
+          setDeviceHistory(generateEmptyChartData(chartPeriod))
         }
       } catch (error) {
         console.error('❌ Erro ao carregar histórico:', error)
-        setDeviceHistory(generateEmptyChartData())
+        setDeviceHistory(generateEmptyChartData(chartPeriod))
       } finally {
         setIsLoadingChart(false)
       }
     }
     
     loadChartData()
+    const refreshInterval = setInterval(loadChartData, 60 * 60 * 1000) // Atualizar a cada hora
     
+    return () => clearInterval(refreshInterval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [chartPeriod])
 
-  const processHistoryData = (data: any[]) => {
+  const processHistoryData = (data: any[], period: '7d' | '14d' | '30d' = '7d') => {
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
     const endDate = new Date()
-    
-    // Começar da segunda-feira da semana atual
-    const currentDay = endDate.getDay() // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1 // Se domingo, voltar 6 dias
+    const numDays = period === '7d' ? 7 : period === '14d' ? 14 : 30
     const startDate = new Date(endDate)
-    startDate.setDate(endDate.getDate() - daysFromMonday)
+    startDate.setDate(endDate.getDate() - numDays + 1)
     
-    // Criar mapas de datas para contagem
     const deviceMap = new Map<string, number>()
     const mobileMap = new Map<string, number>()
     const computerMap = new Map<string, number>()
@@ -145,13 +148,12 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       computerMap.set(date, computerDevices)
     })
     
-    // Gerar array de dados da semana (Segunda a Domingo)
     const historyData: Array<{ day: string; date: string; devices: number; computers: number }> = []
     const currentDate = new Date(startDate)
     
-    for (let i = 0; i < 7; i++) {
+    for (let i = 0; i < numDays; i++) {
       const dateStr = currentDate.toISOString().split('T')[0]
-      const dayName = days[currentDate.getDay()]
+      const dayName = period === '7d' ? days[currentDate.getDay()] : `${currentDate.getDate()}/${currentDate.getMonth() + 1}`
       const deviceCount = deviceMap.get(dateStr) || 0
       const computerCount = computerMap.get(dateStr) || 0
       const mobileCount = mobileMap.get(dateStr) || deviceCount - computerCount
@@ -169,52 +171,55 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
     return historyData
   }
 
-  const generateEmptyChartData = () => {
+  const generateEmptyChartData = (period: '7d' | '14d' | '30d' = '7d') => {
     const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
     const endDate = new Date()
-    
-    // ✅ Começar da segunda-feira da semana atual
-    const currentDay = endDate.getDay()
-    const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1
+    const numDays = period === '7d' ? 7 : period === '14d' ? 14 : 30
     const startDate = new Date(endDate)
-    startDate.setDate(endDate.getDate() - daysFromMonday)
+    startDate.setDate(endDate.getDate() - numDays + 1)
     
-    return Array.from({ length: 7 }, (_, i) => {
+    return Array.from({ length: numDays }, (_, i) => {
       const date = new Date(startDate)
       date.setDate(startDate.getDate() + i)
       return {
-        day: days[date.getDay()],
+        day: period === '7d' ? days[date.getDay()] : `${date.getDate()}/${date.getMonth() + 1}`,
         date: date.toISOString().split('T')[0],
-        devices: 0
+        devices: 0,
+        computers: 0
       }
     })
   }
 
   const mergeDeviceAndComputerHistory = (
-    deviceHistoryData: Array<{ day: string; date: string; devices: number }>,
-    computerList: Computer[]
+    deviceHistoryData: Array<{ day: string; date: string; devices: number; computers?: number }>,
+    computerList: Computer[],
+    deviceList: Device[]
   ) => {
     if (deviceHistoryData.length === 0) return []
 
-    const now = new Date()
-    const sevenDaysAgo = new Date(now)
-    sevenDaysAgo.setDate(now.getDate() - 6)
+    const todayStr = new Date().toISOString().split('T')[0]
+    const onlineMobileCount = deviceList.filter(d => d.status === 'online').length
+    const onlinePcCount = computerList.filter(c => (c.status || '').toLowerCase() === 'online').length
 
     const computerCounts = new Map<string, number>()
-
     computerList.forEach((computer) => {
       if (!computer.lastSeen) return
       if ((computer.status || '').toLowerCase() !== 'online') return
       const lastSeenDate = new Date(computer.lastSeen)
-      if (lastSeenDate < sevenDaysAgo) return
       const dateStr = lastSeenDate.toISOString().split('T')[0]
       const current = computerCounts.get(dateStr) || 0
       computerCounts.set(dateStr, current + 1)
     })
 
     return deviceHistoryData.map((entry) => {
-      const baseDevices = entry.devices || 0
-      const baseComputers = computerCounts.get(entry.date) || 0
+      let baseDevices = entry.devices || 0
+      let baseComputers = entry.computers ?? computerCounts.get(entry.date) ?? 0
+
+      // Para hoje: usar contagem em tempo real (garante que dispositivos conectados apareçam)
+      if (entry.date === todayStr) {
+        baseDevices = Math.max(baseDevices, onlineMobileCount)
+        baseComputers = Math.max(baseComputers, onlinePcCount)
+      }
 
       return {
         day: entry.day,
@@ -333,9 +338,9 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   const combinedComputers = useMemo(() => computers, [computers])
 
   useEffect(() => {
-    const merged = mergeDeviceAndComputerHistory(deviceHistory, combinedComputers)
+    const merged = mergeDeviceAndComputerHistory(deviceHistory, combinedComputers, combinedDevices)
     setChartData(merged)
-  }, [deviceHistory, combinedComputers])
+  }, [deviceHistory, combinedComputers, combinedDevices])
 
   const onlineDevices = combinedDevices.filter(d => d.status === 'online').length
   
@@ -514,12 +519,25 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
   }, [combinedDevices, combinedComputers])
 
   const chartStackData = useMemo(() => {
+    if (viewMode === 'atual') {
+      return [{
+        day: 'Agora',
+        celulares: onlineDevices,
+        pcs: onlineComputers
+      }]
+    }
     return chartData.map((entry) => ({
       day: entry.day,
       celulares: entry.devices ?? 0,
       pcs: entry.computers ?? 0
     }))
-  }, [chartData])
+  }, [chartData, viewMode, onlineDevices, onlineComputers])
+
+  const chartMaxValue = useMemo(() => {
+    const maxCelulares = Math.max(...chartStackData.map(d => d.celulares), 1)
+    const maxPcs = Math.max(...chartStackData.map(d => d.pcs), 1)
+    return Math.max(5, maxCelulares + maxPcs, maxCelulares, maxPcs)
+  }, [chartStackData])
 
   const renderBarChartTooltip = useMemo(() => {
     return ({ active, payload, label }: any) => {
@@ -614,9 +632,49 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Device Status Chart */}
         <div className="lg:col-span-2 card p-6">
-          <div className="flex justify-between items-center mb-6">
+          <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
             <h3 className="text-lg font-semibold text-primary">Status dos Dispositivos</h3>
-            <span className="text-sm text-secondary">Semana Atual (Seg - Dom)</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setViewMode('atual')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                  viewMode === 'atual'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Ver dados do momento"
+              >
+                Agora
+              </button>
+              <button
+                onClick={() => setViewMode('historico')}
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                  viewMode === 'historico'
+                    ? 'bg-primary text-white'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+                title="Ver histórico por período"
+              >
+                📅 Histórico
+              </button>
+              {viewMode === 'historico' && (
+                <>
+                  {(['7d', '14d', '30d'] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setChartPeriod(p)}
+                      className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                        chartPeriod === p
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                    >
+                      {p === '7d' ? '7d' : p === '14d' ? '14d' : '30d'}
+                    </button>
+                  ))}
+                </>
+              )}
+            </div>
           </div>
           
           {/* Bar Chart */}
@@ -635,9 +693,8 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
                   tick={{ fill: '#94a3b8', fontSize: 12 }}
                   axisLine={false}
                   tickLine={false}
-                  domain={[0, 50]}
-                  interval={0}
-                  ticks={[0, 10, 20, 30, 40, 50]}
+                  domain={[0, chartMaxValue]}
+                  allowDataOverflow
                 />
                 <RechartsTooltip content={renderBarChartTooltip} cursor={{ fill: 'rgba(59,130,246,0.08)' }} />
                 <Legend
@@ -666,7 +723,48 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
               <span className="text-xs text-secondary">PCs Online</span>
             </div>
           </div>
-          <div className="text-center text-[11px] text-muted mt-2">Celulares usam histórico diário; PCs consideram a última atividade registrada em cada dia</div>
+          <div className="text-center text-[11px] text-muted mt-2">
+            {viewMode === 'atual' ? 'Dados em tempo real do momento.' : 'Atualiza a cada hora. Hoje usa dados em tempo real.'}
+          </div>
+
+          {/* Lista de dispositivos conectados agora */}
+          {(onlineDevices > 0 || onlineComputers > 0) && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <h4 className="text-sm font-semibold text-gray-800 mb-3">Conectados agora</h4>
+              <div className="space-y-2 max-h-40 overflow-y-auto">
+                {combinedDevices
+                  .filter(d => d.status === 'online')
+                  .map((d) => (
+                    <div key={d.deviceId} className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg">
+                      <span className="text-lg">📱</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">{d.name}</div>
+                        <div className="text-xs text-gray-600">
+                          {d.assignedUserName ? `Usuário: ${d.assignedUserName}` : 'Sem usuário vinculado'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                {combinedComputers
+                  .filter(c => (c.status || '').toLowerCase() === 'online')
+                  .map((c) => (
+                    <div key={c.computerId} className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg">
+                      <span className="text-lg">💻</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {c.name || c.hostname || c.computerId}
+                        </div>
+                        <div className="text-xs text-gray-600">
+                          {c.assignedUserName || c.loggedInUser
+                            ? `Usuário: ${c.assignedUserName || c.loggedInUser}`
+                            : 'Sem usuário vinculado'}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Recent Activity */}
@@ -716,10 +814,7 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <button 
               className="btn btn-primary hover:scale-105 transition-transform duration-200"
-              onClick={() => {
-                // Navegar para página de provisionamento
-                console.log('Abrir página de provisionamento')
-              }}
+              onClick={() => onViewChange?.('devices')}
             >
               <span>📱</span>
               Provisionar Dispositivo
@@ -727,17 +822,22 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             <button 
               className="btn btn-secondary hover:scale-105 transition-transform duration-200"
               onClick={() => {
-                // Gerar relatório dos dispositivos
-                const reportData = {
-                  totalDevices: combinedDevices.length,
-                  onlineDevices: onlineDevices,
-                  totalComputers: totalComputers,
-                  onlineComputers: onlineComputers,
-                  avgBattery: avgBattery,
-                  timestamp: new Date().toISOString()
-                }
-                console.log('Relatório gerado:', reportData)
-                // Aqui você pode implementar download do relatório
+                const csvHeader = 'ID,Nome,Status,Bateria %,Última Atividade\n'
+                const csvRows = combinedDevices.map(d => [
+                  d.deviceId,
+                  `"${(d.name || '').replace(/"/g, '""')}"`,
+                  d.status,
+                  d.batteryLevel,
+                  d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D'
+                ].join(','))
+                const csvContent = csvHeader + csvRows.join('\n') + `\n\nResumo: ${combinedDevices.length} dispositivos, ${onlineDevices} online, ${totalComputers} computadores, ${onlineComputers} online. Bateria média: ${avgBattery}%`
+                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
+                const url = URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = `relatorio-mdm-${new Date().toISOString().slice(0, 10)}.csv`
+                a.click()
+                URL.revokeObjectURL(url)
               }}
             >
               <span>📊</span>
@@ -745,20 +845,14 @@ export default function Dashboard({ devices, isConnected, onMessage }: Dashboard
             </button>
             <button 
               className="btn btn-secondary hover:scale-105 transition-transform duration-200"
-              onClick={() => {
-                // Abrir configurações
-                console.log('Abrir configurações do sistema')
-              }}
+              onClick={() => onViewChange?.('settings')}
             >
               <span>⚙️</span>
               Configurações
             </button>
             <button 
               className="btn btn-secondary hover:scale-105 transition-transform duration-200"
-              onClick={() => {
-                // Abrir políticas de segurança
-                console.log('Abrir políticas de segurança')
-              }}
+              onClick={() => onViewChange?.('policies')}
             >
               <span>🔒</span>
               Políticas de Segurança

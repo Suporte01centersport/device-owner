@@ -49,6 +49,8 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.START_FOREGROUND_SERVICES_FROM_BACKGROUND" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -124,6 +126,13 @@
             android:exported="false"
             android:foregroundServiceType="location" />
 
+        <!-- Serviço de alarme (som contínuo para localizar dispositivo) -->
+        <service
+            android:name=".service.AlarmService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+
         <!-- Broadcast Receiver para mudanças de apps -->
         <receiver
             android:name=".AppChangeReceiver"
@@ -194,6 +203,14 @@
             android:name=".SetupActivity"
             android:exported="false"
             android:theme="@style/Theme.MDMLauncher.Setup" />
+
+        <!-- Tela de bloqueio com cadeado -->
+        <activity
+            android:name=".LockScreenActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MDMLauncher.LockScreen"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
 
     </application>
 

@@ -17,6 +17,7 @@ export default function PoliciesPage() {
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [groupStats, setGroupStats] = useState<Record<string, any>>({})
+  const [filterGroupId, setFilterGroupId] = useState<string>('')
 
   // Estados para formulários
   const [newGroup, setNewGroup] = useState({
@@ -37,9 +38,21 @@ export default function PoliciesPage() {
     loadData()
   }, [])
 
+  // Mapeamento de ícones por nome do grupo
+  const getGroupIcon = (name: string) => {
+    const n = (name || '').toLowerCase()
+    if (n.includes('full')) return '🔵'
+    if (n.includes('separação') || n.includes('pedidos')) return '📦'
+    if (n.includes('estoque')) return '📱'
+    return '📋'
+  }
+
   const loadData = async () => {
     try {
       setLoading(true)
+      
+      // Criar grupos padrão se não existirem
+      await fetch('/api/groups/seed', { method: 'POST' })
       
       // Carregar grupos da API
       const groupsResponse = await fetch('/api/groups')
@@ -291,13 +304,28 @@ export default function PoliciesPage() {
           <h1 className="text-2xl font-bold text-primary">Políticas e Grupos</h1>
           <p className="text-secondary mt-1">Gerencie grupos de dispositivos e suas políticas de aplicativos</p>
         </div>
-        <button 
-          onClick={() => setIsCreateModalOpen(true)}
-          className="btn btn-primary"
-        >
-          <span>➕</span>
-          Novo Grupo
-        </button>
+        <div className="flex gap-3 items-center">
+          <select
+            value={filterGroupId}
+            onChange={(e) => setFilterGroupId(e.target.value)}
+            className="px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-primary min-w-[200px]"
+            title="Filtrar por grupo"
+          >
+            <option value="">Todos os grupos</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {getGroupIcon(g.name)} {g.name}
+              </option>
+            ))}
+          </select>
+          <button 
+            onClick={() => setIsCreateModalOpen(true)}
+            className="btn btn-primary"
+          >
+            <span>➕</span>
+            Novo Grupo
+          </button>
+        </div>
       </div>
 
       {/* Estatísticas */}
@@ -357,12 +385,25 @@ export default function PoliciesPage() {
         </div>
       </div>
 
-      {/* Lista de Grupos - layout em cubos, 4 colunas */}
+      {/* Lista de Grupos - layout em cubos, mesma cor do botão Novo Grupo */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {groups.map((group) => (
+        {/* Card Novo Grupo - mesma cor dos demais grupos */}
+        {!filterGroupId && (
+          <div
+            onClick={() => setIsCreateModalOpen(true)}
+            className="card p-6 aspect-square flex flex-col justify-center items-center hover:shadow-lg cursor-pointer !bg-primary border-primary text-white"
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === 'Enter' && setIsCreateModalOpen(true)}
+          >
+            <span className="text-4xl mb-2">➕</span>
+            <span className="text-lg font-semibold">Novo Grupo</span>
+          </div>
+        )}
+        {(filterGroupId ? groups.filter((g) => g.id === filterGroupId) : groups).map((group) => (
           <div
             key={group.id}
-            className="card p-6 aspect-square flex flex-col justify-between hover:shadow cursor-pointer"
+            className="card p-6 aspect-square flex flex-col justify-between hover:shadow-lg cursor-pointer !bg-primary border-primary text-white"
             onClick={() => { setSelectedGroup(group); setIsGroupModalOpen(true) }}
             role="button"
             tabIndex={0}
@@ -370,12 +411,13 @@ export default function PoliciesPage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start">
                 <div 
-                  className="w-4 h-4 rounded-full mr-3"
-                  style={{ backgroundColor: group.color }}
-                ></div>
+                  className="w-12 h-12 rounded-xl mr-3 flex items-center justify-center text-2xl bg-white/20 border-2 border-white/50"
+                >
+                  {getGroupIcon(group.name)}
+                </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-primary">{group.name}</h3>
-                  <p className="text-sm text-secondary">{group.description}</p>
+                  <h3 className="text-lg font-semibold text-white">{group.name}</h3>
+                  <p className="text-sm text-white/90">{group.description}</p>
                 </div>
               </div>
               <div>
@@ -391,21 +433,21 @@ export default function PoliciesPage() {
 
             {/* Info do grupo */}
             <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
-              <div className="p-3 rounded bg-gray-50">
-                <div className="text-secondary">Dispositivos</div>
-                <div className="text-lg font-semibold text-primary">{group.deviceCount}</div>
+              <div className="p-3 rounded bg-white/20">
+                <div className="text-white/90">Dispositivos</div>
+                <div className="text-lg font-semibold text-white">{group.deviceCount}</div>
               </div>
-              <div className="p-3 rounded bg-gray-50">
-                <div className="text-secondary">Políticas</div>
-                <div className="text-lg font-semibold text-primary">{group.appPolicies.length}</div>
+              <div className="p-3 rounded bg-white/20">
+                <div className="text-white/90">Políticas</div>
+                <div className="text-lg font-semibold text-white">{group.appPolicies.length}</div>
               </div>
-              <div className="p-3 rounded bg-gray-50">
-                <div className="text-secondary">Média Bateria</div>
-                <div className="text-lg font-semibold text-primary">{Math.round(Number(groupStats[group.id]?.avg_battery_level || 0))}%</div>
+              <div className="p-3 rounded bg-white/20">
+                <div className="text-white/90">Média Bateria</div>
+                <div className="text-lg font-semibold text-white">{Math.round(Number(groupStats[group.id]?.avg_battery_level || 0))}%</div>
               </div>
-              <div className="p-3 rounded bg-gray-50">
-                <div className="text-secondary">Total / Online</div>
-                <div className="text-lg font-semibold text-primary">
+              <div className="p-3 rounded bg-white/20">
+                <div className="text-white/90">Total / Online</div>
+                <div className="text-lg font-semibold text-white">
                   {Number(groupStats[group.id]?.total_devices || group.deviceCount)} / {Number(groupStats[group.id]?.online_devices || 0)}
                 </div>
               </div>
@@ -413,7 +455,18 @@ export default function PoliciesPage() {
           </div>
         ))}
 
-        {groups.length === 0 && (
+        {filterGroupId && groups.filter((g) => g.id === filterGroupId).length === 0 && (
+          <div className="col-span-full text-center py-12">
+            <p className="text-secondary">Nenhum grupo encontrado com o filtro selecionado.</p>
+            <button
+              onClick={() => setFilterGroupId('')}
+              className="btn btn-secondary mt-4"
+            >
+              Limpar filtro
+            </button>
+          </div>
+        )}
+        {groups.length === 0 && !filterGroupId && (
           <div className="col-span-full text-center py-12">
             <div className="w-20 h-20 bg-surface rounded-full flex items-center justify-center mx-auto mb-4 shadow">
               <span className="text-3xl">📋</span>

@@ -100,6 +100,13 @@ class SystemBootReceiver : BroadcastReceiver() {
                 }
                 Log.d(TAG, "WebSocketService iniciado após boot")
             }
+            // Aplicar políticas de dispositivo no boot (desbloqueio, Settings, Quick Settings)
+            try {
+                com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(context)
+                Log.d(TAG, "Políticas de dispositivo aplicadas no boot")
+            } catch (e: Exception) {
+                Log.w(TAG, "Não foi possível aplicar políticas no boot: ${e.message}")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao iniciar serviço após boot", e)

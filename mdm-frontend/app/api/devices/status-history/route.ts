@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
       case '7d':
         startDate.setDate(endDate.getDate() - 7);
         break;
+      case '14d':
+        startDate.setDate(endDate.getDate() - 14);
+        break;
       case '30d':
         startDate.setDate(endDate.getDate() - 30);
         break;

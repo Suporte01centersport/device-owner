@@ -6,6 +6,9 @@ interface User {
   id: string
   name: string
   cpf: string
+  birth_year?: number | null
+  device_model?: string | null
+  device_serial_number?: string | null
 }
 
 interface ConfigModalProps {
@@ -14,15 +17,22 @@ interface ConfigModalProps {
   onSave: (users: User[]) => void
 }
 
+const emptyForm = () => ({
+  name: '',
+  cpf: '',
+  birth_year: '',
+  device_model: '',
+  device_serial_number: '',
+  center_peripheral: ''
+})
+
 export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProps) {
-  const [textInput, setTextInput] = useState('')
+  const [form, setForm] = useState(emptyForm())
   const [users, setUsers] = useState<User[]>([])
-  const [previewUsers, setPreviewUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
-  // Carregar usuários existentes da API
   useEffect(() => {
     if (isOpen) {
       loadExistingUsers()
@@ -33,87 +43,64 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
     setIsLoading(true)
     try {
       const response = await fetch('/api/device-users?active=true')
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      }
-      
+      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       const result = await response.json()
-      
-      // Suporta tanto 'users' quanto 'data' para compatibilidade
       const usersList = result.users || result.data || []
-      
       if (result.success && Array.isArray(usersList) && usersList.length > 0) {
-        const loadedUsers = usersList.map((u: any) => ({
+        setUsers(usersList.map((u: any) => ({
           id: u.user_id || u.id,
           name: u.name,
-          cpf: u.cpf
-        }))
-        setUsers(loadedUsers)
-        // Converter para texto
-        const text = loadedUsers.map((u: User) => `${u.name}\t${u.cpf}\t${u.id}`).join('\n')
-        setTextInput(text)
+          cpf: u.cpf,
+          birth_year: u.birth_year,
+          device_model: u.device_model,
+          device_serial_number: u.device_serial_number
+        })))
+      } else {
+        setUsers([])
       }
     } catch (error) {
       console.error('Erro ao carregar usuários:', error)
-      alert('Erro ao carregar usuários. Verifique o console para mais detalhes.')
+      alert('Erro ao carregar usuários.')
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Preview em tempo real
-  useEffect(() => {
-    if (textInput.trim()) {
-      try {
-        const parsed = parseInput(textInput)
-        setPreviewUsers(parsed)
-      } catch (e) {
-        setPreviewUsers([])
-      }
-    } else {
-      setPreviewUsers([])
-    }
-  }, [textInput])
+  const updateForm = (field: string, value: string) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
 
-  const parseInput = (input: string): User[] => {
-    const lines = input.trim().split('\n')
-    const users: User[] = []
-    
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i].trim()
-      if (!line) continue
-      
-      let parts: string[]
-      
-      // Detectar separador
-      if (line.includes('\t')) {
-        parts = line.split('\t')
-      } else if (line.includes(',')) {
-        parts = line.split(',')
-      } else if (line.includes(';')) {
-        parts = line.split(';')
-      } else {
-        parts = line.split(/\s+/)
-      }
-      
-      if (parts.length >= 2) {
-        const name = parts[0]?.trim()
-        const cpf = parts[1]?.trim()
-        const id = parts[2]?.trim() || `user_${i + 1}`
-        
-        if (name && cpf) {
-          users.push({ id, name, cpf })
-        }
-      }
+  const handleAddUser = () => {
+    const { name, cpf, birth_year, device_model, device_serial_number, center_peripheral } = form
+    if (!name.trim() || !cpf.trim()) {
+      alert('Nome e CPF são obrigatórios.')
+      return
     }
-    
-    return users
+    const userId = center_peripheral.trim() || `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
+    const year = birth_year.trim() ? parseInt(birth_year, 10) : null
+    if (year && (isNaN(year) || year < 1900 || year > new Date().getFullYear())) {
+      alert('Ano de nascimento inválido.')
+      return
+    }
+    const newUser: User = {
+      id: userId,
+      name: name.trim(),
+      cpf: cpf.trim(),
+      birth_year: year,
+      device_model: device_model.trim() || null,
+      device_serial_number: device_serial_number.trim() || null
+    }
+    setUsers(prev => [...prev, newUser])
+    setForm(emptyForm())
+  }
+
+  const handleRemoveUser = (index: number) => {
+    setUsers(prev => prev.filter((_, i) => i !== index))
   }
 
   const handleSave = async () => {
-    const parsed = parseInput(textInput)
-    if (parsed.length === 0) {
-      alert('❌ Nenhum usuário válido encontrado. Verifique o formato.')
+    if (users.length === 0) {
+      alert('Adicione pelo menos um usuário para salvar.')
       return
     }
 
@@ -121,22 +108,27 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
     setSaveMessage('')
 
     try {
-      // Enviar para API (bulk update)
+      const payload = users.map(u => ({
+        id: u.id,
+        name: u.name,
+        cpf: u.cpf,
+        birth_year: u.birth_year,
+        device_model: u.device_model,
+        device_serial_number: u.device_serial_number
+      }))
+
       const response = await fetch('/api/device-users', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ users: parsed })
+        body: JSON.stringify({ users: payload })
       })
 
       const result = await response.json()
 
       if (result.success) {
-        setSaveMessage(`✅ ${result.count} usuários salvos com sucesso!`)
-        // Notificar o pai com os usuários salvos
-        onSave(parsed)
-        setTimeout(() => {
-          onClose()
-        }, 1500)
+        setSaveMessage(`✅ ${result.count} usuário(s) salvo(s) com sucesso!`)
+        onSave(users)
+        setTimeout(() => onClose(), 1500)
       } else {
         alert(`❌ Erro ao salvar: ${result.error}`)
       }
@@ -149,19 +141,15 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
   }
 
   const handleClear = () => {
-    if (confirm('Limpar todos os usuários?')) {
-      setTextInput('')
+    if (confirm('Limpar todos os usuários da lista?')) {
       setUsers([])
-      setPreviewUsers([])
+      setForm(emptyForm())
     }
   }
 
-  // Fechar ao pressionar ESC
   useEffect(() => {
     const handleEsc = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isOpen && !isSaving) {
-        onClose()
-      }
+      if (e.key === 'Escape' && isOpen && !isSaving) onClose()
     }
     if (isOpen) {
       document.addEventListener('keydown', handleEsc)
@@ -172,135 +160,157 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
   if (!isOpen) return null
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto"
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-xl shadow-xl max-w-3xl w-full my-8"
+      <div
+        className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
             <div>
               <h2 className="text-xl font-bold text-gray-900">👥 Usuários</h2>
-              <p className="text-sm text-gray-600 mt-1">Cole os dados dos usuários abaixo</p>
+              <p className="text-sm text-gray-900 mt-1">Preencha a ficha da pessoa e do celular</p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+              className="w-8 h-8 flex items-center justify-center text-gray-700 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-100"
             >
               ✕
             </button>
           </div>
         </div>
 
-        {/* Content */}
-        <div className="p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Input Area */}
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  📝 Cole os dados aqui:
-                </label>
-                <textarea
-                  value={textInput}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder="Cole direto do Excel/Sheets:&#10;Nome&#9;CPF&#9;ID&#10;João Silva&#9;123.456.789-00&#9;1&#10;Maria Santos&#9;234.567.890-11&#9;2"
-                  className="w-full h-64 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm resize-none"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                  💡 Cole diretamente do Excel/Google Sheets - o sistema detecta automaticamente
-                </p>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <p className="text-sm text-blue-900 font-medium mb-2">📋 Formato esperado:</p>
-                <div className="bg-white border border-blue-200 rounded p-2 mb-2">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b border-gray-200">
-                        <th className="text-left p-1 text-gray-500">Nome</th>
-                        <th className="text-left p-1 text-gray-500">CPF</th>
-                        <th className="text-left p-1 text-gray-500">ID</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-gray-700">
-                      <tr>
-                        <td className="p-1">João Silva</td>
-                        <td className="p-1">123.456.789-00</td>
-                        <td className="p-1">1</td>
-                      </tr>
-                      <tr>
-                        <td className="p-1">Maria Santos</td>
-                        <td className="p-1">234.567.890-11</td>
-                        <td className="p-1">2</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-                <ul className="text-xs text-blue-700 space-y-1">
-                  <li>✅ Aceita CSV (vírgula)</li>
-                  <li>✅ Aceita TSV (tab do Excel/Sheets)</li>
-                  <li>✅ Aceita ponto-e-vírgula</li>
-                  <li>✅ ID é opcional</li>
-                </ul>
-              </div>
+        <div className="p-6 space-y-6">
+          {/* Mini ficha */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <h3 className="text-sm font-semibold text-gray-900/90 col-span-full">📋 Dados da pessoa</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">Nome *</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => updateForm('name', e.target.value)}
+                placeholder="Nome completo"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">CPF *</label>
+              <input
+                type="text"
+                value={form.cpf}
+                onChange={(e) => updateForm('cpf', e.target.value)}
+                placeholder="000.000.000-00"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">Ano de nascimento</label>
+              <input
+                type="number"
+                value={form.birth_year}
+                onChange={(e) => updateForm('birth_year', e.target.value)}
+                placeholder="Ex: 1990"
+                min={1900}
+                max={new Date().getFullYear()}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">Nº periférico na Center</label>
+              <input
+                type="text"
+                value={form.center_peripheral}
+                onChange={(e) => updateForm('center_peripheral', e.target.value)}
+                placeholder="ID do periférico"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
+            </div>
+            <h3 className="text-sm font-semibold text-gray-900/90 col-span-full mt-2">📱 Dados do celular</h3>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">Modelo</label>
+              <input
+                type="text"
+                value={form.device_model}
+                onChange={(e) => updateForm('device_model', e.target.value)}
+                placeholder="Ex: Galaxy A54"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-900/90 mb-1">Número de série</label>
+              <input
+                type="text"
+                value={form.device_serial_number}
+                onChange={(e) => updateForm('device_serial_number', e.target.value)}
+                placeholder="Número de série"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+              />
+            </div>
+            <div className="col-span-full">
+              <button
+                onClick={handleAddUser}
+                disabled={!form.name.trim() || !form.cpf.trim()}
+                className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                ➕ Adicionar à lista
+              </button>
+            </div>
+          </div>
 
-            {/* Preview Area */}
-            <div className="space-y-4">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    👁️ Preview ({previewUsers.length} usuários)
-                  </label>
-                  {users.length > 0 && (
-                    <button
-                      onClick={handleClear}
-                      className="text-xs text-red-600 hover:text-red-700"
+          {/* Lista de usuários adicionados */}
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <label className="text-sm font-medium text-gray-900">
+                👁️ Lista ({users.length} usuário{users.length !== 1 ? 's' : ''})
+              </label>
+              {users.length > 0 && (
+                <button onClick={handleClear} className="text-xs text-red-600 hover:text-red-700">
+                  🗑️ Limpar lista
+                </button>
+              )}
+            </div>
+            <div className="border border-gray-300 rounded-lg max-h-48 overflow-y-auto bg-gray-50">
+              {isLoading ? (
+                <div className="p-4 text-center text-gray-900">Carregando...</div>
+              ) : users.length > 0 ? (
+                <div className="p-4 space-y-2">
+                  {users.map((user, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-white p-3 rounded-lg border border-gray-200 flex justify-between items-center"
                     >
-                      🗑️ Limpar tudo
-                    </button>
-                  )}
-                </div>
-                <div className="border border-gray-300 rounded-lg h-64 overflow-y-auto bg-gray-50">
-                  {previewUsers.length > 0 ? (
-                    <div className="p-4 space-y-2">
-                      {previewUsers.map((user, idx) => (
-                        <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200">
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                              <span className="text-white font-bold text-xs">
-                                {user.name.charAt(0).toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-sm text-gray-900 truncate">{user.name}</p>
-                              <p className="text-xs text-gray-600">{user.cpf}</p>
-                            </div>
-                            <span className="text-xs text-gray-400">#{user.id}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-center h-full text-gray-400">
-                      <div className="text-center">
-                        <p className="text-2xl mb-2">📋</p>
-                        <p className="text-sm">Cole os dados ao lado</p>
+                      <div>
+                        <p className="font-medium text-sm text-gray-900">{user.name}</p>
+                        <p className="text-xs text-gray-900/90">
+                          CPF: {user.cpf}
+                          {user.birth_year && ` • Nasc: ${user.birth_year}`}
+                          {user.device_model && ` • ${user.device_model}`}
+                          {user.device_serial_number && ` • Série: ${user.device_serial_number}`}
+                        </p>
                       </div>
+                      <button
+                        onClick={() => handleRemoveUser(idx)}
+                        className="text-red-500 hover:text-red-700 text-sm"
+                        title="Remover"
+                      >
+                        ✕
+                      </button>
                     </div>
-                  )}
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-center h-24 text-gray-900">
+                  <p className="text-sm">Preencha a ficha e clique em Adicionar</p>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Footer */}
         <div className="p-6 border-t border-gray-200">
           {saveMessage && (
             <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
@@ -311,13 +321,13 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
             <button
               onClick={onClose}
               disabled={isSaving}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors disabled:opacity-50"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
-              disabled={previewUsers.length === 0 || isSaving}
+              disabled={users.length === 0 || isSaving}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSaving ? (
@@ -328,7 +338,7 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
               ) : (
                 <>
                   <span>💾</span>
-                  Salvar {previewUsers.length > 0 && `(${previewUsers.length})`}
+                  Salvar {users.length > 0 && `(${users.length})`}
                 </>
               )}
             </button>
@@ -338,4 +348,3 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
     </div>
   )
 }
-

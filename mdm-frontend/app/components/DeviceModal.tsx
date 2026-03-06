@@ -77,6 +77,7 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
   const [showMessageModal, setShowMessageModal] = useState(false)
   const [messageText, setMessageText] = useState('')
   const [isSendingMessage, setIsSendingMessage] = useState(false)
+  const [isApplyingPolicies, setIsApplyingPolicies] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [showTermsModal, setShowTermsModal] = useState(false)
   
@@ -1016,7 +1017,35 @@ export default function DeviceModal({ device, onClose, onDelete, sendMessage, on
 
         {/* Footer - Controles Rápidos */}
         <div className="border-t border-border p-4 bg-gray-50">
-          <div className="flex gap-3 justify-center max-w-2xl mx-auto">
+          <div className="flex flex-wrap gap-3 justify-center max-w-2xl mx-auto">
+            <button 
+              className="btn btn-warning flex-1 min-w-[140px]"
+              onClick={async () => {
+                setIsApplyingPolicies(true)
+                try {
+                  const res = await fetch('/api/devices/apply-policies', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ deviceId: device.deviceId })
+                  })
+                  const data = await res.json()
+                  if (data.success) {
+                    alert('✅ Políticas aplicadas: bloqueio desativado, Settings bloqueado, Quick Settings restritos (WiFi, Bluetooth, claridade, som, lanterna)')
+                  } else {
+                    alert('❌ Erro: ' + (data.error || 'Não foi possível aplicar'))
+                  }
+                } catch (e) {
+                  alert('❌ Erro ao conectar com o servidor')
+                } finally {
+                  setIsApplyingPolicies(false)
+                }
+              }}
+              disabled={isApplyingPolicies}
+              title="Desabilita bloqueio de tela, bloqueia configurações do celular e restringe Quick Settings a WiFi, Bluetooth, claridade, som e lanterna"
+            >
+              <span>{isApplyingPolicies ? '⏳' : '🔒'}</span>
+              {isApplyingPolicies ? 'Aplicando...' : 'Aplicar Políticas'}
+            </button>
             <button 
               className="btn btn-primary flex-1"
               onClick={handleOpenMessageModal}

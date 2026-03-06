@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Device } from '../types/device'
+import ConfirmModal from './ConfirmModal'
 
 interface DeviceCardProps {
   device: Device
@@ -14,6 +15,8 @@ interface DeviceCardProps {
 
 export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showUpdateConfirm, setShowUpdateConfirm] = useState(false)
 
   const loadReadMessagesCount = useCallback(async () => {
     try {
@@ -96,7 +99,7 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
 
   return (
     <div 
-      className="card p-6 cursor-pointer hover:shadow-lg transition-all group"
+      className="relative card p-6 cursor-pointer hover:shadow-lg transition-all group"
       onClick={onClick}
     >
       {/* Header */}
@@ -230,7 +233,7 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
           className="btn btn-sm btn-success flex-1"
           onClick={(e) => {
             e.stopPropagation()
-            onUpdate()
+            setShowUpdateConfirm(true)
           }}
           title="Atualizar APK do dispositivo"
         >
@@ -240,12 +243,42 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
           className="btn btn-sm btn-error flex-1"
           onClick={(e) => {
             e.stopPropagation()
-            onDelete()
+            setShowDeleteConfirm(true)
           }}
         >
           🗑️ Deletar
         </button>
       </div>
+
+      <ConfirmModal
+        isOpen={showDeleteConfirm}
+        onClose={() => setShowDeleteConfirm(false)}
+        onConfirm={() => {
+          setShowDeleteConfirm(false)
+          onDelete()
+        }}
+        title="Tem certeza?"
+        message={`Deseja deletar o dispositivo "${device.name}"? Esta ação não pode ser desfeita.`}
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="danger"
+        insideCard
+      />
+
+      <ConfirmModal
+        isOpen={showUpdateConfirm}
+        onClose={() => setShowUpdateConfirm(false)}
+        onConfirm={() => {
+          setShowUpdateConfirm(false)
+          onUpdate()
+        }}
+        title="Tem certeza?"
+        message={`Deseja atualizar o APK do dispositivo "${device.name}"?`}
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="primary"
+        insideCard
+      />
     </div>
   )
 }

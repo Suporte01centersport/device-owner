@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import Dashboard from './components/Dashboard'
@@ -12,6 +12,7 @@ import BulkUpdateModal from './components/BulkUpdateModal'
 import UserSelectionModal from './components/UserSelectionModal'
 import UserConflictModal from './components/UserConflictModal'
 import ConfigModal from './components/ConfigModal'
+import ConfirmModal from './components/ConfirmModal'
 import PoliciesPage from './policies/page'
 import UEMPage from './uem/page'
 import { Device, AppInfo } from './types/device'
@@ -43,6 +44,17 @@ export default function Home() {
   const [usersCount, setUsersCount] = useState(0)
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<any>(null)
+  const [isAddingDevice, setIsAddingDevice] = useState(false)
+  const [showBackupConfirm, setShowBackupConfirm] = useState(false)
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false)
+  const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
+  const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
+  const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3002')
+  const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
+  const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
+  const [settingsLocationTracking, setSettingsLocationTracking] = useState(true)
+  const settingsLoadedRef = useRef(false)
   
   // Carregar contagem de usuários
   useEffect(() => {
@@ -86,6 +98,24 @@ export default function Home() {
     }
   }, [])
 
+  // Carregar configurações salvas ao abrir a tela de configurações
+  useEffect(() => {
+    if (currentView === 'settings' && !settingsLoadedRef.current) {
+      try {
+        const saved = localStorage.getItem('mdm_settings')
+        if (saved) {
+          const s = JSON.parse(saved)
+          if (s.wsUrl) setSettingsWsUrl(s.wsUrl)
+          if (s.heartbeatInterval != null) setSettingsHeartbeat(String(s.heartbeatInterval))
+          if (s.autoUpdateStatus != null) setSettingsAutoUpdate(s.autoUpdateStatus)
+          if (s.locationTracking != null) setSettingsLocationTracking(s.locationTracking)
+        }
+        settingsLoadedRef.current = true
+      } catch (_) {}
+    }
+    if (currentView !== 'settings') settingsLoadedRef.current = false
+  }, [currentView])
+
   // WebSocket connection
   useEffect(() => {
     let websocket: WebSocket | null = null
@@ -99,15 +129,21 @@ export default function Home() {
       }
 
       try {
-        // Detectar automaticamente o host correto
-        // Se acessando de localhost/127.0.0.1, usar localhost
-        // Caso contrário, usar o mesmo host da página web
-        const hostname = window.location.hostname
-        const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') 
-          ? 'localhost' 
-          : hostname
-        
-        const wsUrl = `ws://${wsHost}:3002`
+        let wsUrl: string | undefined
+        try {
+          const saved = localStorage.getItem('mdm_settings')
+          if (saved) {
+            const s = JSON.parse(saved)
+            if (s?.wsUrl && typeof s.wsUrl === 'string' && s.wsUrl.startsWith('ws')) {
+              wsUrl = s.wsUrl
+            }
+          }
+        } catch (_) {}
+        if (!wsUrl) {
+          const hostname = window.location.hostname
+          const wsHost = (hostname === 'localhost' || hostname === '127.0.0.1') ? 'localhost' : hostname
+          wsUrl = `ws://${wsHost}:3002`
+        }
         console.log('🔌 Conectando ao WebSocket:', wsUrl)
         
         websocket = new WebSocket(wsUrl)
@@ -506,16 +542,17 @@ export default function Home() {
         break
       case 'location_updated':
         console.log('Localização atualizada:', message)
-        updateDevices(prevDevices => 
+        updateDevices(prevDevices =>
           prevDevices.map(device => {
             if (device.deviceId === message.deviceId) {
-              return { 
-                ...device, 
+              return {
+                ...device,
                 latitude: message.location.latitude,
                 longitude: message.location.longitude,
                 locationAccuracy: message.location.accuracy,
                 lastLocationUpdate: message.location.timestamp,
-                isLocationEnabled: true
+                isLocationEnabled: true,
+                ...(message.location.address != null && { address: message.location.address })
               }
             }
             return device
@@ -563,6 +600,32 @@ export default function Home() {
         // Mensagens de atualização de computadores são tratadas em /uem/page.tsx
         // Ignorar silenciosamente aqui
         break
+      case 'lock_device_result':
+        if (message.success) {
+          alert('✅ ' + (message.message || 'Comando de travar enviado ao dispositivo'))
+        } else {
+          alert('❌ ' + (message.message || 'Falha ao enviar comando. Verifique se o dispositivo está online.'))
+        }
+        break
+      case 'reboot_device_result':
+        if (message.success) {
+          alert('✅ ' + (message.message || 'Dispositivo reiniciando...'))
+        } else {
+          alert('❌ ' + (message.message || 'Falha ao reiniciar. Verifique se o dispositivo está online e é Device Owner.'))
+        }
+        break
+      case 'alarm_device_result':
+        if (message.success) {
+          if (message.action === 'start') {
+            // Alarme iniciou no dispositivo - confirmação silenciosa (usuário já viu "Alarme iniciado")
+          } else {
+            // Alarme parou no dispositivo
+          }
+        } else {
+          alert('❌ ' + (message.message || 'Falha no alarme. Verifique se o dispositivo está online e na mesma rede.'))
+          setAlarmError({ deviceId: message.deviceId })
+        }
+        break
       default:
         // Ignorar mensagens desconhecidas silenciosamente (evitar spam de logs)
         // console.log('Mensagem WebSocket não reconhecida:', message)
@@ -573,9 +636,10 @@ export default function Home() {
   const sendMessage = useCallback((message: any) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message))
-    } else {
-      console.warn('WebSocket não conectado')
+      return true
     }
+    console.warn('WebSocket não conectado')
+    return false
   }, [ws])
 
   const handleDeviceClick = (device: Device) => {
@@ -719,6 +783,87 @@ export default function Home() {
     console.log('✅ Usuários salvos no banco:', users.length)
   }
 
+  const handleBackup = async () => {
+    setShowBackupConfirm(false)
+    try {
+      const res = await fetch('/api/config/backup')
+      if (!res.ok) throw new Error('Falha ao gerar backup')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `mdm-backup-${new Date().toISOString().slice(0, 10)}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      alert('✅ Backup baixado com sucesso!')
+    } catch (e) {
+      console.error('Erro no backup:', e)
+      alert('❌ Erro ao gerar backup. Verifique se o servidor está conectado ao banco.')
+    }
+  }
+
+  const handleRestart = async () => {
+    setShowRestartConfirm(false)
+    try {
+      const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+      const res = await fetch(`http://${wsHost}:3002/api/server/restart`, { method: 'POST' })
+      if (res.ok) {
+        alert('✅ Reinício solicitado. O servidor irá reconectar em alguns segundos.')
+      } else {
+        throw new Error('Falha ao reiniciar')
+      }
+    } catch (e) {
+      console.error('Erro ao reiniciar:', e)
+      alert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3002.')
+    }
+  }
+
+  const handleClearCache = async () => {
+    setShowClearCacheConfirm(false)
+    try {
+      const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+      const res = await fetch(`http://${wsHost}:3002/api/server/clear-cache`, { method: 'POST' })
+      const data = await res.json()
+      if (res.ok && data.success) {
+        alert('✅ Cache limpo com sucesso!')
+      } else {
+        throw new Error(data.error || 'Falha ao limpar cache')
+      }
+    } catch (e) {
+      console.error('Erro ao limpar cache:', e)
+      alert('❌ Erro ao limpar o cache. Verifique se o servidor WebSocket está rodando na porta 3002.')
+    }
+  }
+
+  const handleSaveSettings = () => {
+    try {
+      const settings = {
+        wsUrl: settingsWsUrl,
+        heartbeatInterval: parseInt(settingsHeartbeat, 10) || 30,
+        autoUpdateStatus: settingsAutoUpdate,
+        locationTracking: settingsLocationTracking
+      }
+      localStorage.setItem('mdm_settings', JSON.stringify(settings))
+    } catch (e) {
+      console.error('Erro ao salvar configurações:', e)
+    }
+  }
+
+  const handleApplySettings = () => {
+    try {
+      const settings = {
+        wsUrl: settingsWsUrl,
+        heartbeatInterval: parseInt(settingsHeartbeat, 10) || 30,
+        autoUpdateStatus: settingsAutoUpdate,
+        locationTracking: settingsLocationTracking
+      }
+      localStorage.setItem('mdm_settings', JSON.stringify(settings))
+      ws?.close(1001, 'Aplicando novas configurações')
+    } catch (e) {
+      console.error('Erro ao aplicar mudanças:', e)
+    }
+  }
+
   const handleCloseModal = () => {
     setIsModalOpen(false)
     setSelectedDevice(null)
@@ -731,15 +876,12 @@ export default function Home() {
       alert('Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
       return
     }
-    
-    if (window.confirm('Tem certeza que deseja deletar este dispositivo permanentemente? Esta ação não pode ser desfeita.')) {
-      console.log('🗑️ Enviando requisição de deleção:', deviceId)
-      sendMessage({
-        type: 'delete_device',
-        deviceId: deviceId,
-        timestamp: Date.now()
-      })
-    }
+    console.log('🗑️ Enviando requisição de deleção:', deviceId)
+    sendMessage({
+      type: 'delete_device',
+      deviceId: deviceId,
+      timestamp: Date.now()
+    })
   }, [sendMessage])
 
   const handleUpdateApp = useCallback(async (apkUrl: string, version: string) => {
@@ -779,38 +921,23 @@ export default function Home() {
     }
   }, [updateDevice])
 
-  const handleBulkUpdateApp = useCallback(async (deviceIds: string[], apkUrl: string, version: string) => {
+  const handleBulkUpdateMdm = useCallback(async (deviceIds: string[]) => {
     try {
-      console.log('📥 Iniciando atualização em massa:', {
-        deviceCount: deviceIds.length,
-        deviceIds,
-        apkUrl,
-        version
-      })
-
-      const response = await fetch('/api/devices/update-app', {
+      const response = await fetch('/api/devices/bulk-update-mdm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          deviceIds,
-          apkUrl,
-          version
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deviceIds })
       })
-
       const result = await response.json()
-
       if (result.success) {
-        alert(`✅ Atualização iniciada para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos começarão a baixar e instalar o APK automaticamente.\n\nAcompanhe o progresso nos logs dos dispositivos.`)
-        setIsBulkUpdateModalOpen(false)
+        alert(`✅ Build concluído e atualização enviada via WiFi para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos baixarão e instalarão o MDM automaticamente.`)
+        syncWithServer()
       } else {
-        alert(`❌ Erro ao enviar comando de atualização:\n${result.error || 'Erro desconhecido'}`)
+        alert(`❌ Erro: ${result.error || 'Falha ao enviar atualização'}`)
       }
     } catch (error) {
-      console.error('Erro ao atualizar apps em massa:', error)
-      alert('❌ Erro ao enviar comando de atualização. Verifique o console para mais detalhes.')
+      console.error('Erro ao atualizar MDM em massa:', error)
+      alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3002.')
     }
   }, [])
 
@@ -895,7 +1022,7 @@ export default function Home() {
     updateDevices(prevDevices => prevDevices.filter(device => device.deviceId !== deviceId))
   }, [updateDevices])
 
-  const handleSetAdminPasswordAll = useCallback(() => {
+  const handleSetPasswordClick = useCallback(() => {
     const passwordInput = document.getElementById('adminPassword') as HTMLInputElement
     const confirmInput = document.getElementById('adminPasswordConfirm') as HTMLInputElement
     
@@ -925,37 +1052,43 @@ export default function Home() {
       return
     }
 
-    const onlineDevices = devices.filter(d => d.status === 'online')
+    setShowSetPasswordConfirm(true)
+  }, [])
+
+  const handleSetPasswordConfirm = useCallback(() => {
+    setShowSetPasswordConfirm(false)
+    const passwordInput = document.getElementById('adminPassword') as HTMLInputElement
+    const confirmInput = document.getElementById('adminPasswordConfirm') as HTMLInputElement
     
-    if (confirm(`Definir senha de administrador?${onlineDevices.length > 0 ? `\n\n${onlineDevices.length} dispositivo(s) online receberão a senha imediatamente.` : '\n\nDispositivos receberão a senha quando se conectarem.'}`)) {
-      // Enviar para todos os dispositivos (online e offline)
-      sendMessage({
-        type: 'set_admin_password',
-        data: {
-          password: password
-        },
-        timestamp: Date.now()
-      })
-      
-      // Atualizar estado da senha
-      updateAdminPassword(password)
-      
-      if (onlineDevices.length > 0) {
-        alert(`Senha de administrador definida e enviada para ${onlineDevices.length} dispositivos online!`)
-      } else {
-        alert('Senha de administrador definida! Dispositivos receberão a senha quando se conectarem.')
-      }
-      
-      // Limpar campos
-      passwordInput.value = ''
-      confirmInput.value = ''
+    if (!passwordInput || !confirmInput) return
+
+    const password = passwordInput.value.trim()
+    if (!password || password.length < 4) return
+
+    const onlineDevices = devices.filter(d => d.status === 'online')
+
+    sendMessage({
+      type: 'set_admin_password',
+      data: { password },
+      timestamp: Date.now()
+    })
+    
+    updateAdminPassword(password)
+    
+    if (onlineDevices.length > 0) {
+      alert(`Senha de administrador definida e enviada para ${onlineDevices.length} dispositivos online!`)
+    } else {
+      alert('Senha de administrador definida! Dispositivos receberão a senha quando se conectarem.')
     }
+    
+    passwordInput.value = ''
+    confirmInput.value = ''
   }, [sendMessage, devices, updateAdminPassword])
 
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
-        return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} />
+        return <Dashboard devices={devices} isConnected={isConnected} onMessage={handleWebSocketMessage} onViewChange={setCurrentView} />
       case 'policies':
         return <PoliciesPage />
       case 'uem':
@@ -970,6 +1103,30 @@ export default function Home() {
               </div>
               <div className="flex gap-3">
                 <button 
+                  className="btn btn-primary"
+                  onClick={async () => {
+                    setIsAddingDevice(true)
+                    try {
+                      const res = await fetch('/api/devices/add-device', { method: 'POST' })
+                      const data = await res.json()
+                      if (data.success) {
+                        alert('Dispositivo configurado com sucesso! MDM, WMS e kiosk instalados.')
+                        window.location.reload()
+                      } else {
+                        alert('Erro: ' + (data.error || 'Falha ao configurar'))
+                      }
+                    } catch (e) {
+                      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+                    } finally {
+                      setIsAddingDevice(false)
+                    }
+                  }}
+                  disabled={isAddingDevice}
+                >
+                  <span>{isAddingDevice ? '⏳' : '📱'}</span>
+                  {isAddingDevice ? 'Instalando...' : 'Adicionar Dispositivo'}
+                </button>
+                <button 
                   className="btn btn-secondary"
                   onClick={() => setIsConfigModalOpen(true)}
                 >
@@ -982,7 +1139,7 @@ export default function Home() {
                   )}
                 </button>
                 <button 
-                  className="btn btn-primary"
+                  className="btn btn-secondary"
                   onClick={() => setIsBulkUpdateModalOpen(true)}
                   disabled={devices.length === 0}
                 >
@@ -999,11 +1156,31 @@ export default function Home() {
                 </div>
                 <h3 className="text-lg font-semibold text-primary mb-2">Nenhum dispositivo conectado</h3>
                 <p className="text-secondary mb-6">
-                  Conecte dispositivos Android para começar o gerenciamento
+                  Conecte o celular via USB, habilite depuração e clique para instalar MDM + WMS
                 </p>
-                <button className="btn btn-primary btn-lg">
-                  <span>📱</span>
-                  Conectar Primeiro Dispositivo
+                <button 
+                  className="btn btn-primary btn-lg"
+                  onClick={async () => {
+                    setIsAddingDevice(true)
+                    try {
+                      const res = await fetch('/api/devices/add-device', { method: 'POST' })
+                      const data = await res.json()
+                      if (data.success) {
+                        alert('Dispositivo configurado! O celular aparecerá quando conectar ao servidor.')
+                        syncWithServer()
+                      } else {
+                        alert('Erro: ' + (data.error || 'Conecte o celular via USB e habilite depuração'))
+                      }
+                    } catch (e) {
+                      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+                    } finally {
+                      setIsAddingDevice(false)
+                    }
+                  }}
+                  disabled={isAddingDevice}
+                >
+                  <span>{isAddingDevice ? '⏳' : '📱'}</span>
+                  {isAddingDevice ? 'Instalando MDM e WMS...' : 'Adicionar Dispositivo'}
                 </button>
               </div>
             ) : (
@@ -1028,18 +1205,18 @@ export default function Home() {
         )
       case 'settings':
         return (
-          <div className="p-6">
+          <div className="p-6 text-white">
             <div className="flex justify-between items-center mb-6">
               <div>
-                <h1 className="text-2xl font-bold text-primary">Configurações</h1>
-                <p className="text-secondary mt-1">Gerencie as configurações do sistema MDM</p>
+                <h1 className="text-2xl font-bold text-white">Configurações</h1>
+                <p className="text-white mt-1">Gerencie as configurações do sistema MDM</p>
               </div>
               <div className="flex gap-3">
-                <button className="btn btn-secondary">
+                <button onClick={handleSaveSettings} className="btn btn-secondary !text-white border-white/30">
                   <span>💾</span>
                   Salvar Configurações
                 </button>
-                <button className="btn btn-primary">
+                <button onClick={handleApplySettings} className="btn btn-primary text-white">
                   <span>🔄</span>
                   Aplicar Mudanças
                 </button>
@@ -1047,79 +1224,91 @@ export default function Home() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Configurações do Servidor */}
+              {/* Configurações do Servidor - texto branco */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-primary mb-4">Configurações do Servidor</h3>
+                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Configurações do Servidor</h3>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">
+                      <label className="block text-sm font-medium text-white mb-2">
                         Endereço do Servidor WebSocket
                       </label>
                       <input
                         type="text"
-                        defaultValue="ws://localhost:3002"
-                        className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        value={settingsWsUrl}
+                        onChange={(e) => setSettingsWsUrl(e.target.value)}
+                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">
+                      <label className="block text-sm font-medium text-white mb-2">
                         Intervalo de Heartbeat (segundos)
                       </label>
                       <input
                         type="number"
-                        defaultValue="30"
-                        className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        value={settingsHeartbeat}
+                        onChange={(e) => setSettingsHeartbeat(e.target.value)}
+                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-primary mb-4">Configurações de Dispositivo</h3>
+                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Configurações de Dispositivo</h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-primary">Atualização Automática de Status</div>
-                        <div className="text-xs text-secondary">Atualizar status dos dispositivos automaticamente</div>
+                        <div className="text-sm font-medium text-white">Atualização Automática de Status</div>
+                        <div className="text-xs text-white/80">Atualizar status dos dispositivos automaticamente</div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" defaultChecked className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <input
+                          type="checkbox"
+                          checked={settingsAutoUpdate}
+                          onChange={(e) => setSettingsAutoUpdate(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-sm font-medium text-primary">Rastreamento de Localização</div>
-                        <div className="text-xs text-secondary">Permitir rastreamento de localização dos dispositivos</div>
+                        <div className="text-sm font-medium text-white">Rastreamento de Localização</div>
+                        <div className="text-xs text-white/80">Permitir rastreamento de localização dos dispositivos</div>
                       </div>
                       <label className="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" defaultChecked className="sr-only peer" />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <input
+                          type="checkbox"
+                          checked={settingsLocationTracking}
+                          onChange={(e) => setSettingsLocationTracking(e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
                   </div>
                 </div>
 
-                <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-primary mb-4">Senha de Administrador</h3>
+                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Senha de Administrador</h3>
                   
                   {/* Senha Atual */}
-                <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                <div className="mb-6 p-4 bg-white/5 border border-white/20 rounded-lg">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-700">Senha Atual:</div>
-                            <div className="text-lg font-mono text-gray-900">
+                            <div className="text-sm font-medium text-white">Senha Atual:</div>
+                            <div className="text-lg font-mono text-white">
                                 {currentAdminPassword ? (showPassword ? currentAdminPassword : '••••••••') : 'Não definida'}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs text-white/80 mt-1">
                                 Debug: {currentAdminPassword ? `Tamanho: ${currentAdminPassword.length}` : 'Vazia'}
                             </div>
                         </div>
                         {currentAdminPassword && (
                             <button
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="ml-3 p-2 text-gray-500 hover:text-gray-700 transition-colors"
+                                className="ml-3 p-2 text-white hover:text-white/80 transition-colors"
                                 title={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                             >
                                 {showPassword ? '🙈' : '👁️'}
@@ -1130,31 +1319,31 @@ export default function Home() {
                   
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">
+                      <label className="block text-sm font-medium text-white mb-2">
                         Nova Senha de Administrador
                       </label>
                       <input
                         type="password"
                         id="adminPassword"
                         placeholder="Digite a nova senha (mín. 4 caracteres)"
-                        className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-secondary mb-2">
+                      <label className="block text-sm font-medium text-white mb-2">
                         Confirmar Senha
                       </label>
                       <input
                         type="password"
                         id="adminPasswordConfirm"
                         placeholder="Confirme a nova senha"
-                        className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                        className="w-full px-4 py-2 border border-white/30 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white/5 text-white placeholder:text-gray-400"
                       />
                     </div>
                     <div className="flex gap-3">
                       <button 
-                        onClick={handleSetAdminPasswordAll}
-                        className="btn btn-primary flex-1"
+                        onClick={handleSetPasswordClick}
+                        className="btn btn-primary flex-1 text-white"
                       >
                         <span>🔐</span>
                         Definir Senha
@@ -1166,14 +1355,15 @@ export default function Home() {
                           if (passwordInput) passwordInput.value = ''
                           if (confirmInput) confirmInput.value = ''
                         }}
-                        className="btn btn-secondary"
+                        className="btn btn-secondary text-white"
+                        title="Limpar os campos de nova senha"
                       >
                         <span>🗑️</span>
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <div className="text-xs text-blue-800">
+                    <div className="bg-white/10 border border-white/20 rounded-lg p-3">
+                      <div className="text-xs text-white">
                         <strong>📋 Instruções:</strong>
                         <ul className="mt-1 list-disc list-inside space-y-1">
                           <li>A senha será salva no servidor e enviada para <strong>todos os dispositivos</strong></li>
@@ -1187,42 +1377,51 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Sidebar de Informações */}
+              {/* Sidebar de Informações - texto branco */}
               <div className="space-y-6">
-                <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-primary mb-4">Status do Sistema</h3>
+                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Status do Sistema</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-secondary">Servidor WebSocket</span>
+                      <span className="text-sm text-white">Servidor WebSocket</span>
                       <span className={`badge ${isConnected ? 'badge-success' : 'badge-error'}`}>
                         {isConnected ? 'Online' : 'Offline'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-secondary">Dispositivos Conectados</span>
-                      <span className="text-sm font-medium text-primary">
+                      <span className="text-sm text-white">Dispositivos Conectados</span>
+                      <span className="text-sm font-medium text-white">
                         {devices.filter(d => d.status === 'online').length}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-secondary">Total de Dispositivos</span>
-                      <span className="text-sm font-medium text-primary">{devices.length}</span>
+                      <span className="text-sm text-white">Total de Dispositivos</span>
+                      <span className="text-sm font-medium text-white">{devices.length}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="card p-6">
-                  <h3 className="text-lg font-semibold text-primary mb-4">Ações Rápidas</h3>
+                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Ações Rápidas</h3>
                   <div className="space-y-3">
-                    <button className="btn btn-secondary w-full">
+                    <button
+                      onClick={() => setShowRestartConfirm(true)}
+                      className="btn btn-secondary w-full !text-white border-white/30"
+                    >
                       <span>🔄</span>
                       Reiniciar Servidor
                     </button>
-                    <button className="btn btn-secondary w-full">
+                    <button
+                      onClick={() => setShowBackupConfirm(true)}
+                      className="btn btn-secondary w-full !text-white border-white/30"
+                    >
                       <span>💾</span>
                       Backup de Configurações
                     </button>
-                    <button className="btn btn-warning w-full">
+                    <button
+                      onClick={() => setShowClearCacheConfirm(true)}
+                      className="btn btn-warning w-full !text-white"
+                    >
                       <span>⚠️</span>
                       Limpar Cache
                     </button>
@@ -1233,7 +1432,7 @@ export default function Home() {
           </div>
         )
       default:
-        return <Dashboard devices={devices} isConnected={isConnected} />
+        return <Dashboard devices={devices} isConnected={isConnected} onViewChange={setCurrentView} />
     }
   }
 
@@ -1292,10 +1491,13 @@ export default function Home() {
       {/* Support Messages Modal */}
       {isSupportModalOpen && supportDevice && (
         <SupportMessagesModal
-          device={supportDevice}
+          device={devices.find(d => d.deviceId === supportDevice.deviceId) ?? supportDevice}
           isOpen={isSupportModalOpen}
           onClose={handleSupportModalClose}
           onMessageStatusUpdate={handleSupportCountUpdate}
+          sendMessage={sendMessage}
+          alarmError={alarmError?.deviceId === supportDevice.deviceId ? alarmError : null}
+          onAlarmErrorHandled={() => setAlarmError(null)}
         />
       )}
 
@@ -1318,7 +1520,7 @@ export default function Home() {
           devices={devices}
           isOpen={isBulkUpdateModalOpen}
           onClose={() => setIsBulkUpdateModalOpen(false)}
-          onConfirm={handleBulkUpdateApp}
+          onBulkUpdateMdm={handleBulkUpdateMdm}
         />
       )}
 
@@ -1358,6 +1560,53 @@ export default function Home() {
           onSave={handleSaveConfig}
         />
       )}
+
+      {/* Modal de confirmação - Backup */}
+      <ConfirmModal
+        isOpen={showBackupConfirm}
+        onClose={() => setShowBackupConfirm(false)}
+        onConfirm={handleBackup}
+        title="Backup de Configurações"
+        message="Deseja fazer o backup das configurações? Um arquivo JSON será baixado."
+        confirmLabel="Sim"
+        cancelLabel="Não"
+      />
+
+      {/* Modal de confirmação - Reiniciar Servidor */}
+      <ConfirmModal
+        isOpen={showRestartConfirm}
+        onClose={() => setShowRestartConfirm(false)}
+        onConfirm={handleRestart}
+        title="Reiniciar Servidor"
+        message="Deseja reiniciar o servidor? A conexão será interrompida temporariamente."
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="warning"
+      />
+
+      {/* Modal de confirmação - Limpar Cache */}
+      <ConfirmModal
+        isOpen={showClearCacheConfirm}
+        onClose={() => setShowClearCacheConfirm(false)}
+        onConfirm={handleClearCache}
+        title="Limpar Cache"
+        message="Deseja limpar o cache de localização? Os dados serão recarregados na próxima atualização."
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="warning"
+      />
+
+      {/* Modal de confirmação - Definir Senha */}
+      <ConfirmModal
+        isOpen={showSetPasswordConfirm}
+        onClose={() => setShowSetPasswordConfirm(false)}
+        onConfirm={handleSetPasswordConfirm}
+        title="Definir Senha"
+        message="Tem certeza que deseja definir esta senha de administrador para todos os dispositivos?"
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="primary"
+      />
     </div>
   )
 }

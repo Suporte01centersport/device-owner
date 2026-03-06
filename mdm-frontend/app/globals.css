@@ -112,6 +112,14 @@
   }
 }
 
+/* Inputs - texto e placeholder escuros para legibilidade */
+.input {
+  color: #111827 !important;
+}
+.input::placeholder {
+  color: #4b5563 !important;
+}
+
 /* Reset e base */
 * {
   margin: 0;

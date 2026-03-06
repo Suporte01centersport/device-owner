@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
+import LocationMapModal from './LocationMapModal'
 
 interface SupportMessage {
   id: string
@@ -20,18 +21,33 @@ interface SupportMessagesModalProps {
   isOpen: boolean
   onClose: () => void
   onMessageStatusUpdate?: () => void
+  sendMessage?: (message: any) => boolean | void
+  alarmError?: { deviceId: string } | null
+  onAlarmErrorHandled?: () => void
 }
 
-export default function SupportMessagesModal({ device, isOpen, onClose, onMessageStatusUpdate }: SupportMessagesModalProps) {
+export default function SupportMessagesModal({ device, isOpen, onClose, onMessageStatusUpdate, sendMessage, alarmError, onAlarmErrorHandled }: SupportMessagesModalProps) {
   const [messages, setMessages] = useState<SupportMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [selectedMessage, setSelectedMessage] = useState<SupportMessage | null>(null)
+  const [outgoingMessage, setOutgoingMessage] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const [showLocationModal, setShowLocationModal] = useState(false)
+  const [alarmOn, setAlarmOn] = useState(false)
 
   useEffect(() => {
     if (isOpen) {
       loadSupportMessages()
     }
   }, [isOpen, device.deviceId])
+
+  // Sincronizar alarmOn quando receber erro (dispositivo não conectado)
+  useEffect(() => {
+    if (alarmError && alarmError.deviceId === device.deviceId && isOpen) {
+      setAlarmOn(false)
+      onAlarmErrorHandled?.()
+    }
+  }, [alarmError, device.deviceId, isOpen, onAlarmErrorHandled])
 
   const loadSupportMessages = async () => {
     setIsLoading(true)
@@ -134,6 +150,77 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
     }
   }
 
+  const handleControlAction = (action: 'lock' | 'locate' | 'alarm' | 'reboot') => {
+    if (!sendMessage) {
+      alert('Conexão não disponível')
+      return
+    }
+    if (device.status !== 'online') {
+      alert('O dispositivo está offline. Apenas dispositivos online podem receber comandos.')
+      return
+    }
+    switch (action) {
+      case 'lock':
+        if (!sendMessage?.({ type: 'lock_device', deviceId: device.deviceId, timestamp: Date.now() })) {
+          alert('Conexão não disponível. Verifique se o painel está conectado ao servidor.')
+        }
+        break
+      case 'locate':
+        sendMessage({ type: 'request_location', deviceId: device.deviceId, timestamp: Date.now() })
+        setShowLocationModal(true)
+        break
+      case 'alarm':
+        if (alarmOn) {
+          sendMessage({ type: 'stop_alarm', deviceId: device.deviceId, timestamp: Date.now() })
+          setAlarmOn(false)
+          alert('Alarme parado')
+        } else {
+          sendMessage({ type: 'start_alarm', deviceId: device.deviceId, timestamp: Date.now() })
+          setAlarmOn(true)
+          alert('Alarme iniciado - toque novamente para parar')
+        }
+        break
+      case 'reboot':
+        if (!confirm('Reiniciar o dispositivo agora?')) return
+        if (!sendMessage?.({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })) {
+          alert('Conexão não disponível. Verifique se o painel está conectado ao servidor.')
+        }
+        break
+    }
+  }
+
+  const handleSendMessage = () => {
+    if (!outgoingMessage.trim()) {
+      alert('Digite uma mensagem para enviar')
+      return
+    }
+    if (!sendMessage) {
+      alert('Conexão não disponível para enviar mensagem')
+      return
+    }
+    if (device.status !== 'online') {
+      alert('O dispositivo está offline. Apenas dispositivos online podem receber mensagens.')
+      return
+    }
+
+    setIsSending(true)
+    try {
+      sendMessage({
+        type: 'send_test_notification',
+        deviceId: device.deviceId,
+        message: outgoingMessage.trim(),
+        timestamp: Date.now()
+      })
+      setOutgoingMessage('')
+      alert('Mensagem enviada com sucesso!')
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error)
+      alert('Erro ao enviar mensagem')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
   const clearAllMessages = async () => {
     if (!confirm(`Tem certeza que deseja limpar todas as mensagens de suporte do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita.`)) {
       return
@@ -191,13 +278,13 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
   return (
     <>
-      {/* Modal principal */}
+      {/* Modal principal - azul meio escuro fora dos balões */}
       <div 
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         onClick={onClose}
       >
         <div 
-          className="bg-surface rounded-xl shadow-xl max-w-4xl w-full h-[80vh] flex flex-col"
+          className="rounded-xl shadow-xl max-w-4xl w-full h-[80vh] flex flex-col bg-background"
           onClick={(e) => e.stopPropagation()}
         >
           <div className="flex justify-between items-center p-6 border-b border-border">
@@ -214,17 +301,63 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
           </div>
           
           <div className="flex-1 overflow-y-auto p-6">
+            {/* Dashboard de Controle - balão com fundo claro */}
+            {device.status === 'online' && sendMessage && (
+              <div className="mb-6 p-4 bg-surface rounded-xl border border-border">
+                <h4 className="text-sm font-semibold text-primary mb-3 flex items-center gap-2">
+                  <span>🎛️</span>
+                  Controle do Dispositivo
+                </h4>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <button
+                    onClick={() => handleControlAction('lock')}
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface transition-colors"
+                    title="Travar o dispositivo"
+                  >
+                    <span className="text-2xl">🔒</span>
+                    <span className="text-xs font-medium text-primary">Travar</span>
+                  </button>
+                  <button
+                    onClick={() => handleControlAction('locate')}
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface transition-colors"
+                    title="Solicitar localização"
+                  >
+                    <span className="text-2xl">📍</span>
+                    <span className="text-xs font-medium text-primary">Localizar</span>
+                  </button>
+                  <button
+                    onClick={() => handleControlAction('alarm')}
+                    className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
+                      alarmOn ? 'border-red-500 bg-red-50' : 'border-border bg-background hover:bg-surface'
+                    }`}
+                    title={alarmOn ? 'Parar alarme' : 'Iniciar alarme sonoro'}
+                  >
+                    <span className="text-2xl">{alarmOn ? '⏹️' : '🔊'}</span>
+                    <span className="text-xs font-medium text-primary">{alarmOn ? 'Parar Alerta' : 'Som Alerta'}</span>
+                  </button>
+                  <button
+                    onClick={() => handleControlAction('reboot')}
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface hover:border-red-200 transition-colors"
+                    title="Reiniciar dispositivo"
+                  >
+                    <span className="text-2xl">🔄</span>
+                    <span className="text-xs font-medium text-primary">Reiniciar</span>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {isLoading ? (
               <div className="text-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="text-gray-500 mt-2">Carregando mensagens...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                <p className="text-secondary mt-2">Carregando mensagens...</p>
               </div>
             ) : messages.length > 0 ? (
               <div className="space-y-3">
                 {messages.map((message) => (
                   <div
                     key={message.id}
-                    className="card p-4 cursor-pointer transition-all duration-200 hover:shadow-lg"
+                    className="bg-surface rounded-xl p-4 cursor-pointer transition-all duration-200 hover:shadow-lg border border-border"
                     onClick={() => setSelectedMessage(message)}
                   >
                     <div className="flex items-center justify-between">
@@ -275,17 +408,41 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   <span className="text-3xl">📭</span>
                 </div>
                 <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma mensagem encontrada</h4>
-                <p className="text-sm text-muted">
+                <p className="text-sm text-secondary">
                   Este dispositivo ainda não enviou mensagens de suporte
                 </p>
               </div>
             )}
           </div>
           
+          {/* Área para enviar mensagem - balão branco onde digita */}
+          {device.status === 'online' && sendMessage && (
+            <div className="p-6 border-t border-border bg-background text-primary">
+              <h4 className="text-sm font-medium text-primary mb-3">📤 Enviar mensagem para o celular</h4>
+              <div className="flex gap-3">
+                <textarea
+                  value={outgoingMessage}
+                  onChange={(e) => setOutgoingMessage(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  className="flex-1 px-4 py-3 border border-border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-primary resize-none min-h-[80px] placeholder:text-muted"
+                  disabled={isSending}
+                  rows={3}
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!outgoingMessage.trim() || isSending}
+                  className="btn btn-primary self-end px-6 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSending ? 'Enviando...' : 'Enviar'}
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="p-6 border-t border-border">
             <div className="flex justify-between items-center">
               <div className="flex items-center gap-3">
-                <span className="text-sm text-muted">
+                <span className="text-sm text-secondary">
                   {messages.length} mensagem{messages.length !== 1 ? 's' : ''} de suporte
                 </span>
                 {messages.length > 0 && (
@@ -310,10 +467,17 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         </div>
       </div>
 
-      {/* Modal de detalhes da mensagem */}
+      {/* Modal de localização com mapa */}
+      <LocationMapModal
+        device={device}
+        isOpen={showLocationModal}
+        onClose={() => setShowLocationModal(false)}
+      />
+
+      {/* Modal de detalhes da mensagem - mesma cor do fundo */}
       {selectedMessage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full">
+          <div className="bg-background rounded-xl shadow-xl max-w-2xl w-full">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h3 className="text-lg font-semibold text-primary flex items-center">
                 <span className="mr-2">📨</span>
@@ -332,14 +496,14 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                 <span className={`badge ${getStatusColor(selectedMessage.status)}`}>
                   {getStatusText(selectedMessage.status)}
                 </span>
-                <span className="text-sm text-muted">
+                <span className="text-sm text-secondary">
                   {formatTimestamp(selectedMessage.timestamp)}
                 </span>
               </div>
               
               <div>
                 <label className="text-sm font-medium text-secondary">Mensagem</label>
-                <div className="mt-1 p-3 bg-gray-50 rounded-lg">
+                <div className="mt-1 p-3 bg-surface rounded-lg">
                   <p className="text-sm text-primary whitespace-pre-wrap">
                     {selectedMessage.message}
                   </p>

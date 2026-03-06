@@ -103,22 +103,34 @@ export default function DeviceLocationMap({ device, className = '' }: DeviceLoca
 
       const marker = window.L.marker([lat, lng], { icon: deviceIcon }).addTo(map)
 
-      // Adicionar popup com informações do dispositivo
+      // Adicionar popup com informações do dispositivo (fundo branco, texto preto para legibilidade)
       const popupContent = `
-        <div style="min-width: 200px;">
-          <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold;">
+        <div style="min-width: 200px; padding: 4px; background: #fff !important; color: #000 !important;">
+          <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: bold; color: #000 !important;">
             ${device.name || device.model}
           </h3>
-          <div style="font-size: 14px; color: #666;">
-            <div><strong>Status:</strong> <span style="color: ${device.status === 'online' ? '#10b981' : '#ef4444'}">${device.status === 'online' ? 'Online' : 'Offline'}</span></div>
-            <div><strong>Coordenadas:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
-            ${device.locationAccuracy ? `<div><strong>Precisão:</strong> ${device.locationAccuracy.toFixed(0)}m</div>` : ''}
-            ${device.locationProvider ? `<div><strong>Provedor:</strong> ${device.locationProvider}</div>` : ''}
-            ${device.lastLocationUpdate ? `<div><strong>Última atualização:</strong> ${new Date(device.lastLocationUpdate).toLocaleString('pt-BR')}</div>` : ''}
+          <div style="font-size: 14px; color: #000 !important;">
+            <div style="color: #000 !important;"><strong>Status:</strong> <span style="color: ${device.status === 'online' ? '#10b981' : '#ef4444'}">${device.status === 'online' ? 'Online' : 'Offline'}</span></div>
+            <div style="color: #000 !important;"><strong>Coordenadas:</strong> ${lat.toFixed(6)}, ${lng.toFixed(6)}</div>
+            ${device.locationAccuracy ? `<div style="color: #000 !important;"><strong>Precisão:</strong> ${device.locationAccuracy.toFixed(0)}m</div>` : ''}
+            ${device.locationProvider ? `<div style="color: #000 !important;"><strong>Provedor:</strong> ${device.locationProvider}</div>` : ''}
+            ${device.lastLocationUpdate ? `<div style="color: #000 !important;"><strong>Última atualização:</strong> ${new Date(device.lastLocationUpdate).toLocaleString('pt-BR')}</div>` : ''}
           </div>
         </div>
       `
-      marker.bindPopup(popupContent)
+      const popup = marker.bindPopup(popupContent)
+      // Garantir que o container do popup do Leaflet tenha fundo branco
+      popup.on('add', () => {
+        const el = document.querySelector('.leaflet-popup-content-wrapper')
+        if (el && el instanceof HTMLElement) {
+          el.style.background = '#fff'
+          el.style.color = '#000'
+        }
+        const pane = document.querySelector('.leaflet-popup-content')
+        if (pane && pane instanceof HTMLElement) {
+          pane.style.color = '#000'
+        }
+      })
 
       // Adicionar círculo de precisão se disponível
       if (device.locationAccuracy && device.locationAccuracy > 0) {

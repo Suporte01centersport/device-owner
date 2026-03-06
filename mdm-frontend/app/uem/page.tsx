@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import UEMCard from '../components/UEM/UEMCard'
 import UEMModal from '../components/UEM/UEMModal'
+import AddComputerModal from '../components/UEM/AddComputerModal'
 import { Computer } from '../types/uem'
 
 type ComputerPayload = Partial<Computer> & { computerId: string }
@@ -124,6 +125,7 @@ export default function UEMPage() {
   const [isRefreshing, setIsRefreshing] = useState(false)
 
   const [websocket, setWebsocket] = useState<WebSocket | null>(null)
+  const [isAddComputerModalOpen, setIsAddComputerModalOpen] = useState(false)
   const isMountedRef = useRef(false)
   const lastRequestId = useRef(0)
   const offlineTimersRef = useRef<Record<string, NodeJS.Timeout>>({})
@@ -442,10 +444,7 @@ export default function UEMPage() {
         <div className="flex gap-3">
           <button 
             className="btn btn-primary"
-            onClick={() => {
-              // TODO: Implementar adicionar novo computador
-              alert('Funcionalidade de adicionar computador será implementada em breve')
-            }}
+            onClick={() => setIsAddComputerModalOpen(true)}
           >
             <span>➕</span>
             Adicionar Computador
@@ -478,10 +477,7 @@ export default function UEMPage() {
           </p>
           <button 
             className="btn btn-primary btn-lg"
-            onClick={() => {
-              // TODO: Implementar adicionar novo computador
-              alert('Funcionalidade de adicionar computador será implementada em breve')
-            }}
+            onClick={() => setIsAddComputerModalOpen(true)}
           >
             <span>💻</span>
             Conectar Primeiro Computador
@@ -500,6 +496,12 @@ export default function UEMPage() {
           ))}
         </div>
       )}
+
+      {/* Add Computer Modal */}
+      <AddComputerModal
+        isOpen={isAddComputerModalOpen}
+        onClose={() => setIsAddComputerModalOpen(false)}
+      />
 
       {/* Computer Modal */}
       {isModalOpen && selectedComputer && (

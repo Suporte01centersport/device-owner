@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
         du.user_id,
         du.name,
         du.cpf,
+        du.birth_year,
+        du.device_model,
+        du.device_serial_number,
         du.email,
         du.phone,
         du.department,
@@ -90,7 +93,7 @@ export async function PUT(request: NextRequest) {
       const savedUsers = []
       
       for (const user of users) {
-        const { id: userId, name, cpf } = user || {}
+        const { id: userId, name, cpf, birth_year, device_model, device_serial_number } = user || {}
         
         if (!userId || !name || !cpf) {
           console.warn('Usuário inválido ignorado:', user)
@@ -98,19 +101,25 @@ export async function PUT(request: NextRequest) {
         }
 
         // Limpar CPF (remover caracteres não numéricos)
-        const cleanCpf = cpf.replace(/\D/g, '')
+        const cleanCpf = (typeof cpf === 'string' ? cpf : String(cpf || '')).replace(/\D/g, '')
+        const birthYear = birth_year != null ? parseInt(String(birth_year), 10) : null
+        const model = device_model ? String(device_model).trim() : null
+        const serial = device_serial_number ? String(device_serial_number).trim() : null
 
-        // Upsert: criar ou atualizar
+        // Upsert: criar ou atualizar (com campos estendidos se existirem)
         const upsertResult = await client.query(`
           INSERT INTO device_users (
-            organization_id, user_id, name, cpf, is_active
-          ) VALUES ($1, $2, $3, $4, $5)
+            organization_id, user_id, name, cpf, birth_year, device_model, device_serial_number, is_active
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
           ON CONFLICT (user_id) DO UPDATE SET
             name = EXCLUDED.name,
             cpf = EXCLUDED.cpf,
+            birth_year = COALESCE(EXCLUDED.birth_year, device_users.birth_year),
+            device_model = COALESCE(EXCLUDED.device_model, device_users.device_model),
+            device_serial_number = COALESCE(EXCLUDED.device_serial_number, device_users.device_serial_number),
             updated_at = NOW()
           RETURNING *
-        `, [organizationId, userId, name, cleanCpf, true])
+        `, [organizationId, userId, name, cleanCpf, birthYear, model, serial, true])
 
         if (upsertResult.rows && upsertResult.rows.length > 0) {
           savedUsers.push(upsertResult.rows[0])

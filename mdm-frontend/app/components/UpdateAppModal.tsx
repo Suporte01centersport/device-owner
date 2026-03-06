@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
+import ConfirmModal from './ConfirmModal'
 
 interface UpdateAppModalProps {
   device: Device | null
@@ -14,6 +15,7 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
   const [apkUrl, setApkUrl] = useState('https://github.com/suporte04centersport/qrcode/releases/download/v1/app-debug.apk')
   const [version, setVersion] = useState('1.0.1')
   const [isLoading, setIsLoading] = useState(false)
+  const [showConfirm, setShowConfirm] = useState(false)
 
   // Fechar ao pressionar ESC
   useEffect(() => {
@@ -30,12 +32,16 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
 
   if (!isOpen || !device) return null
 
-  const handleConfirm = async () => {
+  const handleConfirmClick = () => {
     if (!apkUrl.trim()) {
       alert('Por favor, insira a URL do APK')
       return
     }
+    setShowConfirm(true)
+  }
 
+  const handleConfirm = async () => {
+    setShowConfirm(false)
     setIsLoading(true)
     try {
       await onConfirm(apkUrl, version)
@@ -127,7 +133,7 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
             Cancelar
           </button>
           <button 
-            onClick={handleConfirm}
+            onClick={handleConfirmClick}
             className="btn btn-success"
             disabled={isLoading || !apkUrl.trim()}
           >
@@ -135,6 +141,17 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
           </button>
         </div>
       </div>
+
+      <ConfirmModal
+        isOpen={showConfirm}
+        onClose={() => setShowConfirm(false)}
+        onConfirm={handleConfirm}
+        title="Tem certeza?"
+        message={`Deseja atualizar o APK do dispositivo "${device.name}"? O download e instalação serão iniciados.`}
+        confirmLabel="Sim"
+        cancelLabel="Não"
+        variant="primary"
+      />
     </div>
   )
 }

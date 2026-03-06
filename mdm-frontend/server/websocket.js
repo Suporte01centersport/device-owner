@@ -8,6 +8,8 @@ const url = require('url');
 const fs = require('fs');
 const path = require('path');
 
+const os = require('os');
+const { execSync } = require('child_process');
 const config = require('./config');
 const DiscoveryServer = require('./discovery-server');
 
@@ -292,6 +294,98 @@ const server = http.createServer((req, res) => {
     const parsedUrl = url.parse(req.url, true);
     const path = parsedUrl.pathname;
     
+    // Servir APK do MDM para download via WiFi (dispositivos na mesma rede)
+    if (path === '/apk/mdm.apk' && req.method === 'GET') {
+        const pathMod = require('path');
+        const projectRoot = pathMod.resolve(__dirname, '..', '..');
+        const apkPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        if (fs.existsSync(apkPath)) {
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+            res.setHeader('Content-Disposition', 'attachment; filename="mdm-launcher.apk"');
+            const stream = fs.createReadStream(apkPath);
+            stream.pipe(res);
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'APK não encontrado. Execute o build do MDM primeiro.' }));
+        }
+        return;
+    }
+    
+    // Retornar URL do APK MDM (para uso na atualização em massa via WiFi)
+    if (path === '/api/apk-url' && req.method === 'GET') {
+        const interfaces = os.networkInterfaces();
+        let serverIp = 'localhost';
+        for (const name of Object.keys(interfaces)) {
+            for (const iface of interfaces[name]) {
+                if (iface.family === 'IPv4' && !iface.internal) {
+                    serverIp = iface.address;
+                    break;
+                }
+            }
+            if (serverIp !== 'localhost') break;
+        }
+        const apkUrl = `http://${serverIp}:3002/apk/mdm.apk`;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, url: apkUrl }));
+        return;
+    }
+    
+    // Build MDM + enviar atualização para dispositivos via WiFi
+    if (path === '/api/build-and-update-mdm' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            (async () => {
+                try {
+                    const { deviceIds } = body ? JSON.parse(body) : {};
+                    const targetIds = deviceIds === 'all' || !deviceIds ? 'all' : (Array.isArray(deviceIds) ? deviceIds : [deviceIds]);
+                    
+                    const pathMod = require('path');
+                    const projectRoot = pathMod.resolve(__dirname, '..', '..');
+                    const mdmDir = pathMod.join(projectRoot, 'mdm-owner');
+                    const gradlew = pathMod.join(mdmDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
+                    const buildCmd = process.platform === 'win32'
+                        ? `cd /d "${mdmDir}" && "${gradlew}" assembleDebug -q`
+                        : `cd "${mdmDir}" && ./gradlew assembleDebug -q`;
+                    
+                    console.log('📦 Iniciando build do MDM...');
+                    execSync(buildCmd, { encoding: 'utf-8', timeout: 180000 });
+                    console.log('✅ Build do MDM concluído');
+                    
+                    const interfaces = os.networkInterfaces();
+                    let serverIp = 'localhost';
+                    for (const name of Object.keys(interfaces)) {
+                        for (const iface of interfaces[name]) {
+                            if (iface.family === 'IPv4' && !iface.internal) {
+                                serverIp = iface.address;
+                                break;
+                            }
+                        }
+                        if (serverIp !== 'localhost') break;
+                    }
+                    const apkUrl = `http://${serverIp}:3002/apk/mdm.apk`;
+                    
+                    const result = sendAppUpdateCommand(targetIds, apkUrl, 'latest');
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: true,
+                        message: 'Build concluído e atualização enviada via WiFi',
+                        apkUrl,
+                        ...result
+                    }));
+                } catch (err) {
+                    console.error('Erro build-and-update-mdm:', err);
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({
+                        success: false,
+                        error: err.message || 'Erro ao fazer build ou enviar atualização'
+                    }));
+                }
+            })();
+        });
+        return;
+    }
+    
     if (path === '/api/devices/realtime' && req.method === 'GET') {
         // Endpoint para obter dados em tempo real dos dispositivos
         const devices = Array.from(persistentDevices.values())
@@ -411,6 +505,30 @@ const server = http.createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(healthStats));
         
+    } else if (path === '/api/server/restart' && req.method === 'POST') {
+        log.info('Reinício do servidor solicitado via API');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, message: 'Reinício agendado' }));
+        setTimeout(() => {
+            wss.clients.forEach(ws => { ws.close(1000, 'Server restarting'); });
+            wss.close(() => {
+                log.info('Servidor WebSocket fechado para reinício');
+                process.exit(0);
+            });
+        }, 500);
+
+    } else if (path === '/api/server/clear-cache' && req.method === 'POST') {
+        try {
+            locationCache.clearAll();
+            log.info('Cache de localização limpo via API');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Cache limpo com sucesso' }));
+        } catch (err) {
+            log.error('Erro ao limpar cache', { error: err.message });
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: err.message }));
+        }
+        
     } else if (path.startsWith('/api/devices/') && req.method === 'POST') {
         // Endpoints para comandos de dispositivos
         let body = '';
@@ -429,9 +547,9 @@ const server = http.createServer((req, res) => {
                 } else if (path.includes('/restrictions/remove')) {
                     handleRemoveRestrictions({ deviceId }, { connectionId: 'http_api' });
                 } else if (path.includes('/lock')) {
-                    handleLockDevice({ deviceId }, { connectionId: 'http_api' });
+                    handleLockDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
                 } else if (path.includes('/unlock')) {
-                    handleUnlockDevice({ deviceId }, { connectionId: 'http_api' });
+                    handleUnlockDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
                 } else if (path.includes('/delete')) {
                     await handleDeleteDevice({ deviceId }, { connectionId: 'http_api' });
                 } else if (path.includes('/app-permissions')) {
@@ -449,6 +567,22 @@ const server = http.createServer((req, res) => {
                         }
                     } else {
                         applyAppPermissionsToDevice(deviceId, allowedApps);
+                    }
+                } else if (path.includes('/apply-policies')) {
+                    // Aplicar políticas: desabilitar bloqueio, bloquear Settings, restringir Quick Settings
+                    const applyPoliciesMessage = { type: 'apply_device_policies', timestamp: Date.now() };
+                    const targetIds = deviceId === 'all' ? Array.from(connectedDevices.keys()) : [deviceId];
+                    let sentCount = 0;
+                    for (const id of targetIds) {
+                        const deviceWs = connectedDevices.get(id);
+                        if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+                            deviceWs.send(JSON.stringify(applyPoliciesMessage));
+                            sentCount++;
+                            log.info('Comando apply_device_policies enviado', { deviceId: id });
+                        }
+                    }
+                    if (sentCount === 0) {
+                        log.warn('Nenhum dispositivo conectado para aplicar políticas', { deviceId });
                     }
                 }
                 
@@ -1235,14 +1369,57 @@ async function handleMessage(ws, data) {
         case 'send_test_notification':
             handleSendTestNotification(ws, data);
             break;
+        case 'start_alarm':
+            handleStartAlarm(ws, data);
+            break;
+        case 'stop_alarm':
+            handleStopAlarm(ws, data);
+            break;
         case 'notification_received':
             handleNotificationReceived(ws, data);
+            break;
+        case 'lock_device_confirmed':
+            notifyWebClients({
+                type: 'lock_device_result',
+                success: data.success !== false,
+                deviceId: data.deviceId,
+                message: data.success ? 'Dispositivo bloqueado com sucesso!' : (data.reason || 'Falha ao bloquear')
+            });
+            break;
+        case 'alarm_confirmed':
+            notifyWebClients({
+                type: 'alarm_device_result',
+                success: true,
+                deviceId: data.deviceId,
+                action: 'start',
+                message: 'Alarme iniciado no dispositivo'
+            });
+            break;
+        case 'alarm_stopped':
+            notifyWebClients({
+                type: 'alarm_device_result',
+                success: true,
+                deviceId: data.deviceId,
+                action: 'stop',
+                message: 'Alarme parado no dispositivo'
+            });
+            break;
+        case 'reboot_device_confirmed':
+            notifyWebClients({
+                type: 'reboot_device_result',
+                success: data.success !== false,
+                deviceId: data.deviceId,
+                message: data.success ? 'Dispositivo reiniciando...' : (data.reason || 'Falha ao reiniciar')
+            });
             break;
         case 'geofence_event':
             handleGeofenceEvent(ws, data);
             break;
         case 'reboot_device':
             handleRebootDevice(ws, data);
+            break;
+        case 'lock_device':
+            handleLockDevice(ws, data);
             break;
         case 'set_admin_password':
             handleSetAdminPassword(ws, data);
@@ -2433,7 +2610,14 @@ function handleUpdateAppPermissions(ws, data) {
 }
 
 function handleLocationUpdate(ws, data) {
-    const deviceId = data.deviceId;
+    // Suportar formato direto (MainActivity) ou aninhado (LocationService: data.data)
+    const loc = data.data || data;
+    const deviceId = loc.deviceId || data.deviceId;
+    
+    if (!deviceId) {
+        log.warn(`location_update sem deviceId`, { connectionId: ws.connectionId });
+        return;
+    }
     
     // Verificar se o dispositivo existe
     if (!persistentDevices.has(deviceId)) {
@@ -2446,25 +2630,26 @@ function handleLocationUpdate(ws, data) {
     
     // Atualizar dados de localização no dispositivo persistente
     const device = persistentDevices.get(deviceId);
-    device.latitude = data.latitude;
-    device.longitude = data.longitude;
-    device.locationAccuracy = data.accuracy;
-    device.lastLocationUpdate = data.timestamp;
-    device.locationProvider = data.provider;
+    device.latitude = loc.latitude;
+    device.longitude = loc.longitude;
+    device.locationAccuracy = loc.accuracy;
+    device.lastLocationUpdate = loc.timestamp;
+    device.locationProvider = loc.provider;
     device.isLocationEnabled = true;
+    if (loc.address != null) device.address = loc.address;
     
     persistentDevices.set(deviceId, device);
     
     // Salvar no PostgreSQL
-    saveDeviceToDatabase(deviceData);
+    saveDeviceToDatabase(device);
     
     log.info(`Localização atualizada`, {
         deviceId: deviceId,
         connectionId: ws.connectionId,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        accuracy: data.accuracy,
-        provider: data.provider
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        accuracy: loc.accuracy,
+        provider: loc.provider
     });
     
     // Notificar clientes web sobre a atualização de localização
@@ -2472,11 +2657,12 @@ function handleLocationUpdate(ws, data) {
         type: 'location_updated',
         deviceId: deviceId,
         location: {
-            latitude: data.latitude,
-            longitude: data.longitude,
-            accuracy: data.accuracy,
-            timestamp: data.timestamp,
-            provider: data.provider
+            latitude: loc.latitude,
+            longitude: loc.longitude,
+            accuracy: loc.accuracy,
+            timestamp: loc.timestamp,
+            provider: loc.provider,
+            address: loc.address
         },
         timestamp: Date.now()
     });
@@ -2822,30 +3008,95 @@ function handleNotificationReceived(ws, data) {
     });
 }
 
+function handleStartAlarm(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'start_alarm', timestamp: Date.now() }));
+        log.info(`Comando start_alarm enviado`, { deviceId, connectionId: ws.connectionId });
+    } else {
+        log.warn(`Dispositivo não encontrado ou desconectado para alarme`, { deviceId, connectionId: ws.connectionId });
+        notifyWebClients({
+            type: 'alarm_device_result',
+            success: false,
+            deviceId,
+            action: 'start',
+            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+        });
+    }
+}
+
+function handleStopAlarm(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'stop_alarm', timestamp: Date.now() }));
+        log.info(`Comando stop_alarm enviado`, { deviceId, connectionId: ws.connectionId });
+    } else {
+        log.warn(`Dispositivo não encontrado ou desconectado para parar alarme`, { deviceId, connectionId: ws.connectionId });
+        notifyWebClients({
+            type: 'alarm_device_result',
+            success: false,
+            deviceId,
+            action: 'stop',
+            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+        });
+    }
+}
+
 function handleRebootDevice(ws, data) {
     const { deviceId } = data;
     
-    console.log('=== REINICIANDO DISPOSITIVO ===');
-    console.log('Device ID:', deviceId);
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'reboot_device', timestamp: Date.now() }));
+        log.info(`Comando de reinicialização enviado`, { deviceId, connectionId: ws.connectionId });
+    } else {
+        log.warn(`Dispositivo não encontrado ou desconectado para reiniciar`, { deviceId, connectionId: ws.connectionId });
+        notifyWebClients({
+            type: 'reboot_device_result',
+            success: false,
+            deviceId,
+            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+        });
+    }
+}
+
+function handleLockDevice(ws, data) {
+    const { deviceId } = data;
     
     const deviceWs = connectedDevices.get(deviceId);
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         const message = {
-            type: 'reboot_device',
+            type: 'lock_device',
             timestamp: Date.now()
         };
-        
         deviceWs.send(JSON.stringify(message));
-        
-        log.info(`Comando de reinicialização enviado`, {
-            deviceId: deviceId,
-            connectionId: ws.connectionId
-        });
+        log.info(`Comando de bloqueio enviado`, { deviceId, connectionId: ws.connectionId });
+        // Aguardar lock_device_confirmed do dispositivo para notificar o cliente web
     } else {
-        log.warn(`Dispositivo não encontrado ou desconectado`, {
-            deviceId: deviceId,
-            connectionId: ws.connectionId
+        log.warn(`Dispositivo não encontrado ou desconectado para bloqueio`, { deviceId, connectionId: ws.connectionId });
+        notifyWebClients({
+            type: 'lock_device_result',
+            success: false,
+            deviceId,
+            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
         });
+    }
+}
+
+function handleUnlockDevice(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        const message = {
+            type: 'unlock_device',
+            timestamp: Date.now()
+        };
+        deviceWs.send(JSON.stringify(message));
+        log.info(`Comando de desbloqueio enviado`, { deviceId, connectionId: ws.connectionId });
+    } else {
+        log.warn(`Dispositivo não encontrado ou desconectado para desbloqueio`, { deviceId, connectionId: ws.connectionId });
     }
 }
 
