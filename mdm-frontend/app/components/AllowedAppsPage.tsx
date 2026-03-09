@@ -6,6 +6,7 @@ import { PRESET_APPS } from '../lib/allowed-apps-preset'
 import AppIcon from './AppIcon'
 
 const MDM_PACKAGE = 'com.mdm.launcher'
+const WMS_PACKAGE = 'com.centersporti.wmsmobile'
 
 interface DeviceGroup {
   id: string
@@ -69,7 +70,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
           let packages = (data.data || []).map((p: any) => p.package_name).filter((p: string) => p !== MDM_PACKAGE)
           
           // Garantir que WMS sempre está incluído
-          const wmsPackage = 'com.centersporti.wmsmobile'
+          const wmsPackage = WMS_PACKAGE
           if (!packages.includes(wmsPackage)) {
             packages = [wmsPackage, ...packages]
           }
@@ -94,7 +95,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
       let filtered = device.allowedApps.filter(p => p !== MDM_PACKAGE)
       
       // Garantir que WMS sempre está incluído
-      const wmsPackage = 'com.centersporti.wmsmobile'
+      const wmsPackage = WMS_PACKAGE
       if (!filtered.includes(wmsPackage)) {
         filtered = [wmsPackage, ...filtered]
       }
@@ -105,7 +106,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
       setCustomApps(extras.map(p => ({ packageName: p, appName: p.split('.').pop() || p })))
     } else {
       // Se não tiver allowedApps, começar com WMS obrigatório
-      setSelectedApps(new Set(['com.centersporti.wmsmobile']))
+      setSelectedApps(new Set([WMS_PACKAGE]))
       setCustomApps([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só carregar quando seleção muda, não quando devices atualiza (evita sobrescrever checkboxes)
@@ -147,7 +148,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     let packageList = Array.from(selectedApps).filter(p => p !== MDM_PACKAGE)
     
     // Garantir que WMS sempre está incluído (é obrigatório)
-    const wmsPackage = 'com.centersporti.wmsmobile'
+    const wmsPackage = WMS_PACKAGE
     if (!packageList.includes(wmsPackage)) {
       packageList = [wmsPackage, ...packageList]
     }

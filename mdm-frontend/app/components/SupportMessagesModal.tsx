@@ -579,7 +579,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                         <span className="text-sm font-medium text-primary">{msg.deviceName}</span>
                         <span className="text-xs text-secondary">{formatTimestamp(msg.timestamp)}</span>
                       </div>
-                      <p className="text-sm text-black whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{msg.message}</p>
+                      <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{msg.message}</p>
                     </div>
                   ))}
                 </div>

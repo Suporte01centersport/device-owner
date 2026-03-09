@@ -34,66 +34,43 @@ async function getPublicIp() {
     if (cachedPublicIp && (now - publicIpCacheTime) < PUBLIC_IP_CACHE_DURATION) {
         return cachedPublicIp;
     }
-    
-    // Tentar múltiplos serviços para obter IP público
-    const services = [
-        { url: 'https://api.ipify.org?format=json', type: 'json' },
-        { url: 'https://api64.ipify.org?format=json', type: 'json' },
-        { url: 'https://ifconfig.me/ip', type: 'text' }
-    ];
-    
-    for (const service of services) {
-        try {
-            const ip = await new Promise((resolve, reject) => {
-                let req;
-                const timeout = setTimeout(() => {
-                    if (req) req.destroy();
-                    reject(new Error('Timeout'));
-                }, 5000);
-                
-                req = https.get(service.url, (res) => {
-                    let data = '';
-                    
-                    res.on('data', (chunk) => {
-                        data += chunk;
-                    });
-                    
-                    res.on('end', () => {
-                        clearTimeout(timeout);
-                        try {
-                            if (service.type === 'json') {
-                                const json = JSON.parse(data);
-                                resolve(json.ip);
-                            } else {
-                                resolve(data.trim());
-                            }
-                        } catch (error) {
-                            reject(error);
-                        }
-                    });
-                });
-                
-                req.on('error', (error) => {
-                    clearTimeout(timeout);
-                    reject(error);
-                });
+
+    const fetchIpFromService = (url, type) => new Promise((resolve, reject) => {
+        let req;
+        const timeout = setTimeout(() => {
+            if (req) req.destroy();
+            reject(new Error('Timeout'));
+        }, 5000);
+        req = https.get(url, (res) => {
+            let data = '';
+            res.on('data', (chunk) => { data += chunk; });
+            res.on('end', () => {
+                clearTimeout(timeout);
+                try {
+                    const ip = type === 'json' ? JSON.parse(data).ip : data.trim();
+                    if (ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) resolve(ip);
+                    else reject(new Error('IP inválido'));
+                } catch (e) { reject(e); }
             });
-            
-            // Validar IP
-            if (ip && /^(\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
-                cachedPublicIp = ip;
-                publicIpCacheTime = now;
-                console.log(`🌐 IP público obtido: ${ip}`);
-                return ip;
-            }
-        } catch (error) {
-            console.warn(`⚠️ Erro ao obter IP público de ${service.url}:`, error.message);
-            continue;
-        }
+        });
+        req.on('error', (e) => { clearTimeout(timeout); reject(e); });
+    });
+
+    // Todas as requisições em paralelo — usar a primeira que responder com IP válido
+    try {
+        const ip = await Promise.any([
+            fetchIpFromService('https://api.ipify.org?format=json', 'json'),
+            fetchIpFromService('https://api64.ipify.org?format=json', 'json'),
+            fetchIpFromService('https://ifconfig.me/ip', 'text')
+        ]);
+        cachedPublicIp = ip;
+        publicIpCacheTime = now;
+        console.log(`🌐 IP público obtido: ${ip}`);
+        return ip;
+    } catch (_) {
+        console.warn('⚠️ Não foi possível obter IP público de nenhum serviço');
+        return null;
     }
-    
-    console.warn('⚠️ Não foi possível obter IP público de nenhum serviço');
-    return null;
 }
 
 /**

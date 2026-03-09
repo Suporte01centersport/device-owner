@@ -79,7 +79,7 @@ class WmsAccessibilityService : AccessibilityService() {
             for (i in 0 until node.childCount) {
                 node.getChild(i)?.let { child ->
                     collectTexts(child, texts, depth + 1)
-                    child.recycle()
+                    // recycle() removido: deprecated desde API 33 e desnecessário com GC moderno
                 }
             }
         } catch (_: Exception) {}

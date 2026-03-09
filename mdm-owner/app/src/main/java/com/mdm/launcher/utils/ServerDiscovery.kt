@@ -30,13 +30,12 @@ object ServerDiscovery {
     private var consecutiveFailures = 0
     private const val MAX_FAILURES_BEFORE_REDISCOVERY = 2 // Forçar redescoberta após 2 falhas (mais agressivo)
     
-    // 🎯 SERVIDORES CONFIGURADOS (fallback para produção)
+    // 🎯 SERVIDORES CONFIGURADOS (fallback para produção - apenas em release builds)
     private val LINUX_SERVERS = listOf(
-        "ws://192.168.2.100:3001",  // Servidor principal Linux
-        "ws://192.168.2.74:3001",   // Servidor local Windows PC (debug)
-        "ws://192.168.1.100:3001",  // Servidor alternativo Linux
-        "ws://10.0.0.100:3001",    // Servidor corporativo Linux
-        "ws://172.16.0.100:3001"   // Servidor VPN Linux
+        "ws://45.172.99.137:3001",  // Servidor público (IP externo - qualquer rede)
+        "ws://192.168.2.100:3001",  // Servidor principal rede local
+        "ws://192.168.1.100:3001",  // Servidor alternativo rede local
+        "ws://10.0.0.100:3001"      // Servidor corporativo rede local
     )
     
     // 🔄 CONFIGURAÇÕES DE RESILIÊNCIA
