@@ -3,6 +3,10 @@ import './globals.css'
 export const metadata = {
   title: 'MDM Center - Painel de Controle',
   description: 'Gerenciamento de dispositivos Android',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
 }
 
 export default function RootLayout({

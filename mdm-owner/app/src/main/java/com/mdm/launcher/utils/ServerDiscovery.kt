@@ -66,7 +66,25 @@ object ServerDiscovery {
             return@withContext cachedServerUrl!!
         }
         
-        // Estratégia 0: URL FIXA do BuildConfig (PRIORIDADE MÁXIMA)
+        // Estratégia 0: URL pública aprendida do servidor (funciona em qualquer rede)
+        // Salva quando o servidor envia server_config com publicWsUrl
+        val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+        val publicServerUrl = prefs.getString("public_server_url", null)
+        if (!publicServerUrl.isNullOrEmpty()) {
+            val hostPart = publicServerUrl.removePrefix("wss://").removePrefix("ws://").substringBefore("/")
+            val serverIp = hostPart.substringBeforeLast(":")
+            val serverPort = hostPart.substringAfterLast(":").toIntOrNull() ?: 3001
+            if (isServerResponding(serverIp, serverPort)) {
+                cachedServerUrl = publicServerUrl
+                lastDiscoveryTime = now
+                lastHealthCheck = now
+                registerConnectionSuccess()
+                Log.d(TAG, "✅ Conectado via URL pública (multi-rede): $publicServerUrl")
+                return@withContext publicServerUrl
+            }
+        }
+
+        // Estratégia 0.1: URL FIXA do BuildConfig (PRIORIDADE MÁXIMA para builds de produção)
         if (BuildConfig.USE_FIXED_SERVER) {
             val fixedUrl = BuildConfig.SERVER_URL
             
@@ -217,9 +235,19 @@ object ServerDiscovery {
                 socket.receive(responsePacket)
                 val response = String(responsePacket.data, 0, responsePacket.length)
                 val serverIp = responsePacket.address.hostAddress
-                
+
                 if (response.startsWith("MDM_SERVER")) {
-                    val port = response.substringAfter(":").toIntOrNull() ?: 3001
+                    // Parsear: "MDM_SERVER:3001|PUBLIC:ws://ip.publico:3001"
+                    val port = response.substringAfter("MDM_SERVER:").substringBefore("|").substringBefore(" ").toIntOrNull() ?: 3001
+                    // Se servidor incluiu URL pública, salvar para uso em outras redes
+                    if (response.contains("|PUBLIC:")) {
+                        val publicUrl = response.substringAfter("|PUBLIC:").trim()
+                        if (publicUrl.isNotEmpty()) {
+                            context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                                .edit().putString("public_server_url", publicUrl).apply()
+                            Log.d(TAG, "URL pública aprendida via broadcast: $publicUrl")
+                        }
+                    }
                     "ws://$serverIp:$port"
                 } else {
                     null

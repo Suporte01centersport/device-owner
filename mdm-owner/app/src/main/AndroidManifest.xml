@@ -144,6 +144,19 @@
             </intent-filter>
         </service>
 
+        <!-- Captura erros HTTP/HTTPS do WMS via AccessibilityService -->
+        <service
+            android:name=".service.WmsAccessibilityService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/wms_accessibility_service_config" />
+        </service>
+
         <!-- Broadcast Receiver para mudanças de apps -->
         <receiver
             android:name=".AppChangeReceiver"

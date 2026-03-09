@@ -53,6 +53,8 @@ object DevicePolicyHelper {
             showStatusBar(context)
             // Abrir configurações de acesso a notificações (necessário para bloquear notificações de outros apps)
             promptNotificationAccessIfNeeded(context)
+            // Abrir configurações de acessibilidade para o WmsAccessibilityService (captura erros HTTP/HTTPS do WMS)
+            promptAccessibilityServiceIfNeeded(context)
             context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                 .edit()
                 .putBoolean("device_policies_applied", true)
@@ -85,23 +87,17 @@ object DevicePolicyHelper {
                 } catch (_: Exception) {}
             }
 
-            // Remover senha/PIN/padrão - dispositivo sem credencial de desbloqueio
+            // Remover exigência de senha por política MDM
             try {
                 dpm.setPasswordQuality(adminComponent, DevicePolicyManager.PASSWORD_QUALITY_UNSPECIFIED)
                 dpm.setPasswordMinimumLength(adminComponent, 0)
             } catch (_: Exception) {}
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-                try {
-                    val token = ByteArray(32)
-                    java.security.SecureRandom().nextBytes(token)
-                    if (dpm.setResetPasswordToken(adminComponent, token)) {
-                        dpm.resetPasswordWithToken(adminComponent, "", token, 0)
-                    }
-                } catch (_: Exception) {}
+                clearPasswordWithPersistentToken(context, dpm, adminComponent)
             }
 
-            // Desabilitar keyguard (senha, PIN, padrão, fingerprint) - tela estática até desbloqueio web
+            // Desabilitar keyguard (senha, PIN, padrão, fingerprint)
             if (dpm.isDeviceOwnerApp(context.packageName)) {
                 try {
                     @Suppress("DEPRECATION")
@@ -116,6 +112,66 @@ object DevicePolicyHelper {
             Log.e(TAG, "Erro ao desabilitar bloqueio", e)
         }
     }
+
+    /**
+     * Usa um token persistente para remover a senha do dispositivo.
+     * - Se o token ainda não existe, gera e persiste um novo.
+     * - Se o token já está ativo (usuário autenticou uma vez), remove a senha imediatamente.
+     * - Se o token não está ativo ainda (dispositivo tem senha existente), aguarda o usuário
+     *   autenticar uma vez; após isso, DeviceAdminReceiver.onPasswordSucceeded chama este método
+     *   novamente e a senha é removida.
+     */
+    @androidx.annotation.RequiresApi(Build.VERSION_CODES.N)
+    fun clearPasswordWithPersistentToken(
+        context: Context,
+        dpm: DevicePolicyManager,
+        adminComponent: ComponentName
+    ) {
+        try {
+            val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+            val tokenKey = "reset_password_token"
+
+            // Recuperar ou gerar token persistente
+            val existingTokenHex = prefs.getString(tokenKey, null)
+            val token: ByteArray = if (existingTokenHex != null) {
+                hexToBytes(existingTokenHex)
+            } else {
+                val newToken = ByteArray(32)
+                java.security.SecureRandom().nextBytes(newToken)
+                prefs.edit().putString(tokenKey, bytesToHex(newToken)).apply()
+                newToken
+            }
+
+            // Registrar token no sistema (idempotente - OK chamar várias vezes)
+            val tokenSet = dpm.setResetPasswordToken(adminComponent, token)
+            Log.d(TAG, "Token de reset definido: $tokenSet")
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val isActive = dpm.isResetPasswordTokenActive(adminComponent)
+                Log.d(TAG, "Token ativo: $isActive")
+                if (isActive) {
+                    val cleared = dpm.resetPasswordWithToken(adminComponent, "", token, 0)
+                    Log.d(TAG, "Senha removida com token persistente: $cleared")
+                } else {
+                    Log.d(TAG, "Token não ativo ainda - senha será removida após o usuário autenticar uma vez")
+                }
+            } else {
+                // API 24-25: tenta direto (funciona se não há senha ou token já foi ativado)
+                try {
+                    dpm.resetPasswordWithToken(adminComponent, "", token, 0)
+                    Log.d(TAG, "Senha removida (API 24-25)")
+                } catch (_: Exception) {}
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar senha com token: ${e.message}")
+        }
+    }
+
+    private fun bytesToHex(bytes: ByteArray): String =
+        bytes.joinToString("") { "%02x".format(it) }
+
+    private fun hexToBytes(hex: String): ByteArray =
+        ByteArray(hex.length / 2) { hex.substring(it * 2, it * 2 + 2).toInt(16).toByte() }
 
     /** Define timeout de tela (ex: 5 min para manter ativa durante instalações) */
     private fun setScreenTimeout(context: Context, timeoutMs: Int) {
@@ -267,6 +323,29 @@ object DevicePolicyHelper {
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao abrir configurações de notificação: ${e.message}")
+        }
+    }
+
+    /** Abre configurações de acessibilidade para habilitar WmsAccessibilityService (captura erros HTTP/HTTPS do WMS) */
+    fun promptAccessibilityServiceIfNeeded(context: Context) {
+        try {
+            val serviceName = "${context.packageName}/com.mdm.launcher.service.WmsAccessibilityService"
+            val enabled = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+            )?.contains(serviceName) == true
+            if (!enabled) {
+                val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                if (!prefs.getBoolean("accessibility_prompted", false)) {
+                    prefs.edit().putBoolean("accessibility_prompted", true).apply()
+                    val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                    Log.d(TAG, "Abrindo configurações de acessibilidade para WmsAccessibilityService")
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao abrir configurações de acessibilidade: ${e.message}")
         }
     }
 

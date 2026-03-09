@@ -34,7 +34,7 @@ export const PRESET_APPS: PresetApp[] = [
     packageName: 'com.google.android.apps.messaging',
     appName: 'Mensagens',
     emoji: '💬',
-    iconUrl: gicon('messages.google.com'),
+    iconUrl: 'https://www.gstatic.com/images/branding/product/2x/messages_48dp.png',
   },
   // Email e produtividade
   {
@@ -109,7 +109,7 @@ export const PRESET_APPS: PresetApp[] = [
     packageName: 'com.google.android.deskclock',
     appName: 'Relógio',
     emoji: '⏰',
-    iconUrl: gicon('clock.google.com'),
+    iconUrl: 'https://www.gstatic.com/images/branding/product/2x/google_clock_48dp.png',
   },
   {
     packageName: 'com.android.camera2',

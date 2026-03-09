@@ -39,6 +39,9 @@
     <string name="error_permission_denied">Permissão negada</string>
     <string name="error_device_owner_not_set">Device Owner não configurado</string>
     
+    <!-- Accessibility -->
+    <string name="accessibility_service_description">Monitora erros HTTP/HTTPS do WMS e envia alertas ao painel MDM</string>
+
     <!-- Notifications -->
     <string name="notification_channel_name">MDM Center</string>
     <string name="notification_channel_description">Notificações do MDM Center</string>

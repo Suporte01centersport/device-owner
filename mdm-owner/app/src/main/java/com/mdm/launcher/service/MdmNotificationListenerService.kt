@@ -1,5 +1,6 @@
 package com.mdm.launcher.service
 
+import android.content.Intent
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
@@ -18,6 +19,24 @@ class MdmNotificationListenerService : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         if (sbn == null) return
+
+        // Capturar notificações do WMS e encaminhar como mensagem de suporte
+        if (sbn.packageName == "com.centersporti.wmsmobile") {
+            val extras = sbn.notification?.extras
+            val title = extras?.getCharSequence("android.title")?.toString() ?: ""
+            val text = extras?.getCharSequence("android.bigText")?.toString()
+                ?: extras?.getCharSequence("android.text")?.toString() ?: ""
+            val combined = listOf(title, text).filter { it.isNotBlank() }.joinToString(": ")
+            if (combined.isNotBlank()) {
+                val errorIntent = Intent("com.mdm.launcher.WMS_ERROR").apply {
+                    setPackage(packageName)
+                    putExtra("error_text", combined)
+                }
+                sendBroadcast(errorIntent)
+                Log.d(TAG, "Erro WMS capturado e enviado: $combined")
+            }
+        }
+
         if (shouldCancel(sbn)) {
             try {
                 cancelNotification(sbn.key)

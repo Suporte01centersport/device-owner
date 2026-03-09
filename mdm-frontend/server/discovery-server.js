@@ -29,8 +29,12 @@ class DiscoveryServer {
 
             // Verificar se é uma mensagem de descoberta MDM
             if (message === 'MDM_DISCOVERY') {
-                const response = `MDM_SERVER:${WEBSOCKET_PORT}`;
-                
+                // Incluir URL pública se configurada, para dispositivos aprenderem a URL para outras redes
+                const publicUrl = process.env.WEBSOCKET_PUBLIC_URL || process.env.MDM_PUBLIC_URL || '';
+                const response = publicUrl.trim()
+                    ? `MDM_SERVER:${WEBSOCKET_PORT}|PUBLIC:${publicUrl.trim()}`
+                    : `MDM_SERVER:${WEBSOCKET_PORT}`;
+
                 // Enviar resposta para o dispositivo
                 this.server.send(response, rinfo.port, rinfo.address, (err) => {
                     if (err) {

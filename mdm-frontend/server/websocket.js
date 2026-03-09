@@ -1511,6 +1511,9 @@ async function handleMessage(ws, data) {
         case 'update_app_permissions':
             handleUpdateAppPermissions(ws, data);
             break;
+        case 'install_app':
+            handleInstallApp(ws, data);
+            break;
         case 'location_update':
             handleLocationUpdate(ws, data);
             break;
@@ -2049,6 +2052,41 @@ persistentDevices.set(deviceId, deviceData);
         console.log(`Senha de administrador enviada automaticamente para dispositivo ${deviceId}:`, message);
     } else {
         console.log(`Nenhuma senha de administrador definida para enviar ao dispositivo ${deviceId}`);
+    }
+
+    // Enviar configuração do servidor (URL pública) para que dispositivo possa reconectar de qualquer rede
+    try {
+        const port = process.env.WEBSOCKET_PORT || '3001';
+        let publicWsUrl = null;
+        if (process.env.WEBSOCKET_PUBLIC_URL && process.env.WEBSOCKET_PUBLIC_URL.trim()) {
+            // URL pública configurada explicitamente (domínio, IP público, ngrok, etc.)
+            const base = process.env.WEBSOCKET_PUBLIC_URL.trim().replace(/\/$/, '');
+            const protocol = base.startsWith('https') ? 'wss' : 'ws';
+            try {
+                const u = new URL(base);
+                publicWsUrl = `${protocol}://${u.hostname}:${port}`;
+            } catch (_) {
+                publicWsUrl = `ws://${base.replace(/^https?:\/\//, '')}`;
+            }
+        } else if (process.env.MDM_PUBLIC_URL && process.env.MDM_PUBLIC_URL.trim()) {
+            const base = process.env.MDM_PUBLIC_URL.trim().replace(/\/$/, '');
+            const protocol = base.startsWith('https') ? 'wss' : 'ws';
+            try {
+                const u = new URL(base);
+                publicWsUrl = `${protocol}://${u.hostname}:${port}`;
+            } catch (_) {
+                publicWsUrl = `ws://${base.replace(/^https?:\/\//, '')}`;
+            }
+        }
+        if (publicWsUrl && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'server_config',
+                data: { publicWsUrl }
+            }));
+            console.log(`📡 server_config enviado para ${deviceId}: publicWsUrl=${publicWsUrl}`);
+        }
+    } catch (e) {
+        console.warn('⚠️ Erro ao enviar server_config:', e.message);
     }
     
     // Aplicar permissões kiosk pendentes (deploy rodou sem dispositivo conectado)
@@ -2725,6 +2763,18 @@ function applyAppPermissionsToDevice(deviceId, allowedApps) {
         allowedApps: appsToApply,
         timestamp: Date.now()
     });
+}
+
+function handleInstallApp(ws, data) {
+    const { deviceId, packageName } = data;
+    if (!deviceId || !packageName) return;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'install_app', packageName, timestamp: Date.now() }));
+        log.info('Comando install_app enviado', { deviceId, packageName });
+    } else {
+        log.warn('Dispositivo não conectado para install_app', { deviceId, packageName });
+    }
 }
 
 function handleUpdateAppPermissions(ws, data) {

@@ -40,6 +40,18 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
     
     override fun onPasswordSucceeded(context: Context, intent: Intent, user: android.os.UserHandle) {
         super.onPasswordSucceeded(context, intent, user)
-        Log.d(TAG, "Senha correta inserida")
+        Log.d(TAG, "Senha correta inserida - tentando remover bloqueio de tela")
+        // Após o usuário autenticar, o token de reset fica ativo → remove a senha imediatamente
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+            try {
+                val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                val adminComponent = android.content.ComponentName(context, DeviceAdminReceiver::class.java)
+                if (dpm.isDeviceOwnerApp(context.packageName)) {
+                    com.mdm.launcher.utils.DevicePolicyHelper.clearPasswordWithPersistentToken(context, dpm, adminComponent)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao remover senha após autenticação: ${e.message}")
+            }
+        }
     }
 }

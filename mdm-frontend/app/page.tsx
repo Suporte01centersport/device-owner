@@ -1138,17 +1138,11 @@ export default function Home() {
     setIsUpdateModalOpen(false)
     setUpdateDevice(null)
 
-    // Se for o APK MDM do servidor, fazer build primeiro e enviar (evita erro 404)
-    const isMdmApk = apkUrl.includes('/apk/mdm.apk') || apkUrl.endsWith('mdm.apk')
-    const endpoint = isMdmApk ? '/api/devices/bulk-update-mdm' : '/api/devices/update-app'
-    const body = isMdmApk
-      ? JSON.stringify({ deviceIds: [deviceId] })
-      : JSON.stringify({ deviceIds: [deviceId], apkUrl, version })
-
-    fetch(endpoint, {
+    // Sempre usa update-app (não rebuild): a URL já aponta para o APK pronto no servidor
+    fetch('/api/devices/update-app', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body
+      body: JSON.stringify({ deviceIds: [deviceId], apkUrl, version })
     })
       .then(res => res.json())
       .then(result => {
@@ -1156,11 +1150,8 @@ export default function Home() {
           setUpdateProgress(null)
           alert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
         } else {
-          // Atualizar status - dispositivo enviará progresso via WebSocket
+          // Dispositivo enviará progresso via WebSocket
           setUpdateProgress(prev => prev ? { ...prev, status: 'Aguardando resposta do dispositivo...' } : null)
-          if (isMdmApk) {
-            syncWithServer()
-          }
         }
       })
       .catch(err => {

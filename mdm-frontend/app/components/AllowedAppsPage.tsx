@@ -34,6 +34,10 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
          d.osType !== 'Windows' && d.osType !== 'Linux' && d.osType !== 'macOS'
   )
 
+  // Set de packages instalados no dispositivo selecionado
+  const selectedDevice = filterType === 'device' ? mobileDevices.find(d => d.deviceId === selectedDeviceId) : null
+  const installedPackages = new Set((selectedDevice?.installedApps || []).map(a => a.packageName))
+
   // Carregar grupos
   useEffect(() => {
     const loadGroups = async () => {
@@ -107,7 +111,11 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só carregar quando seleção muda, não quando devices atualiza (evita sobrescrever checkboxes)
   }, [filterType, selectedDeviceId])
 
+  const isMandatory = (packageName: string) =>
+    PRESET_APPS.find(a => a.packageName === packageName)?.mandatory === true
+
   const handleToggleApp = (packageName: string) => {
+    if (isMandatory(packageName)) return
     setSelectedApps(prev => {
       const next = new Set(prev)
       if (next.has(packageName)) {
@@ -161,7 +169,13 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
         })
         const sent = await Promise.resolve(result)
         if (sent) {
-          alert('Permissões salvas! O celular será atualizado em breve.')
+          // Instalar apps selecionados que não estão no celular
+          const toInstall = packageList.filter(pkg => pkg !== MDM_PACKAGE && !installedPackages.has(pkg))
+          for (const pkg of toInstall) {
+            sendMessage({ type: 'install_app', deviceId: selectedDeviceId, packageName: pkg, timestamp: Date.now() })
+          }
+          const installMsg = toInstall.length > 0 ? ` Instalando ${toInstall.length} app(s) ausente(s)...` : ''
+          alert(`Permissões salvas! O celular será atualizado em breve.${installMsg}`)
         } else {
           alert('Não foi possível enviar. Verifique se o dispositivo está conectado.')
         }
@@ -339,37 +353,54 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {[...PRESET_APPS, ...customApps.map(a => ({ packageName: a.packageName, appName: a.appName, emoji: '📱' as const }))].filter(app => app.packageName !== MDM_PACKAGE).map((app) => {
-              const checked = selectedApps.has(app.packageName)
+            {[...PRESET_APPS, ...customApps.map(a => ({ packageName: a.packageName, appName: a.appName, emoji: '📱' as const }))].map((app) => {
+              const mandatory = isMandatory(app.packageName)
+              const checked = mandatory || selectedApps.has(app.packageName)
+              const notInstalled = !mandatory && filterType === 'device' && selectedDeviceId && installedPackages.size > 0 && !installedPackages.has(app.packageName)
               return (
                 <label
                   key={app.packageName}
                   onClick={() => handleToggleApp(app.packageName)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleToggleApp(app.packageName)}
+                  onKeyDown={(e) => !mandatory && e.key === 'Enter' && handleToggleApp(app.packageName)}
                   role="button"
                   tabIndex={0}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 cursor-pointer transition-all duration-200 shadow-sm hover:shadow-md select-none ${
-                    checked
-                      ? 'border-primary bg-background ring-2 ring-primary/40 shadow-primary/10'
-                      : 'border-white/20 bg-background hover:border-white/40'
+                  className={`group relative flex flex-col gap-2 p-4 rounded-2xl border-2 transition-all duration-200 shadow-sm select-none ${
+                    mandatory
+                      ? 'border-amber-500/60 bg-background ring-2 ring-amber-500/30 cursor-not-allowed'
+                      : checked
+                        ? 'border-primary bg-background ring-2 ring-primary/40 shadow-primary/10 cursor-pointer hover:shadow-md'
+                        : 'border-white/20 bg-background hover:border-white/40 cursor-pointer hover:shadow-md'
                   }`}
                 >
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={() => handleToggleApp(app.packageName)}
-                    className="w-5 h-5 text-primary border-white/30 rounded-md focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background shrink-0"
-                  />
-                  <AppIcon
-                    packageName={app.packageName}
-                    emoji={app.emoji}
-                    size={48}
-                    className="ring-1 ring-white/10"
-                    iconUrl={(app as any).iconUrl}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-white truncate">{app.appName}</div>
-                    <div className="text-xs text-white/70 truncate mt-0.5 font-mono">{app.packageName}</div>
+                  {mandatory && (
+                    <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white leading-none">
+                      Obrigatório
+                    </span>
+                  )}
+                  {notInstalled && (
+                    <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/80 text-white leading-none">
+                      Instalar
+                    </span>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      disabled={mandatory}
+                      onChange={() => handleToggleApp(app.packageName)}
+                      className="w-5 h-5 text-primary border-white/30 rounded-md focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
+                    />
+                    <AppIcon
+                      packageName={app.packageName}
+                      emoji={app.emoji}
+                      size={40}
+                      className="ring-1 ring-white/10"
+                      iconUrl={(app as any).iconUrl}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-white truncate text-sm">{app.appName}</div>
+                      <div className="text-[10px] text-white/50 truncate font-mono">{app.packageName.split('.').pop()}</div>
+                    </div>
                   </div>
                 </label>
               )

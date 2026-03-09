@@ -36,9 +36,15 @@ android {
             shrinkResources false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.release
-            
-            // URL do servidor de PRODUÇÃO (Linux)
-            buildConfigField "String", "SERVER_URL", '"ws://192.168.2.100:3001"'
+
+            // URL pública do servidor MDM — usada para conexão inicial de qualquer rede/WiFi.
+            // Para funcionar em locais diferentes, coloque o IP público ou domínio do servidor.
+            // Exemplos:
+            //   "ws://200.100.50.25:3001"        (IP público com porta 3001 aberta no roteador)
+            //   "wss://mdm.suaempresa.com:3001"   (domínio com certificado SSL)
+            // Configurável via gradle.properties: MDM_SERVER_URL=ws://seu.ip.publico:3001
+            def serverUrl = project.hasProperty('MDM_SERVER_URL') ? MDM_SERVER_URL : 'ws://45.172.99.137:3001'
+            buildConfigField "String", "SERVER_URL", "\"${serverUrl}\""
             buildConfigField "Boolean", "USE_FIXED_SERVER", "true"
         }
         debug {

@@ -61,6 +61,22 @@ class WebSocketService : Service() {
                         "timestamp" to System.currentTimeMillis()
                     )))
                 }
+                "com.mdm.launcher.WMS_ERROR" -> {
+                    val errorText = intent.getStringExtra("error_text") ?: "Erro no WMS"
+                    val deviceId = DeviceIdManager.getDeviceId(this@WebSocketService)
+                    val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                    val deviceName = prefs.getString("device_name", android.os.Build.MODEL) ?: android.os.Build.MODEL
+                    Log.d(TAG, "Erro WMS recebido, enviando mensagem de suporte: $errorText")
+                    webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                        "type" to "support_message",
+                        "deviceId" to deviceId,
+                        "deviceName" to deviceName,
+                        "message" to "⚠️ Erro WMS: $errorText",
+                        "androidVersion" to android.os.Build.VERSION.RELEASE,
+                        "model" to android.os.Build.MODEL,
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                }
             }
         }
     }
@@ -106,6 +122,7 @@ class WebSocketService : Service() {
             addAction("com.mdm.launcher.NETWORK_CHANGE")
             addAction("com.mdm.launcher.FORCE_RECONNECT")
             addAction("com.mdm.launcher.ALARM_STARTED")
+            addAction("com.mdm.launcher.WMS_ERROR")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(commandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -412,6 +429,20 @@ class WebSocketService : Service() {
             when (type) {
                 "device_status" -> sendDeviceStatus()
                 "ping" -> webSocketClient?.sendMessage("""{"type":"pong","timestamp":${System.currentTimeMillis()}}""")
+                "install_app" -> {
+                    val packageName = jsonObject["packageName"] as? String
+                    if (!packageName.isNullOrEmpty()) {
+                        try {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("market://details?id=$packageName"))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        } catch (e: Exception) {
+                            val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName"))
+                            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            startActivity(intent)
+                        }
+                    }
+                }
                 "update_app_permissions" -> {
                     val data = jsonObject["data"] as? Map<*, *>
                     val allowedAppsList = data?.get("allowedApps") as? List<*>
@@ -518,6 +549,18 @@ class WebSocketService : Service() {
                         }
                     } else {
                         Log.e(TAG, "Comando de atualização recebido sem URL do APK")
+                    }
+                }
+                "server_config" -> {
+                    // Servidor enviou sua URL pública — salvar para reconexão em qualquer rede
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val publicWsUrl = data?.get("publicWsUrl") as? String
+                    if (!publicWsUrl.isNullOrEmpty()) {
+                        getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                            .edit()
+                            .putString("public_server_url", publicWsUrl)
+                            .apply()
+                        Log.d(TAG, "URL pública do servidor salva: $publicWsUrl")
                     }
                 }
                 "support_message_received" -> { /* Silencioso - usuário não deve saber que a mensagem foi recebida/lida */ }
