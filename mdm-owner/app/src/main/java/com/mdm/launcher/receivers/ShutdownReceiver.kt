@@ -42,22 +42,8 @@ class ShutdownReceiver : BroadcastReceiver() {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
 
             if (dpm.isDeviceOwnerApp(context.packageName)) {
-                // INICIAR SIRENE - tentativa não autorizada de desligar/reiniciar
-                // NÃO chamamos dpm.reboot() - se o usuário escolheu "reiniciar", o sistema já está reiniciando.
-                // Chamar reboot() de novo causa loop infinito.
-                Log.w(TAG, "Tentativa de desligar/reiniciar detectada - INICIANDO SIRENE")
-                try {
-                    val alarmIntent = Intent(context, com.mdm.launcher.service.AlarmService::class.java).apply {
-                        action = "START"
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        context.startForegroundService(alarmIntent)
-                    } else {
-                        context.startService(alarmIntent)
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
-                }
+                // Sem sirene - apenas log da tentativa
+                Log.w(TAG, "Tentativa de desligar/reiniciar detectada")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar shutdown", e)

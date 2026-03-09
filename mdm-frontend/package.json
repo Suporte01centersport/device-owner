@@ -36,7 +36,8 @@
     "db:migrate:alert-history": "node server/database/migrations/run-add-group-alert-history.js",
     "db:migrate:computers": "node server/database/migrations/run-add-computers-tables.js",
     "db:migrate:computer-location": "node server/database/migrations/run-add-computer-location-fields.js",
-    "db:migrate:device-users-extended": "node server/database/migrations/run-add-device-users-extended.js"
+    "db:migrate:device-users-extended": "node server/database/migrations/run-add-device-users-extended.js",
+    "db:migrate:device-users-role-password": "node server/database/migrations/run-add-device-users-role-password.js"
   },
   "dependencies": {
     "@coreui/icons-react": "^2.3.0",

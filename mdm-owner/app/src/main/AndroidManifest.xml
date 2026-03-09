@@ -230,7 +230,9 @@
             android:theme="@style/Theme.MDMLauncher.LockScreen"
             android:excludeFromRecents="true"
             android:taskAffinity=""
-            android:lockTaskMode="always" />
+            android:lockTaskMode="always"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true" />
 
     </application>
 

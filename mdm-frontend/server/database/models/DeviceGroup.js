@@ -278,6 +278,25 @@ class DeviceGroupModel {
         }
     }
 
+    // Deletar todos os grupos e políticas (CASCADE remove app_policies, device_group_memberships, etc.)
+    static async deleteAll(organizationId = null) {
+        try {
+            return await transaction(async (client) => {
+                let deleteQuery = 'DELETE FROM device_groups';
+                const params = [];
+                if (organizationId) {
+                    deleteQuery += ' WHERE organization_id = $1';
+                    params.push(organizationId);
+                }
+                const result = await client.query(deleteQuery, params);
+                return { success: true, deletedCount: result.rowCount || 0 };
+            });
+        } catch (error) {
+            console.error('Erro ao deletar todos os grupos:', error);
+            throw error;
+        }
+    }
+
     // Adicionar dispositivo ao grupo
     static async addDevice(groupId, deviceId, assignedBy = null, organizationId = null) {
         try {

@@ -244,14 +244,14 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
               <select
                 value={selectedDeviceId}
                 onChange={(e) => setSelectedDeviceId(e.target.value)}
-                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white"
+                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white [&_option]:text-white [&_option]:bg-background"
               >
-                <option value="">Selecione um celular</option>
+                <option value="" disabled className="text-white bg-background">Selecione o celular</option>
                 {mobileDevices.length === 0 ? (
-                  <option value="" disabled>Nenhum celular conectado</option>
+                  <option value="" disabled className="text-white bg-background">Nenhum celular conectado</option>
                 ) : (
                   mobileDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId}>
+                    <option key={d.deviceId} value={d.deviceId} className="text-white bg-background">
                       {d.name || d.model || d.deviceId} {d.status === 'online' ? '(online)' : '(offline)'}
                     </option>
                   ))
@@ -266,11 +266,11 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
               <select
                 value={selectedGroupId}
                 onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white"
+                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white [&_option]:text-white [&_option]:bg-background"
               >
-                <option value="">Selecione um grupo</option>
+                <option value="" className="text-white bg-background">Selecione um grupo</option>
                 {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
+                  <option key={g.id} value={g.id} className="text-white bg-background">
                     {g.name}
                   </option>
                 ))}

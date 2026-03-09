@@ -135,9 +135,6 @@ class MainActivity : AppCompatActivity() {
     // Controle de interação do usuário
     private var lastInteractionTime = System.currentTimeMillis()
     
-    // Rastreamento de teclas para sirene: power + volume = alerta
-    private var lastAlarmSirenTime = 0L
-    private val ALARM_SIREN_COOLDOWN_MS = 2000L // Evitar múltiplos disparos ao segurar
     
     // Serviço WebSocket em background
     private var webSocketService: WebSocketService? = null
@@ -4013,7 +4010,8 @@ class MainActivity : AppCompatActivity() {
                     return false
                 }
                 KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
-                    startAlarmSiren()
+                    // Sem sirene - apenas tela de cadeado
+                    com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
                     return true
                 }
                 KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
@@ -4026,27 +4024,6 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchKeyEvent(event)
     }
     
-    private fun startAlarmSiren() {
-        if (!isDeviceOwner()) return
-        val now = System.currentTimeMillis()
-        if (now - lastAlarmSirenTime < ALARM_SIREN_COOLDOWN_MS) return // Debounce
-        // Não iniciar sirene quando tela está apagada (bloqueio por timeout ou 1 click no power)
-        if (!isScreenOn()) return
-        lastAlarmSirenTime = now
-        try {
-            val alarmIntent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
-                action = "START"
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(alarmIntent)
-            } else {
-                startService(alarmIntent)
-            }
-            Log.d(TAG, "Sirene de alerta iniciada (tecla power/volume)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
-        }
-    }
     
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {

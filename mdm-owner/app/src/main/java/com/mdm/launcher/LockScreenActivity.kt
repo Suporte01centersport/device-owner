@@ -10,13 +10,19 @@ import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.util.Log
+import android.graphics.Color
+import android.widget.Button
+import android.widget.EditText
+import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 
 /**
  * Tela de bloqueio: tela preta com cadeado.
- * Permanece até o admin clicar em "Desbloquear" no painel MDM.
- * Não usa lockNow() - usa Lock Task Mode para bloquear totalmente.
+ * Mensagem: "Peça para seu líder desbloquear".
+ * Líder digita senha de 4 dígitos (admin_password) para desbloquear.
+ * Também pode desbloquear remotamente via painel MDM.
  */
 class LockScreenActivity : AppCompatActivity() {
 
@@ -48,8 +54,47 @@ class LockScreenActivity : AppCompatActivity() {
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         // Impedir screenshots e gravação
         window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        // Garantir fundo preto e conteúdo opaco (evita tela em branco ou invisível)
+        window.setBackgroundDrawableResource(android.R.color.black)
+        window.decorView.setBackgroundColor(Color.BLACK)
 
         setContentView(R.layout.activity_lock_screen)
+
+        val passwordInput = findViewById<EditText>(R.id.lock_password_input)
+        val unlockBtn = findViewById<Button>(R.id.lock_unlock_btn)
+        val root = window.decorView.rootView
+
+        // Garantir visibilidade: forçar cores brancas (fallback se tema não aplicar)
+        val white = Color.WHITE
+        passwordInput.setTextColor(white)
+        passwordInput.setHintTextColor(0xFFCCCCCC.toInt())
+        passwordInput.setBackgroundColor(0x40FFFFFF)
+        passwordInput.visibility = android.view.View.VISIBLE
+        unlockBtn.setTextColor(white)
+        unlockBtn.visibility = android.view.View.VISIBLE
+        // TextViews do layout (ícone e mensagem)
+        (passwordInput.parent as? android.view.ViewGroup)?.let { parent ->
+            for (i in 0 until parent.childCount) {
+                val child = parent.getChildAt(i)
+                (child as? TextView)?.setTextColor(white)
+                child?.visibility = android.view.View.VISIBLE
+            }
+        }
+        root.setBackgroundColor(Color.BLACK)
+        root.visibility = android.view.View.VISIBLE
+
+        unlockBtn.setOnClickListener {
+            val entered = passwordInput.text?.toString()?.trim() ?: ""
+            val savedPassword = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                .getString("admin_password", "") ?: ""
+            if (entered == savedPassword) {
+                Log.d(TAG, "Senha correta - desbloqueando")
+                finishLockScreen()
+            } else {
+                Toast.makeText(this, "Senha incorreta", Toast.LENGTH_SHORT).show()
+                passwordInput.text?.clear()
+            }
+        }
 
         // Garantir que bloqueio padrão Android está desabilitado - só nossa tela (cadeado estático)
         com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
@@ -92,9 +137,9 @@ class LockScreenActivity : AppCompatActivity() {
         com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
     }
 
-    /** Consumir todos os toques e gestos - impede deslizar para desbloquear */
+    /** Permitir toques no input de senha e botão Desbloquear */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        return true
+        return super.dispatchTouchEvent(ev)
     }
 
     /** Consumir teclas físicas - impede sair da tela de cadeado com power/volume/home/etc */

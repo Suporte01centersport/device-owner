@@ -1244,8 +1244,8 @@ export default function Home() {
       return
     }
 
-    if (password.length < 4) {
-      alert('A senha deve ter pelo menos 4 caracteres')
+    if (password.length !== 4) {
+      alert('A senha deve ter exatamente 4 dígitos (para desbloqueio na tela de cadeado)')
       passwordInput.focus()
       return
     }
@@ -1552,7 +1552,7 @@ export default function Home() {
                       <input
                         type="password"
                         id="adminPassword"
-                        placeholder="Digite a nova senha (mín. 4 caracteres)"
+                        placeholder="Digite a nova senha (4 dígitos para desbloqueio local)"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
                       />
                     </div>
@@ -1595,8 +1595,8 @@ export default function Home() {
                         <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
                           <li>A senha será salva no servidor e enviada para todos os dispositivos</li>
                           <li>Será necessária para alterar o nome do dispositivo</li>
+                          <li>O líder usa esta senha (4 dígitos) para desbloquear o celular na tela de cadeado</li>
                           <li>Dispositivos offline receberão a senha automaticamente quando se conectarem</li>
-                          <li>Você pode definir a senha mesmo sem dispositivos conectados</li>
                         </ul>
                       </div>
                     </div>

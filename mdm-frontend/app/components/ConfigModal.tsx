@@ -9,6 +9,8 @@ interface User {
   birth_year?: number | null
   device_model?: string | null
   device_serial_number?: string | null
+  role?: 'operador' | 'líder'
+  unlock_password?: string | null
 }
 
 interface ConfigModalProps {
@@ -25,7 +27,9 @@ const emptyForm = () => ({
   birth_year: '',
   device_model: '',
   device_serial_number: '',
-  center_peripheral: ''
+  center_peripheral: '',
+  role: 'operador' as 'operador' | 'líder',
+  unlock_password: ''
 })
 
 export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigModalProps) {
@@ -61,7 +65,9 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
           cpf: u.cpf,
           birth_year: u.birth_year,
           device_model: u.device_model,
-          device_serial_number: u.device_serial_number
+          device_serial_number: u.device_serial_number,
+          role: u.role || 'operador',
+          unlock_password: u.unlock_password || null
         })))
       } else {
         setUsers([])
@@ -80,10 +86,16 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
   }
 
   const handleAddUser = () => {
-    const { name, cpf, birth_year, device_model, device_serial_number, center_peripheral } = form
+    const { name, cpf, birth_year, device_model, device_serial_number, center_peripheral, role, unlock_password } = form
     if (!name.trim() || !cpf.trim()) {
       alert('Nome e CPF são obrigatórios.')
       return
+    }
+    if (role === 'líder' && unlock_password.trim()) {
+      if (unlock_password.trim().length !== 4) {
+        alert('A senha do líder deve ter exatamente 4 dígitos.')
+        return
+      }
     }
     const userId = center_peripheral.trim() || `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const year = birth_year.trim() ? parseInt(birth_year, 10) : null
@@ -97,7 +109,9 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
       cpf: cpf.trim(),
       birth_year: year,
       device_model: device_model.trim() || null,
-      device_serial_number: device_serial_number.trim() || null
+      device_serial_number: device_serial_number.trim() || null,
+      role: role || 'operador',
+      unlock_password: role === 'líder' && unlock_password.trim() ? unlock_password.trim() : null
     }
     setUsers(prev => [...prev, newUser])
     setForm(emptyForm())
@@ -123,7 +137,9 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
         cpf: u.cpf,
         birth_year: u.birth_year,
         device_model: u.device_model,
-        device_serial_number: u.device_serial_number
+        device_serial_number: u.device_serial_number,
+        role: u.role || 'operador',
+        unlock_password: u.unlock_password || null
       }))
 
       const response = await fetch('/api/device-users', {
@@ -252,6 +268,46 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
               />
             </div>
+            <h3 className="text-sm font-semibold text-gray-900/90 col-span-full mt-2">👤 Tipo de usuário</h3>
+            <div className="col-span-full">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="role"
+                    checked={form.role === 'operador'}
+                    onChange={() => updateForm('role', 'operador')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-900">Operador</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="role"
+                    checked={form.role === 'líder'}
+                    onChange={() => updateForm('role', 'líder')}
+                    className="w-4 h-4 text-blue-600"
+                  />
+                  <span className="text-sm text-gray-900">Líder</span>
+                </label>
+              </div>
+            </div>
+            {form.role === 'líder' && (
+              <div className="col-span-full">
+                <label className="block text-sm font-medium text-gray-900/90 mb-1">Senha de desbloqueio (4 dígitos)</label>
+                <input
+                  type="password"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={form.unlock_password}
+                  onChange={(e) => updateForm('unlock_password', e.target.value.replace(/\D/g, ''))}
+                  placeholder="Senha para desbloquear celular na tela de cadeado"
+                  className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm bg-white text-gray-900 placeholder:text-gray-600"
+                />
+                <p className="text-xs text-gray-500 mt-1">O líder usa esta senha para desbloquear o celular quando aparecer a tela de cadeado.</p>
+              </div>
+            )}
             <h3 className="text-sm font-semibold text-gray-900/90 col-span-full mt-2">📱 Dados do celular</h3>
             <div>
               <label className="block text-sm font-medium text-gray-900/90 mb-1">Modelo</label>
@@ -310,6 +366,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                         <p className="font-medium text-sm text-gray-900">{user.name}</p>
                         <p className="text-xs text-gray-900/90">
                           CPF: {user.cpf}
+                          {user.role && ` • ${user.role === 'líder' ? '👑 Líder' : 'Operador'}`}
                           {user.birth_year && ` • Nasc: ${user.birth_year}`}
                           {user.device_model && ` • ${user.device_model}`}
                           {user.device_serial_number && ` • Série: ${user.device_serial_number}`}

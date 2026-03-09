@@ -181,7 +181,7 @@ class WebSocketService : Service() {
                         lastVolumeMusic = curMusic
                         lastVolumeRing = curRing
                         lastVolumeAlarm = curAlarm
-                        startAlarmSirenFromVolume()
+                        // Sem sirene - volume apenas atualiza estado
                     }
                 }
             }
@@ -199,30 +199,6 @@ class WebSocketService : Service() {
         } else {
             @Suppress("DEPRECATION")
             pm.isScreenOn
-        }
-    }
-
-    private fun startAlarmSirenFromVolume() {
-        try {
-            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
-            if (!dpm.isDeviceOwnerApp(packageName)) return
-            val now = System.currentTimeMillis()
-            if (now - lastAlarmSirenFromVolume < ALARM_SIREN_COOLDOWN_MS) return
-            if (now - lastScreenOffTime < SCREEN_OFF_IGNORE_VOLUME_MS) return
-            // Não iniciar sirene quando tela está apagada (bloqueio por timeout ou 1 click no power)
-            if (!isScreenOn()) return
-            lastAlarmSirenFromVolume = now
-            val alarmIntent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
-                action = "START"
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(alarmIntent)
-            } else {
-                startService(alarmIntent)
-            }
-            Log.d(TAG, "Sirene de alerta iniciada (tecla volume em qualquer app)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
         }
     }
 
@@ -245,7 +221,8 @@ class WebSocketService : Service() {
                                 return false
                             }
                             KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
-                                startAlarmSirenFromVolume()
+                                // Sem sirene - apenas tela de cadeado
+                                com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this@WebSocketService)
                                 return true
                             }
                             KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
@@ -565,28 +542,12 @@ class WebSocketService : Service() {
                     sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
                 }
                 "start_alarm" -> {
-                    Log.d(TAG, "Comando start_alarm recebido - iniciando alarme")
-                    val intent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
-                        action = "START"
-                    }
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent)
-                    } else {
-                        startService(intent)
-                    }
-                    // alarm_confirmed será enviado pelo AlarmService quando o som iniciar
+                    // Sirene removida - comando ignorado
+                    Log.d(TAG, "Comando start_alarm recebido - sirene desabilitada")
                 }
                 "stop_alarm" -> {
-                    Log.d(TAG, "Comando stop_alarm recebido - parando alarme")
-                    val intent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
-                        action = "STOP"
-                    }
-                    startService(intent)
-                    webSocketClient?.sendMessage(gson.toJson(mapOf(
-                        "type" to "alarm_stopped",
-                        "deviceId" to DeviceIdManager.getDeviceId(this),
-                        "timestamp" to System.currentTimeMillis()
-                    )))
+                    // Sirene removida - comando ignorado
+                    Log.d(TAG, "Comando stop_alarm recebido - sirene desabilitada")
                 }
                 "wake_device" -> {
                     Log.d(TAG, "Comando wake_device recebido - acordando tela")
