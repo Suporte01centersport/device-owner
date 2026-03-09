@@ -250,7 +250,8 @@ object ServerDiscovery {
             }
 
             val networkPrefix = localIp.substringBeforeLast(".")
-            val commonLastOctets = listOf(1, 100, 10, 2, 50, 254)
+            // IPs comuns: gateway(1), roteador(254), PCs(2-100)
+            val commonLastOctets = listOf(1, 2, 10, 50, 83, 84, 85, 90, 100, 101, 254)
             
             for (lastOctet in commonLastOctets) {
                 val testIp = "$networkPrefix.$lastOctet"
@@ -366,6 +367,27 @@ object ServerDiscovery {
             prefs.edit().putString("discovered_server_url", serverUrl).apply()
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao salvar URL: ${e.message}")
+        }
+    }
+
+    /**
+     * Retorna URL do APK usando o servidor ao qual o dispositivo está conectado.
+     * Prioridade: servidor conectado (que sabemos que funciona) > URL do painel.
+     */
+    fun getApkUrlFromConnection(context: Context): String? {
+        val wsUrl = cachedServerUrl
+            ?: context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE).getString("discovered_server_url", null)
+            ?: context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE).getString("server_url", null)
+            ?: context.getSharedPreferences("mdm_connection_state", Context.MODE_PRIVATE).getString("last_server_url", null)
+            ?: return null
+        return try {
+            val withoutProtocol = wsUrl.substringAfter("ws://").substringBefore("/")
+            val host = withoutProtocol.substringBeforeLast(":")
+            val port = withoutProtocol.substringAfterLast(":").takeIf { it.all { c -> c.isDigit() } } ?: "3001"
+            "http://$host:$port/apk/mdm.apk"
+        } catch (e: Exception) {
+            Log.w(TAG, "Erro ao construir URL do APK: ${e.message}")
+            null
         }
     }
     

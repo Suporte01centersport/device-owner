@@ -2,11 +2,21 @@ package com.mdm.launcher.service
 
 import android.app.*
 import android.content.*
+import android.bluetooth.BluetoothDevice
+import android.database.ContentObserver
+import android.media.AudioManager
+import android.net.Uri
 import android.os.Binder
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
+import android.view.View
+import android.view.WindowManager
 import com.mdm.launcher.MainActivity
 import com.mdm.launcher.R
 import com.mdm.launcher.UpdateProgressActivity
@@ -59,6 +69,25 @@ class WebSocketService : Service() {
     /** ACTION_SCREEN_ON só pode ser recebido por receiver dinâmico. Ao ligar tela, abre app kiosk. */
     private var screenOnReceiver: BroadcastReceiver? = null
 
+    /** ACTION_SCREEN_OFF: não faz nada (evita sirene/cadeado ao power/timeout) */
+    private var screenOffReceiver: BroadcastReceiver? = null
+    private var lastScreenOffTime = 0L
+    private val SCREEN_OFF_IGNORE_VOLUME_MS = 15000L  // 15s - evita sirene ao bloquear por timeout ou 1 click power
+
+    /** Regra: volume (+ ou -) em qualquer app = inicia sirene de alerta */
+    private var volumeContentObserver: ContentObserver? = null
+
+    /** Bloqueia pareamento Bluetooth de dispositivos que não sejam barcode scanners */
+    private var bluetoothPairingReceiver: BroadcastReceiver? = null
+    private var lastVolumeMusic = -1
+    private var lastVolumeRing = -1
+    private var lastVolumeAlarm = -1
+    private var lastAlarmSirenFromVolume = 0L
+    private val ALARM_SIREN_COOLDOWN_MS = 2000L
+
+    /** Overlay para capturar teclas power/volume quando outro app está em foco (ex: WMS) */
+    private var keyCaptureOverlay: View? = null
+
     companion object {
         private const val TAG = "WebSocketService"
         private const val NOTIFICATION_ID = 1001
@@ -91,6 +120,9 @@ class WebSocketService : Service() {
         wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "MDMLauncher::WebSocketWakeLock")
         ConnectionStateManager.scheduleHealthChecks(this)
         registerKioskScreenReceiver()
+        registerVolumeObserver()
+        registerBluetoothPairingReceiver()
+        setupKeyCaptureOverlay()
     }
 
     private fun registerKioskScreenReceiver() {
@@ -108,6 +140,163 @@ class WebSocketService : Service() {
             registerReceiver(screenOnReceiver, filter)
         }
         Log.d(TAG, "Receiver de tela registrado (sem auto-abertura de apps)")
+
+        registerScreenOffReceiver()
+    }
+
+    /** Power/timeout: não faz nada - evita sirene e cadeado ao bloquear normalmente */
+    private fun registerScreenOffReceiver() {
+        screenOffReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action != Intent.ACTION_SCREEN_OFF) return
+                lastScreenOffTime = System.currentTimeMillis()
+                // Não iniciar sirene nem mostrar cadeado - deixa o Android tratar normalmente
+            }
+        }
+        val filter = IntentFilter(Intent.ACTION_SCREEN_OFF)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(screenOffReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(screenOffReceiver, filter)
+        }
+        Log.d(TAG, "Receiver SCREEN_OFF registrado (sem sirene/cadeado ao desligar tela)")
+    }
+
+    /** Regra: ao pressionar volume (+ ou -) em qualquer app = inicia sirene de alerta */
+    private fun registerVolumeObserver() {
+        try {
+            val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            lastVolumeMusic = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+            lastVolumeRing = audioManager.getStreamVolume(AudioManager.STREAM_RING)
+            lastVolumeAlarm = audioManager.getStreamVolume(AudioManager.STREAM_ALARM)
+
+            volumeContentObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+                override fun onChange(selfChange: Boolean, uri: Uri?) {
+                    val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+                    val curMusic = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    val curRing = am.getStreamVolume(AudioManager.STREAM_RING)
+                    val curAlarm = am.getStreamVolume(AudioManager.STREAM_ALARM)
+                    val changed = (curMusic != lastVolumeMusic || curRing != lastVolumeRing || curAlarm != lastVolumeAlarm)
+                    if (changed) {
+                        lastVolumeMusic = curMusic
+                        lastVolumeRing = curRing
+                        lastVolumeAlarm = curAlarm
+                        startAlarmSirenFromVolume()
+                    }
+                }
+            }
+            contentResolver.registerContentObserver(Settings.System.CONTENT_URI, true, volumeContentObserver!!)
+            Log.d(TAG, "ContentObserver de volume registrado - sirene ao pressionar volume")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao registrar observer de volume: ${e.message}")
+        }
+    }
+
+    private fun isScreenOn(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            pm.isInteractive
+        } else {
+            @Suppress("DEPRECATION")
+            pm.isScreenOn
+        }
+    }
+
+    private fun startAlarmSirenFromVolume() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            if (!dpm.isDeviceOwnerApp(packageName)) return
+            val now = System.currentTimeMillis()
+            if (now - lastAlarmSirenFromVolume < ALARM_SIREN_COOLDOWN_MS) return
+            if (now - lastScreenOffTime < SCREEN_OFF_IGNORE_VOLUME_MS) return
+            // Não iniciar sirene quando tela está apagada (bloqueio por timeout ou 1 click no power)
+            if (!isScreenOn()) return
+            lastAlarmSirenFromVolume = now
+            val alarmIntent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
+                action = "START"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(alarmIntent)
+            } else {
+                startService(alarmIntent)
+            }
+            Log.d(TAG, "Sirene de alerta iniciada (tecla volume em qualquer app)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
+        }
+    }
+
+    /** Overlay invisível para capturar power/volume quando WMS ou outro app está em foco */
+    private fun setupKeyCaptureOverlay() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !android.provider.Settings.canDrawOverlays(this)) {
+                Log.w(TAG, "Sem permissão de overlay - teclas power/volume só funcionam na tela do MDM")
+                return
+            }
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val overlay = object : View(this) {
+                override fun dispatchKeyEvent(event: KeyEvent?): Boolean {
+                    if (event == null) return super.dispatchKeyEvent(event)
+                    if (event.action == KeyEvent.ACTION_DOWN) {
+                        when (event.keyCode) {
+                            KeyEvent.KEYCODE_POWER -> {
+                                // Power: deixa o sistema tratar (sem sirene/cadeado)
+                                return false
+                            }
+                            KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                                startAlarmSirenFromVolume()
+                                return true
+                            }
+                            KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
+                            KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH, KeyEvent.KEYCODE_ESCAPE -> {
+                                com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this@WebSocketService)
+                                return true
+                            }
+                        }
+                    }
+                    return super.dispatchKeyEvent(event)
+                }
+            }.apply {
+                isFocusable = true
+                isFocusableInTouchMode = true
+            }
+            val params = WindowManager.LayoutParams().apply {
+                width = WindowManager.LayoutParams.MATCH_PARENT
+                height = WindowManager.LayoutParams.MATCH_PARENT
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    WindowManager.LayoutParams.TYPE_PHONE
+                }
+                flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                format = android.graphics.PixelFormat.TRANSPARENT
+            }
+            wm.addView(overlay, params)
+            overlay.requestFocus()
+            keyCaptureOverlay = overlay
+            Log.d(TAG, "Overlay: power=deixa sistema tratar, volume=sirene+cadeado")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao criar overlay de teclas: ${e.message}")
+        }
+    }
+
+    /** Bloqueia pareamento Bluetooth de dispositivos que não sejam barcode scanners (fones, caixas de som, etc.) */
+    private fun registerBluetoothPairingReceiver() {
+        try {
+            bluetoothPairingReceiver = com.mdm.launcher.receivers.BluetoothPairingReceiver()
+            val filter = IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                registerReceiver(bluetoothPairingReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            } else {
+                registerReceiver(bluetoothPairingReceiver, filter)
+            }
+            Log.d(TAG, "Receiver de pareamento Bluetooth registrado - apenas barcode scanners permitidos")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao registrar receiver Bluetooth: ${e.message}")
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -154,6 +343,20 @@ class WebSocketService : Service() {
         } catch (e: Exception) {}
         try {
             screenOnReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {}
+        try {
+            screenOffReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {}
+        try {
+            volumeContentObserver?.let { contentResolver.unregisterContentObserver(it) }
+        } catch (e: Exception) {}
+        try {
+            bluetoothPairingReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {}
+        try {
+            keyCaptureOverlay?.let {
+                (getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(it)
+            }
         } catch (e: Exception) {}
         if (wakeLock?.isHeld == true) wakeLock?.release()
         webSocketClient?.disconnect()
@@ -289,6 +492,13 @@ class WebSocketService : Service() {
 
                     if (!apkUrl.isNullOrEmpty()) {
                         Log.d(TAG, "Comando de atualização recebido: $apkUrl (versão: ${version ?: "N/A"})")
+                        val localApkUrl = com.mdm.launcher.utils.ServerDiscovery.getApkUrlFromConnection(this@WebSocketService)
+                        val (primaryUrl, fallbackUrls) = if (localApkUrl != null) {
+                            Log.d(TAG, "Usando URL do servidor conectado primeiro: $localApkUrl")
+                            localApkUrl to listOf(apkUrl)
+                        } else {
+                            apkUrl to emptyList<String>()
+                        }
                         val updateIntent = Intent(this@WebSocketService, UpdateProgressActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                         }
@@ -302,8 +512,9 @@ class WebSocketService : Service() {
                             })
                             com.mdm.launcher.utils.ApkInstaller.installApkFromUrl(
                                 context = this@WebSocketService,
-                                apkUrl = apkUrl,
+                                apkUrl = primaryUrl,
                                 version = version,
+                                fallbackUrls = fallbackUrls,
                                 onProgress = { progress ->
                                     Log.d(TAG, "Progresso da atualização: $progress%")
                                     val status = when {
@@ -376,6 +587,36 @@ class WebSocketService : Service() {
                         "deviceId" to DeviceIdManager.getDeviceId(this),
                         "timestamp" to System.currentTimeMillis()
                     )))
+                }
+                "wake_device" -> {
+                    Log.d(TAG, "Comando wake_device recebido - acordando tela")
+                    try {
+                        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+                        @Suppress("DEPRECATION")
+                        val wl = pm.newWakeLock(
+                            PowerManager.FULL_WAKE_LOCK or PowerManager.ACQUIRE_CAUSES_WAKEUP or PowerManager.ON_AFTER_RELEASE,
+                            "mdm:wakeup"
+                        )
+                        wl.acquire(5000)
+                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                            try { wl.release() } catch (_: Exception) {}
+                        }, 5000)
+                        webSocketClient?.sendMessage(gson.toJson(mapOf(
+                            "type" to "wake_device_confirmed",
+                            "deviceId" to DeviceIdManager.getDeviceId(this),
+                            "success" to true,
+                            "timestamp" to System.currentTimeMillis()
+                        )))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao acordar tela: ${e.message}")
+                        webSocketClient?.sendMessage(gson.toJson(mapOf(
+                            "type" to "wake_device_confirmed",
+                            "deviceId" to DeviceIdManager.getDeviceId(this),
+                            "success" to false,
+                            "reason" to (e.message ?: "Erro desconhecido"),
+                            "timestamp" to System.currentTimeMillis()
+                        )))
+                    }
                 }
                 "reboot_device" -> {
                     Log.d(TAG, "Comando reboot_device recebido - reiniciando dispositivo")
@@ -546,9 +787,9 @@ class WebSocketService : Service() {
 
     private fun showBackgroundNotification(title: String, body: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        val channelId = "mdm_notifications"
+        val channelId = "mdm_web_notifications"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "MDM Center Notifications", NotificationManager.IMPORTANCE_HIGH)
+            val channel = NotificationChannel(channelId, "Mensagens do Painel Web", NotificationManager.IMPORTANCE_HIGH)
             notificationManager.createNotificationChannel(channel)
         }
         val intent = Intent(this, MainActivity::class.java).apply {
@@ -565,7 +806,12 @@ class WebSocketService : Service() {
             .setAutoCancel(true)
             .setPriority(Notification.PRIORITY_HIGH)
             .build()
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        val id = System.currentTimeMillis().toInt()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            notificationManager.notify(MdmNotificationListenerService.WEB_NOTIFICATION_TAG, id, notification)
+        } else {
+            notificationManager.notify(id, notification)
+        }
     }
 
     private fun startHealthCheck() {

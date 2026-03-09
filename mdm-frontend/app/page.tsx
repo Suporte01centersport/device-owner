@@ -52,7 +52,10 @@ export default function Home() {
   const [justAddedDevice, setJustAddedDevice] = useState(false)
   const [showBackupConfirm, setShowBackupConfirm] = useState(false)
   const [showRestartConfirm, setShowRestartConfirm] = useState(false)
+  const [isRestarting, setIsRestarting] = useState(false)
   const [showClearCacheConfirm, setShowClearCacheConfirm] = useState(false)
+  const [showFormatConfirm, setShowFormatConfirm] = useState(false)
+  const [isFormattingDevice, setIsFormattingDevice] = useState(false)
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
   const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3001')
@@ -675,6 +678,13 @@ export default function Home() {
           alert('❌ ' + (message.message || 'Falha ao reiniciar. Verifique se o dispositivo está online e é Device Owner.'))
         }
         break
+      case 'wake_device_result':
+        if (message.success) {
+          // Confirmação silenciosa - tela acordada
+        } else {
+          alert('❌ ' + (message.message || 'Falha ao acordar. Verifique se o dispositivo está online.'))
+        }
+        break
       case 'alarm_device_result':
         if (message.success) {
           if (message.action === 'start') {
@@ -699,7 +709,6 @@ export default function Home() {
       ws.send(JSON.stringify(message))
       return true
     }
-    // Fallback HTTP quando WebSocket não conectado (lock, unlock, etc.)
     const deviceId = message.deviceId
     if (deviceId && (message.type === 'lock_device' || message.type === 'unlock_device')) {
       try {
@@ -713,6 +722,21 @@ export default function Home() {
         return !!data.success
       } catch (e) {
         console.error('Erro no fallback HTTP:', e)
+        return false
+      }
+    }
+    if (deviceId && (message.type === 'wake_device' || message.type === 'reboot_device')) {
+      try {
+        const action = message.type === 'wake_device' ? 'wake-device' : 'reboot'
+        const res = await fetch(`/api/devices/${deviceId}/${action}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceId })
+        })
+        const data = await res.json().catch(() => ({}))
+        return !!data.success
+      } catch (e) {
+        console.error('Erro no fallback HTTP ligar/desligar:', e)
         return false
       }
     }
@@ -883,6 +907,8 @@ export default function Home() {
   }
 
   const handleRestart = async () => {
+    if (isRestarting) return
+    setIsRestarting(true)
     setShowRestartConfirm(false)
     try {
       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
@@ -895,6 +921,26 @@ export default function Home() {
     } catch (e) {
       console.error('Erro ao reiniciar:', e)
       alert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3001.')
+    } finally {
+      setIsRestarting(false)
+    }
+  }
+
+  const handleFormatDevice = async () => {
+    setShowFormatConfirm(false)
+    setIsFormattingDevice(true)
+    try {
+      const res = await fetch('/api/devices/format-device', { method: 'POST' })
+      const data = await res.json()
+      if (data.success) {
+        alert('✅ ' + (data.message || 'Celular reiniciando no modo recovery. Use as teclas de volume para navegar e Power para confirmar. Selecione "Wipe data/factory reset".'))
+      } else {
+        alert('❌ ' + (data.error || 'Falha ao formatar'))
+      }
+    } catch (e) {
+      alert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+    } finally {
+      setIsFormattingDevice(false)
     }
   }
 
@@ -962,6 +1008,30 @@ export default function Home() {
     setTimeout(() => setIsSearchingDevices(false), 3000)
   }, [syncWithServer])
 
+  const handleAddDevice = useCallback(async () => {
+    setIsAddingDevice(true)
+    try {
+      const res = await fetch('/api/devices/add-device', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wmsVariant: 'pedidos' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setJustAddedDevice(true)
+        setTimeout(() => setJustAddedDevice(false), 45000)
+        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
+        pollForDevicesAfterAdd()
+      } else {
+        alert('Erro: ' + (data.error || 'Falha ao configurar'))
+      }
+    } catch (e) {
+      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+    } finally {
+      setIsAddingDevice(false)
+    }
+  }, [pollForDevicesAfterAdd])
+
   const handleApplySettings = () => {
     try {
       const settings = {
@@ -1026,27 +1096,32 @@ export default function Home() {
     setIsUpdateModalOpen(false)
     setUpdateDevice(null)
 
-    // Enviar comando em background (fire-and-forget)
-    fetch('/api/devices/update-app', {
+    // Se for o APK MDM do servidor, fazer build primeiro e enviar (evita erro 404)
+    const isMdmApk = apkUrl.includes('/apk/mdm.apk') || apkUrl.endsWith('mdm.apk')
+    const endpoint = isMdmApk ? '/api/devices/bulk-update-mdm' : '/api/devices/update-app'
+    const body = isMdmApk
+      ? JSON.stringify({ deviceIds: [deviceId] })
+      : JSON.stringify({ deviceIds: [deviceId], apkUrl, version })
+
+    fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        deviceIds: [deviceId],
-        apkUrl,
-        version
-      })
+      body
     })
       .then(res => res.json())
       .then(result => {
         if (!result.success) {
           alert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
+        } else if (isMdmApk) {
+          alert(`✅ Build concluído e atualização enviada para ${deviceName}! O dispositivo baixará e instalará o MDM automaticamente.`)
+          syncWithServer()
         }
       })
       .catch(err => {
         console.error('Erro ao atualizar app:', err)
-        alert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando.`)
+        alert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.`)
       })
-  }, [updateDevice])
+  }, [updateDevice, syncWithServer])
 
   const handleBulkUpdateMdm = useCallback(async (deviceIds: string[]) => {
     try {
@@ -1240,25 +1315,7 @@ export default function Home() {
               <div className="flex gap-3">
                 <button 
                   className="btn btn-primary"
-                  onClick={async () => {
-                    setIsAddingDevice(true)
-                    try {
-                      const res = await fetch('/api/devices/add-device', { method: 'POST' })
-                      const data = await res.json()
-                      if (data.success) {
-                        setJustAddedDevice(true)
-                        setTimeout(() => setJustAddedDevice(false), 45000)
-                        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
-                        pollForDevicesAfterAdd()
-                      } else {
-                        alert('Erro: ' + (data.error || 'Falha ao configurar'))
-                      }
-                    } catch (e) {
-                      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
-                    } finally {
-                      setIsAddingDevice(false)
-                    }
-                  }}
+                  onClick={handleAddDevice}
                   disabled={isAddingDevice}
                 >
                   <span>{isAddingDevice ? '⏳' : '📱'}</span>
@@ -1283,6 +1340,15 @@ export default function Home() {
                 >
                   <span>📥</span>
                   Atualização em Massa
+                </button>
+                <button 
+                  className="btn btn-warning"
+                  onClick={() => setShowFormatConfirm(true)}
+                  disabled={isFormattingDevice}
+                  title="Formata o celular conectado via USB (factory reset). Use quando o dispositivo está em boot loop."
+                >
+                  <span>{isFormattingDevice ? '⏳' : '🔄'}</span>
+                  {isFormattingDevice ? 'Formatando...' : 'Formatar Celular'}
                 </button>
               </div>
             </div>
@@ -1315,29 +1381,20 @@ export default function Home() {
                 )}
                 <button 
                   className="btn btn-primary btn-lg"
-                  onClick={async () => {
-                    setIsAddingDevice(true)
-                    try {
-                      const res = await fetch('/api/devices/add-device', { method: 'POST' })
-                      const data = await res.json()
-                      if (data.success) {
-                        setJustAddedDevice(true)
-                        setTimeout(() => setJustAddedDevice(false), 45000)
-                        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
-                        pollForDevicesAfterAdd()
-                      } else {
-                        alert('Erro: ' + (data.error || 'Conecte o celular via USB e habilite depuração'))
-                      }
-                    } catch (e) {
-                      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
-                    } finally {
-                      setIsAddingDevice(false)
-                    }
-                  }}
+                  onClick={handleAddDevice}
                   disabled={isAddingDevice}
                 >
                   <span>{isAddingDevice ? '⏳' : '📱'}</span>
                   {isAddingDevice ? 'Instalando MDM e WMS...' : 'Adicionar Dispositivo'}
+                </button>
+                <button 
+                  className="btn btn-warning btn-lg mt-4"
+                  onClick={() => setShowFormatConfirm(true)}
+                  disabled={isFormattingDevice}
+                  title="Formata o celular via USB (factory reset). Use quando está em boot loop."
+                >
+                  <span>{isFormattingDevice ? '⏳' : '🔄'}</span>
+                  {isFormattingDevice ? 'Formatando...' : 'Formatar Celular (recovery)'}
                 </button>
               </div>
             ) : (
@@ -1353,11 +1410,24 @@ export default function Home() {
                       setUpdateDevice(device)
                       setIsUpdateModalOpen(true)
                     }}
+                    onLigar={() => sendMessage({ type: 'wake_device', deviceId: device.deviceId, timestamp: Date.now() })}
+                    onDesligar={() => sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })}
                     onSupportCountUpdate={supportCountUpdateTrigger}
                   />
                 ))}
               </div>
             )}
+          </div>
+        )
+      case 'users':
+        return (
+          <div className="p-6">
+            <ConfigModal
+              isOpen={true}
+              onClose={() => setCurrentView('dashboard')}
+              onSave={handleSaveConfig}
+              asPage
+            />
           </div>
         )
       case 'settings':
@@ -1563,10 +1633,11 @@ export default function Home() {
                   <div className="space-y-3">
                     <button
                       onClick={() => setShowRestartConfirm(true)}
-                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30"
+                      disabled={isRestarting}
+                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30 disabled:opacity-70"
                     >
-                      <span>🔄</span>
-                      Reiniciar Servidor
+                      <span>{isRestarting ? '⏳' : '🔄'}</span>
+                      {isRestarting ? 'Reiniciando...' : 'Reiniciar Servidor'}
                     </button>
                     <button
                       onClick={() => setShowBackupConfirm(true)}
@@ -1798,6 +1869,18 @@ export default function Home() {
         confirmLabel="Sim"
         cancelLabel="Não"
         variant="warning"
+      />
+
+      {/* Modal de confirmação - Formatar Celular */}
+      <ConfirmModal
+        isOpen={showFormatConfirm}
+        onClose={() => setShowFormatConfirm(false)}
+        onConfirm={handleFormatDevice}
+        title="Formatar Celular"
+        message="O celular conectado via USB será reiniciado no modo recovery. Você precisará usar as teclas de volume para navegar e Power para confirmar. Selecione 'Wipe data/factory reset'. Isso apagará todos os dados do dispositivo. Continuar?"
+        confirmLabel="Sim, formatar"
+        cancelLabel="Cancelar"
+        variant="danger"
       />
 
       {/* Modal de confirmação - Limpar Cache */}

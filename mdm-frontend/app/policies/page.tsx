@@ -5,6 +5,8 @@ import { DeviceGroup, Device, AppPolicy } from '../types/device'
 import AppPolicyModal from '../components/AppPolicyModal'
 import DeviceAssignmentModal from '../components/DeviceAssignmentModal'
 import GroupModal from '../components/GroupModal'
+import FreeDevicesModal from '../components/FreeDevicesModal'
+import PoliciesOverviewModal from '../components/PoliciesOverviewModal'
 
 export default function PoliciesPage() {
   const [groups, setGroups] = useState<DeviceGroup[]>([])
@@ -15,6 +17,9 @@ export default function PoliciesPage() {
   const [isAppPolicyModalOpen, setIsAppPolicyModalOpen] = useState(false)
   const [isDeviceAssignmentModalOpen, setIsDeviceAssignmentModalOpen] = useState(false)
   const [isGroupModalOpen, setIsGroupModalOpen] = useState(false)
+  const [isFreeDevicesModalOpen, setIsFreeDevicesModalOpen] = useState(false)
+  const [isPoliciesOverviewModalOpen, setIsPoliciesOverviewModalOpen] = useState(false)
+  const [freeDevices, setFreeDevices] = useState<Device[]>([])
   const [loading, setLoading] = useState(true)
   const [groupStats, setGroupStats] = useState<Record<string, any>>({})
   const [filterGroupId, setFilterGroupId] = useState<string>('')
@@ -44,10 +49,20 @@ export default function PoliciesPage() {
     if (isCreateModalOpen) setCreateGroupError(null)
   }, [isCreateModalOpen])
 
+  // Carregar dispositivos livres ao abrir modal
+  useEffect(() => {
+    if (isFreeDevicesModalOpen) {
+      fetch('/api/devices/free')
+        .then((r) => r.json())
+        .then((res) => res.success && Array.isArray(res.data) && setFreeDevices(res.data))
+        .catch(() => setFreeDevices([]))
+    }
+  }, [isFreeDevicesModalOpen])
+
   // Mapeamento de ícones por nome do grupo
   const getGroupIcon = (name: string) => {
     const n = (name || '').toLowerCase()
-    if (n.includes('full')) return '🔵'
+    if (n.includes('full')) return <span className="text-blue-500">⚡</span>
     if (n.includes('separação') || n.includes('pedidos')) return '📦'
     if (n.includes('estoque')) return '📱'
     return '📋'
@@ -187,45 +202,71 @@ export default function PoliciesPage() {
     setIsDeviceAssignmentModalOpen(true)
   }
 
-  const handleSaveAppPolicy = (policy: AppPolicy) => {
+  const handleSaveAppPolicy = async (policy: AppPolicy) => {
     if (!selectedGroup) return
 
-    setGroups(groups.map(group => {
-      if (group.id === selectedGroup.id) {
-        const existingPolicyIndex = group.appPolicies.findIndex(p => p.id === policy.id)
-        let updatedPolicies = [...group.appPolicies]
-        
-        if (existingPolicyIndex >= 0) {
-          updatedPolicies[existingPolicyIndex] = policy
-        } else {
-          updatedPolicies.push(policy)
-        }
-        
-        return {
-          ...group,
-          appPolicies: updatedPolicies,
-          updatedAt: new Date().toISOString()
-        }
+    try {
+      const res = await fetch(`/api/groups/${selectedGroup.id}/policies`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageName: policy.packageName,
+          appName: policy.appName,
+          policyType: policy.policyType || 'allow'
+        })
+      })
+      const result = await res.json()
+      if (!res.ok) {
+        alert(result.detail || result.error || 'Erro ao salvar política')
+        return
       }
-      return group
-    }))
-    
-    setIsAppPolicyModalOpen(false)
+      const saved = result.data
+      setGroups(groups.map(group => {
+        if (group.id === selectedGroup.id) {
+          const existing = group.appPolicies.findIndex(p => p.packageName === policy.packageName)
+          const updatedPolicies = existing >= 0
+            ? group.appPolicies.map((p, i) => i === existing ? { ...policy, id: saved.id?.toString?.() || saved.id } : p)
+            : [...group.appPolicies, { ...policy, id: saved.id?.toString?.() || saved.id }]
+          return { ...group, appPolicies: updatedPolicies, updatedAt: new Date().toISOString() }
+        }
+        return group
+      }))
+      setIsAppPolicyModalOpen(false)
+    } catch (e) {
+      console.error('Erro ao salvar política:', e)
+      alert('Erro ao salvar política. Verifique a conexão.')
+    }
   }
 
-  const handleDeleteAppPolicy = (policyId: string) => {
+  const handleDeleteAppPolicy = async (policyId: string) => {
     if (!selectedGroup) return
+    const policy = selectedGroup.appPolicies.find(p => p.id === policyId || p.packageName === policyId)
+    const packageName = policy?.packageName || policyId
+    if (!packageName) return
 
-    setGroups(groups.map(group => {
-      if (group.id === selectedGroup.id) {
-        return {
-          ...group,
-          appPolicies: group.appPolicies.filter(p => p.id !== policyId),
-          updatedAt: new Date().toISOString()
-        }
+    try {
+      const res = await fetch(`/api/groups/${selectedGroup.id}/policies?packageName=${encodeURIComponent(packageName)}`, {
+        method: 'DELETE'
+      })
+      if (!res.ok) {
+        const result = await res.json().catch(() => ({}))
+        alert(result.detail || result.error || 'Erro ao remover política')
+        return
       }
-      return group
-    }))
+      setGroups(groups.map(group => {
+        if (group.id === selectedGroup.id) {
+          return {
+            ...group,
+            appPolicies: group.appPolicies.filter(p => p.packageName !== packageName),
+            updatedAt: new Date().toISOString()
+          }
+        }
+        return group
+      }))
+    } catch (e) {
+      console.error('Erro ao remover política:', e)
+      alert('Erro ao remover política. Verifique a conexão.')
+    }
   }
 
   const handleAssignDevice = async (deviceId: string, groupId: string) => {
@@ -246,19 +287,22 @@ export default function PoliciesPage() {
         return
       }
       // sucesso: atualizar estado local
-      setGroups(groups.map(group => {
+      const updatedGroups = groups.map(group => {
         if (group.id === groupId) {
-          if (!group.devices.find(d => d.id === deviceId)) {
-            return {
+          if (!group.devices.find(d => (d as any).id === deviceId || (d as any).deviceId === deviceId)) {
+            const updated = {
               ...group,
               devices: [...group.devices, device],
               deviceCount: group.deviceCount + 1,
               updatedAt: new Date().toISOString()
             }
+            if (selectedGroup?.id === groupId) setSelectedGroup(updated)
+            return updated
           }
         }
         return group
-      }))
+      })
+      setGroups(updatedGroups)
     } catch (e) {
       console.error('Erro ao atribuir dispositivo ao grupo:', e)
     }
@@ -277,17 +321,20 @@ export default function PoliciesPage() {
         return
       }
       // sucesso: atualizar estado local
-      setGroups(groups.map(group => {
+      const updatedGroups = groups.map(group => {
         if (group.id === groupId) {
-          return {
+          const updated = {
             ...group,
-            devices: group.devices.filter(d => d.id !== deviceId),
+            devices: group.devices.filter(d => (d as any).id !== deviceId && (d as any).deviceId !== device.deviceId),
             deviceCount: group.deviceCount - 1,
             updatedAt: new Date().toISOString()
           }
+          if (selectedGroup?.id === groupId) setSelectedGroup(updated)
+          return updated
         }
         return group
-      }))
+      })
+      setGroups(updatedGroups)
     } catch (e) {
       console.error('Erro ao remover dispositivo do grupo:', e)
     }
@@ -364,7 +411,13 @@ export default function PoliciesPage() {
           </div>
         </div>
 
-        <div className="card p-6">
+        <div
+          className="card p-6 cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => setIsPoliciesOverviewModalOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && setIsPoliciesOverviewModalOpen(true)}
+        >
           <div className="flex items-center">
             <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
               <span className="text-2xl text-yellow-600">📋</span>
@@ -372,13 +425,20 @@ export default function PoliciesPage() {
             <div>
               <p className="text-sm text-secondary">Políticas de Apps</p>
               <p className="text-2xl font-bold text-primary">
-                {groups.reduce((sum, group) => sum + group.appPolicies.length, 0)}
+                {groups.reduce((sum, group) => sum + (group.appPolicies?.length || 0), 0)}
               </p>
+              <p className="text-xs text-secondary mt-1">Clique para gerenciar</p>
             </div>
           </div>
         </div>
 
-        <div className="card p-6">
+        <div
+          className="card p-6 cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => setIsFreeDevicesModalOpen(true)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => e.key === 'Enter' && setIsFreeDevicesModalOpen(true)}
+        >
           <div className="flex items-center">
             <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
               <span className="text-2xl text-purple-600">🎯</span>
@@ -388,6 +448,7 @@ export default function PoliciesPage() {
               <p className="text-2xl font-bold text-primary">
                 {devices.length - groups.reduce((sum, group) => sum + group.deviceCount, 0)}
               </p>
+              <p className="text-xs text-secondary mt-1">Clique para atribuir</p>
             </div>
           </div>
         </div>
@@ -468,6 +529,8 @@ export default function PoliciesPage() {
         group={selectedGroup}
         isOpen={isGroupModalOpen}
         onClose={() => setIsGroupModalOpen(false)}
+        onAddDevices={() => setIsDeviceAssignmentModalOpen(true)}
+        onAddPolicy={() => setIsAppPolicyModalOpen(true)}
       />
 
       {/* Modal de Criação de Grupo */}

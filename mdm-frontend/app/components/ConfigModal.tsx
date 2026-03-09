@@ -15,6 +15,8 @@ interface ConfigModalProps {
   isOpen: boolean
   onClose: () => void
   onSave: (users: User[]) => void
+  /** Quando true, renderiza como página (sem overlay de modal) */
+  asPage?: boolean
 }
 
 const emptyForm = () => ({
@@ -26,11 +28,12 @@ const emptyForm = () => ({
   center_peripheral: ''
 })
 
-export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProps) {
+export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigModalProps) {
   const [form, setForm] = useState(emptyForm())
   const [users, setUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
@@ -41,10 +44,15 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
 
   const loadExistingUsers = async () => {
     setIsLoading(true)
+    setLoadError(null)
     try {
       const response = await fetch('/api/device-users?active=true')
-      if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-      const result = await response.json()
+      const result = await response.json().catch(() => ({}))
+      if (!response.ok) {
+        setLoadError(result.detail || result.error || `Erro HTTP ${response.status}`)
+        setUsers([])
+        return
+      }
       const usersList = result.users || result.data || []
       if (result.success && Array.isArray(usersList) && usersList.length > 0) {
         setUsers(usersList.map((u: any) => ({
@@ -60,7 +68,8 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
       }
     } catch (error) {
       console.error('Erro ao carregar usuários:', error)
-      alert('Erro ao carregar usuários.')
+      setLoadError('Não foi possível conectar. Verifique se o PostgreSQL está rodando e configurado em .env.development.')
+      setUsers([])
     } finally {
       setIsLoading(false)
     }
@@ -159,29 +168,43 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
 
   if (!isOpen) return null
 
+  const wrapperClass = asPage
+    ? 'p-6 max-w-2xl'
+    : 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto'
+  const contentClass = asPage
+    ? 'bg-white rounded-xl shadow-xl w-full'
+    : 'bg-white rounded-xl shadow-xl max-w-2xl w-full my-8'
+
   return (
     <div
-      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto"
-      onClick={onClose}
+      className={wrapperClass}
+      onClick={asPage ? undefined : onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl max-w-2xl w-full my-8"
-        onClick={(e) => e.stopPropagation()}
+        className={contentClass}
+        onClick={asPage ? undefined : (e) => e.stopPropagation()}
       >
         <div className="p-6 border-b border-gray-200">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">👥 Usuários</h2>
+              <h2 className="text-xl font-bold text-gray-900">{asPage ? '👤' : '👥'} Usuários</h2>
               <p className="text-sm text-gray-900 mt-1">Preencha a ficha da pessoa e do celular</p>
             </div>
             <button
               onClick={onClose}
               className="w-8 h-8 flex items-center justify-center text-gray-700 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-100"
+              title={asPage ? 'Voltar' : 'Fechar'}
             >
-              ✕
+              {asPage ? '←' : '✕'}
             </button>
           </div>
         </div>
+
+        {loadError && (
+          <div className="mx-6 mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+            ⚠️ {loadError}
+          </div>
+        )}
 
         <div className="p-6 space-y-6">
           {/* Mini ficha */}
@@ -323,7 +346,7 @@ export default function ConfigModal({ isOpen, onClose, onSave }: ConfigModalProp
               disabled={isSaving}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-900 rounded-lg transition-colors disabled:opacity-50"
             >
-              Cancelar
+              {asPage ? 'Voltar' : 'Cancelar'}
             </button>
             <button
               onClick={handleSave}

@@ -40,6 +40,12 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Grupos e políticas de apps'
     },
     {
+      id: 'users',
+      label: 'Usuários',
+      icon: '👤',
+      description: 'Gerenciar usuários do sistema'
+    },
+    {
       id: 'settings',
       label: 'Configurações',
       icon: '⚙️',

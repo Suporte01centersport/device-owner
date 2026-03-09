@@ -48,6 +48,11 @@ export async function GET(request: NextRequest) {
     })
   } catch (error: any) {
     console.error('Erro ao listar device-users:', error?.message || error)
+    // Se tabela não existe ou conexão falhou, retornar lista vazia para permitir uso do formulário
+    const msg = String(error?.message || error).toLowerCase()
+    if (msg.includes('does not exist') || msg.includes('relation') || msg.includes('connection') || msg.includes('econnrefused') || msg.includes('password') || msg.includes('timeout')) {
+      return NextResponse.json({ success: true, data: [], users: [] })
+    }
     return NextResponse.json({ 
       success: false, 
       error: 'Erro interno do servidor', 

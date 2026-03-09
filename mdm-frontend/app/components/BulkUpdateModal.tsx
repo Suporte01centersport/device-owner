@@ -134,11 +134,6 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdate
                         <span className="text-xs px-2 py-1 bg-green-100 text-green-700 rounded-full">
                           🟢 Online
                         </span>
-                        {device.isDeviceOwner && (
-                          <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
-                            Device Owner
-                          </span>
-                        )}
                       </div>
                       <div className="text-sm text-gray-700 mt-1">
                         {device.model} • Android {device.androidVersion} • Bateria: {device.batteryLevel}%

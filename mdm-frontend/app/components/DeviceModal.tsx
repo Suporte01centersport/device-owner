@@ -76,7 +76,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     
     return isZeroed || isSimulated
   }
-  const [selectedApps, setSelectedApps] = useState<string[]>(device.allowedApps || [])
+  const MDM_PACKAGE = 'com.mdm.launcher'
+  const [selectedApps, setSelectedApps] = useState<string[]>(() => (device.allowedApps || []).filter(p => p !== MDM_PACKAGE))
   const [isSaving, setIsSaving] = useState(false)
   const [appFilter, setAppFilter] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
@@ -149,8 +150,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
   useEffect(() => {
     if (device.allowedApps) {
       // selectedApps representa apenas apps individuais (sem os da política de grupo)
-      // Se device.allowedApps contém apps da política de grupo, precisamos filtrar
-      const individualApps = device.allowedApps.filter(app => !groupPolicyApps.includes(app))
+      // Excluir MDM do launcher (não é app para liberar)
+      const individualApps = device.allowedApps.filter(app => app !== MDM_PACKAGE && !groupPolicyApps.includes(app))
       setSelectedApps(individualApps)
     }
   }, [device.allowedApps, groupPolicyApps])
@@ -200,7 +201,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
       // ✅ Apps individuais têm prioridade: mesclar com apps da política de grupo
       // Quando salvamos individualmente, mantemos os apps da política de grupo também
       // Mas os apps individuais não serão afetados quando a política de grupo for aplicada
-      const finalApps = Array.from(new Set([...selectedApps, ...groupPolicyApps]))
+      const finalApps = Array.from(new Set([...selectedApps, ...groupPolicyApps])).filter(p => p !== MDM_PACKAGE)
       
       // Enviar permissões via WebSocket
       // ✅ IMPORTANTE: Marcar como isIndividual=true e enviar selectedApps separadamente
@@ -353,7 +354,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     if (!device.installedApps) return []
     
     let filtered = device.installedApps.filter(app => 
-      app && app.packageName && app.appName
+      app && app.packageName && app.appName && app.packageName !== MDM_PACKAGE
     )
 
     // Aplicar filtro de tipo
@@ -614,12 +615,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         {device.isLocationEnabled ? 'Habilitado' : 'Desabilitado'}
                       </span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-black">Modo Desenvolvedor</span>
-                      <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                        {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
-                      </span>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -745,36 +740,12 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                            'Desconhecido'}
                         </span>
                       </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-black">Device Owner</span>
-                        <span className={`badge ${device.isDeviceOwner ? 'badge-success' : 'badge-error'}`}>
-                          {device.isDeviceOwner ? 'Sim' : 'Não'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-black">Profile Owner</span>
-                        <span className={`badge ${device.isProfileOwner ? 'badge-success' : 'badge-error'}`}>
-                          {device.isProfileOwner ? 'Sim' : 'Não'}
-                        </span>
-                      </div>
                     </div>
                   </div>
 
                   <div className="card p-4">
                     <h4 className="font-semibold text-primary mb-3">Configurações do Sistema</h4>
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-black">Opções de Desenvolvedor</span>
-                        <span className={`badge ${device.isDeveloperOptionsEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                          {device.isDeveloperOptionsEnabled ? 'Habilitado' : 'Desabilitado'}
-                        </span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-black">ADB</span>
-                        <span className={`badge ${device.isAdbEnabled ? 'badge-warning' : 'badge-gray'}`}>
-                          {device.isAdbEnabled ? 'Habilitado' : 'Desabilitado'}
-                        </span>
-                      </div>
                       <div className="flex justify-between items-center">
                         <span className="text-black">Fontes Desconhecidas</span>
                         <span className={`badge ${device.isUnknownSourcesEnabled ? 'badge-warning' : 'badge-gray'}`}>

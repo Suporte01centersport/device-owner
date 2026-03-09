@@ -81,7 +81,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:src="@android:drawable/ic_menu_preferences"
-            android:contentDescription="Configurações"
+            android:contentDescription="Configurações. Segure para WiFi/Bluetooth"
             app:backgroundTint="@color/primary_color"
             app:tint="@color/white"
             app:elevation="0dp"

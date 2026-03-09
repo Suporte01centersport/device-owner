@@ -14,12 +14,8 @@ import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
-import android.media.MediaPlayer
-import android.media.RingtoneManager
-import android.media.ToneGenerator
+import android.media.AudioFocusRequest
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.os.IBinder
 import android.os.UserManager
 import android.util.Log
@@ -33,11 +29,7 @@ import com.mdm.launcher.DeviceAdminReceiver
  */
 class AlarmService : Service() {
 
-    private var mediaPlayer: MediaPlayer? = null
     private var audioTrack: AudioTrack? = null
-    private var toneGenerator: ToneGenerator? = null
-    private var toneRunnable: Runnable? = null
-    private val handler = Handler(Looper.getMainLooper())
     private var volumeRestrictionApplied = false
 
     companion object {
@@ -65,9 +57,13 @@ class AlarmService : Service() {
                     startForeground(NOTIFICATION_ID, createNotification())
                 }
                 applyVolumeRestriction()
-                startAlarmSound()
+                setAlarmVolumeToMax()
+                showLockScreen()  // Tela de cadeado primeiro - visível imediatamente
+                startAlarmSound() // Sirene de evacuação no volume máximo
+                showKeyBlockOverlay()
             }
             "STOP" -> {
+                hideKeyBlockOverlay()
                 stopAlarmSound()
                 removeVolumeRestriction()
                 stopForeground(true)
@@ -78,9 +74,65 @@ class AlarmService : Service() {
     }
 
     override fun onDestroy() {
+        hideKeyBlockOverlay()
         stopAlarmSound()
         removeVolumeRestriction()
         super.onDestroy()
+    }
+
+    private var keyBlockOverlay: android.view.View? = null
+
+    /** Overlay que bloqueia power/volume - impede menu desligar e alteração de volume */
+    private fun showKeyBlockOverlay() {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+                !android.provider.Settings.canDrawOverlays(this)) return
+            val wm = getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager
+            val overlay = object : android.view.View(this) {
+                override fun dispatchKeyEvent(event: android.view.KeyEvent?): Boolean {
+                    if (event != null && event.action == android.view.KeyEvent.ACTION_DOWN) {
+                        when (event.keyCode) {
+                            android.view.KeyEvent.KEYCODE_POWER,
+                            android.view.KeyEvent.KEYCODE_VOLUME_UP,
+                            android.view.KeyEvent.KEYCODE_VOLUME_DOWN,
+                            android.view.KeyEvent.KEYCODE_VOLUME_MUTE -> return true
+                        }
+                    }
+                    return super.dispatchKeyEvent(event)
+                }
+            }.apply {
+                isFocusable = true
+                isFocusableInTouchMode = true
+            }
+            val params = android.view.WindowManager.LayoutParams().apply {
+                width = android.view.WindowManager.LayoutParams.MATCH_PARENT
+                height = android.view.WindowManager.LayoutParams.MATCH_PARENT
+                type = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                } else {
+                    @Suppress("DEPRECATION")
+                    android.view.WindowManager.LayoutParams.TYPE_PHONE
+                }
+                flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                format = android.graphics.PixelFormat.TRANSPARENT
+            }
+            wm.addView(overlay, params)
+            overlay.requestFocus()
+            keyBlockOverlay = overlay
+            Log.d(TAG, "Overlay de bloqueio de teclas ativo (power/volume)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro overlay teclas: ${e.message}")
+        }
+    }
+
+    private fun hideKeyBlockOverlay() {
+        try {
+            keyBlockOverlay?.let {
+                (getSystemService(Context.WINDOW_SERVICE) as android.view.WindowManager).removeView(it)
+            }
+            keyBlockOverlay = null
+        } catch (_: Exception) {}
     }
 
     private fun createNotificationChannel() {
@@ -111,6 +163,77 @@ class AlarmService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun showLockScreen() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            if (!dpm.isDeviceOwnerApp(packageName)) return
+            com.mdm.launcher.utils.DevicePolicyHelper.disableLockScreen(this)
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+            try {
+                dpm.setLockTaskPackages(adminComponent, arrayOf(packageName))
+            } catch (e: Exception) {
+                Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
+            }
+            val lockIntent = Intent(this, com.mdm.launcher.LockScreenActivity::class.java).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                    addFlags(0x00080000 or 0x00100000) // FLAG_ACTIVITY_SHOW_WHEN_LOCKED | FLAG_ACTIVITY_TURN_SCREEN_ON
+                }
+            }
+            startActivity(lockIntent)
+            Log.d(TAG, "Tela de cadeado exibida (sirene ativa)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao exibir tela de cadeado: ${e.message}")
+        }
+    }
+
+    private fun setAlarmVolumeToMax() {
+        try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            am.mode = AudioManager.MODE_NORMAL
+            am.isSpeakerphoneOn = true
+            // Todos os streams no máximo - sirene no volume máximo que o celular aguenta
+            for (stream in intArrayOf(
+                AudioManager.STREAM_ALARM,
+                AudioManager.STREAM_MUSIC,
+                AudioManager.STREAM_RING,
+                AudioManager.STREAM_NOTIFICATION,
+                AudioManager.STREAM_SYSTEM
+            )) {
+                try {
+                    val maxVol = am.getStreamMaxVolume(stream)
+                    am.setStreamVolume(stream, maxVol, AudioManager.FLAG_VIBRATE)
+                } catch (_: Exception) {}
+            }
+            Log.d(TAG, "Volume definido ao máximo em todos os streams (sirene evacuação)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao definir volume máximo", e)
+        }
+    }
+
+    private fun requestAudioFocus(): Boolean {
+        return try {
+            val am = getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            val attrs = AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                val request = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+                    .setAudioAttributes(attrs)
+                    .setAcceptsDelayedFocusGain(false)
+                    .build()
+                am.requestAudioFocus(request) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            } else {
+                @Suppress("DEPRECATION")
+                am.requestAudioFocus(null, AudioManager.STREAM_ALARM, AudioManager.AUDIOFOCUS_GAIN) == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Audio focus não concedido: ${e.message}")
+            true
+        }
     }
 
     private fun applyVolumeRestriction() {
@@ -144,43 +267,49 @@ class AlarmService : Service() {
 
     private fun startAlarmSound() {
         stopAlarmSound()
+        setAlarmVolumeToMax()
+        requestAudioFocus()
         try {
-            startPoliceSiren()
+            startSiren()
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao iniciar sirene", e)
-            startToneGeneratorFallback()
+            Log.e(TAG, "Erro ao iniciar sirene: ${e.message}", e)
         }
     }
 
     /**
-     * Buzzer alarme irritante - onda quadrada alta frequência, pulsos rápidos.
-     * Som que incomoda de verdade para desencorajar ações não autorizadas.
+     * Sirene única normalizada - som wailing (sobe e desce) em volume máximo.
+     * Frequência varre de 800Hz a 1600Hz e volta, ciclo ~2 segundos.
+     * Mesmo som em todos os dispositivos (gerado por software).
      */
-    private fun startPoliceSiren() {
+    private fun startSiren() {
         val sampleRate = 44100
-        val freq = 3200f  // Hz - frequência alta e irritante
-        val beepOnMs = 80   // ms de som
-        val beepOffMs = 80  // ms de silêncio
-        val cycleSamples = (sampleRate * (beepOnMs + beepOffMs) / 1000).toInt()
+        val cycleDurationSec = 2.0
+        val freqLow = 800.0
+        val freqHigh = 1600.0
+        val cycleSamples = (sampleRate * cycleDurationSec).toInt()
         val buffer = ShortArray(cycleSamples)
-        val onSamples = (sampleRate * beepOnMs / 1000).toInt()
         var phase = 0.0
 
         for (i in 0 until cycleSamples) {
-            val sample = if (i < onSamples) {
-                phase += 2.0 * Math.PI * freq / sampleRate
-                val square = if (Math.sin(phase) > 0) 1.0 else -1.0
-                (square * 32767 * 0.9).toInt().coerceIn(-32768, 32767)
+            val t = i.toDouble() / sampleRate
+            val progress = (t % 1.0)
+            val halfCycle = (t / 1.0).toInt() % 2
+            val freq = if (halfCycle == 0) {
+                freqLow + (freqHigh - freqLow) * progress
             } else {
-                0
+                freqHigh - (freqHigh - freqLow) * progress
             }
+            phase += 2.0 * Math.PI * freq / sampleRate
+            val sample = (Math.sin(phase) * 32767).toInt().coerceIn(-32768, 32767)
             buffer[i] = sample.toShort()
         }
 
+        val flags = AudioAttributes.FLAG_AUDIBILITY_ENFORCED or
+            (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) 0x40 else 0) // FLAG_BYPASS_INTERRUPTION_POLICY
         val audioAttrs = AudioAttributes.Builder()
             .setUsage(AudioAttributes.USAGE_ALARM)
             .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .setFlags(AudioAttributes.FLAG_AUDIBILITY_ENFORCED)
+            .setFlags(flags)
             .build()
         val format = AudioFormat.Builder()
             .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
@@ -197,47 +326,22 @@ class AlarmService : Service() {
             .setTransferMode(AudioTrack.MODE_STATIC)
             .build()
             .apply {
+                setVolume(1.0f)
                 write(buffer, 0, buffer.size)
                 setLoopPoints(0, buffer.size, -1)
                 play()
             }
         sendBroadcast(Intent("com.mdm.launcher.ALARM_STARTED").setPackage(packageName))
-        Log.d(TAG, "Buzzer alarme iniciado")
-    }
-
-    private fun startToneGeneratorFallback() {
-        try {
-            toneGenerator = ToneGenerator(AudioManager.STREAM_ALARM, 100)
-            toneRunnable = object : Runnable {
-                override fun run() {
-                    toneGenerator?.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 400)
-                    handler.postDelayed(this, 500)
-                }
-            }
-            handler.post(toneRunnable!!)
-            sendBroadcast(Intent("com.mdm.launcher.ALARM_STARTED").setPackage(packageName))
-            Log.d(TAG, "Buzzer alarme iniciado (fallback)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao iniciar ToneGenerator", e)
-        }
+        Log.d(TAG, "Sirene normalizada iniciada (volume máximo)")
     }
 
     private fun stopAlarmSound() {
         try {
-            toneRunnable?.let { handler.removeCallbacks(it) }
-            toneRunnable = null
-            toneGenerator?.release()
-            toneGenerator = null
             audioTrack?.apply {
                 if (playState == AudioTrack.PLAYSTATE_PLAYING) stop()
                 release()
             }
             audioTrack = null
-            mediaPlayer?.apply {
-                if (isPlaying) stop()
-                release()
-            }
-            mediaPlayer = null
             Log.d(TAG, "Alarme parado")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao parar alarme", e)

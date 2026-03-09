@@ -1,8 +1,5 @@
 package com.mdm.launcher.utils
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.admin.DevicePolicyManager
 import android.content.ComponentName
@@ -11,35 +8,61 @@ import android.content.Intent
 import android.content.pm.PackageInstaller
 import android.net.Uri
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
-import com.mdm.launcher.MainActivity
-import com.mdm.launcher.R
+import android.widget.Toast
 import com.mdm.launcher.DeviceAdminReceiver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
-import java.net.HttpURLConnection
-import java.net.URL
+import java.util.concurrent.TimeUnit
 
 object ApkInstaller {
 
     private const val TAG = "ApkInstaller"
-    private const val NOTIFICATION_CHANNEL_ID = "apk_installer_channel"
-    private const val NOTIFICATION_ID_DOWNLOAD = 2001
-    private const val NOTIFICATION_ID_INSTALL = 2002
+    private const val MAX_RETRIES = 3
+    private const val CONNECT_TIMEOUT = 60L
+    private const val READ_TIMEOUT = 120L
+    private const val USER_AGENT = "MDM-Launcher/1.0 (Android)"
 
+    private val okHttpClient by lazy {
+        OkHttpClient.Builder()
+            .connectTimeout(CONNECT_TIMEOUT, TimeUnit.SECONDS)
+            .readTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
+            .writeTimeout(READ_TIMEOUT, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .retryOnConnectionFailure(true)
+            .build()
+    }
+
+    private fun showToast(context: Context, message: String) {
+        Handler(Looper.getMainLooper()).post {
+            Toast.makeText(context.applicationContext, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * @param apkUrl URL principal do APK (do painel)
+     * @param fallbackUrls URLs alternativas (ex: do servidor conectado) - tentadas em ordem se a principal falhar
+     */
     suspend fun installApkFromUrl(
         context: Context,
         apkUrl: String,
         version: String? = null,
+        fallbackUrls: List<String>? = null,
         onProgress: ((Int) -> Unit)? = null,
         onComplete: ((Boolean, String?) -> Unit)? = null
     ) = withContext(Dispatchers.IO) {
         var tempFile: File? = null
         try {
-            Log.d(TAG, "Iniciando instalação de APK: $apkUrl")
+            val urlsToTry = listOfNotNull(apkUrl) + (fallbackUrls ?: emptyList()).filter { it != apkUrl }
+            Log.d(TAG, "Iniciando instalação de APK. URLs a tentar: $urlsToTry")
 
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(context, DeviceAdminReceiver::class.java)
@@ -47,31 +70,21 @@ object ApkInstaller {
             if (!dpm.isDeviceOwnerApp(context.packageName)) {
                 val error = "App não é Device Owner. Instalação silenciosa requer Device Owner."
                 Log.e(TAG, error)
-                showNotification(context, "Erro na Instalação", error, false)
+                showToast(context, error)
                 onComplete?.invoke(false, error)
                 return@withContext
             }
 
-            createNotificationChannel(context)
-
-            showNotification(
-                context,
-                "Download do APK",
-                "Baixando APK...",
-                true,
-                NOTIFICATION_ID_DOWNLOAD
-            )
-
             onProgress?.invoke(10)
-            tempFile = downloadApk(context, apkUrl) { progress ->
+            tempFile = downloadApkWithRetry(context, urlsToTry) { progress ->
                 val totalProgress = 10 + (progress * 0.7).toInt()
                 onProgress?.invoke(totalProgress)
             }
 
             if (tempFile == null || !tempFile!!.exists()) {
-                val error = "Falha ao baixar APK"
+                val error = "Falha ao baixar APK. Verifique se o celular está na mesma rede do servidor."
                 Log.e(TAG, error)
-                showNotification(context, "Erro no Download", error, false)
+                showToast(context, error)
                 onComplete?.invoke(false, error)
                 return@withContext
             }
@@ -79,38 +92,25 @@ object ApkInstaller {
             Log.d(TAG, "APK baixado: ${tempFile!!.absolutePath}")
             onProgress?.invoke(80)
 
-            showNotification(
-                context,
-                "Instalando APK",
-                "Instalando aplicativo...",
-                true,
-                NOTIFICATION_ID_INSTALL
-            )
-
             onProgress?.invoke(85)
             val installSuccess = installApk(context, tempFile!!, dpm, componentName)
             onProgress?.invoke(100)
 
             if (installSuccess) {
                 Log.d(TAG, "APK instalado com sucesso!")
-                showNotification(
-                    context,
-                    "Instalação Concluída",
-                    "APK instalado com sucesso!",
-                    false
-                )
+                showToast(context, "Instalação concluída")
                 onComplete?.invoke(true, null)
             } else {
                 val error = "Falha ao instalar APK"
                 Log.e(TAG, error)
-                showNotification(context, "Erro na Instalação", error, false)
+                showToast(context, error)
                 onComplete?.invoke(false, error)
             }
 
         } catch (e: Exception) {
             val error = "Erro ao instalar APK: ${e.message}"
             Log.e(TAG, error, e)
-            showNotification(context, "Erro", error, false)
+            showToast(context, error)
             onComplete?.invoke(false, error)
         } finally {
             try {
@@ -121,62 +121,83 @@ object ApkInstaller {
         }
     }
 
-    private suspend fun downloadApk(
+    private suspend fun downloadApkWithRetry(
+        context: Context,
+        urlsToTry: List<String>,
+        onProgress: ((Int) -> Unit)? = null
+    ): File? = withContext(Dispatchers.IO) {
+        var lastError: Exception? = null
+        for (url in urlsToTry) {
+            repeat(MAX_RETRIES) { attempt ->
+                try {
+                    Log.d(TAG, "Tentativa ${attempt + 1}/$MAX_RETRIES - URL: $url")
+                    val result = downloadApk(context, url, onProgress)
+                    if (result != null) {
+                        Log.d(TAG, "Download concluído com sucesso de: $url")
+                        return@withContext result
+                    }
+                } catch (e: Exception) {
+                    lastError = e
+                    Log.w(TAG, "Tentativa ${attempt + 1} falhou ($url): ${e.message}")
+                    if (attempt < MAX_RETRIES - 1) {
+                        kotlinx.coroutines.delay(2000L * (attempt + 1))
+                    }
+                }
+            }
+        }
+        lastError?.let { Log.e(TAG, "Todas as URLs falharam", it) }
+        null
+    }
+
+    private fun downloadApk(
         context: Context,
         apkUrl: String,
         onProgress: ((Int) -> Unit)? = null
-    ): File? = withContext(Dispatchers.IO) {
-        var connection: HttpURLConnection? = null
-        var outputStream: FileOutputStream? = null
-        var inputStream: java.io.InputStream? = null
+    ): File? {
+        val request = Request.Builder()
+            .url(apkUrl)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "*/*")
+            .get()
+            .build()
 
-        try {
-            val url = URL(apkUrl)
-            connection = url.openConnection() as HttpURLConnection
-            connection.connectTimeout = 30000
-            connection.readTimeout = 60000
-            connection.connect()
-
-            if (connection.responseCode != HttpURLConnection.HTTP_OK) {
-                Log.e(TAG, "Erro HTTP: ${connection.responseCode}")
-                return@withContext null
+        okHttpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                Log.e(TAG, "Erro HTTP: ${response.code} ${response.message}")
+                return null
             }
 
-            val contentLength = connection.contentLength
+            val body = response.body ?: return null
+            val contentLength = body.contentLength()
             val tempDir = context.getExternalFilesDir(null) ?: context.cacheDir
             val tempFile = File(tempDir, "downloaded_apk_${System.currentTimeMillis()}.apk")
 
-            inputStream = connection.inputStream
-            outputStream = FileOutputStream(tempFile)
+            body.byteStream().use { inputStream ->
+                FileOutputStream(tempFile).use { outputStream ->
+                    val buffer = ByteArray(65536)
+                    var totalBytesRead = 0L
+                    var bytesRead: Int
 
-            val buffer = ByteArray(8192)
-            var totalBytesRead = 0L
-            var bytesRead: Int
+                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                        outputStream.write(buffer, 0, bytesRead)
+                        totalBytesRead += bytesRead
 
-            while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                outputStream.write(buffer, 0, bytesRead)
-                totalBytesRead += bytesRead
-
-                if (contentLength > 0 && onProgress != null) {
-                    val progress = ((totalBytesRead * 100) / contentLength).toInt()
-                    onProgress(progress)
+                        if (contentLength > 0 && onProgress != null) {
+                            val progress = ((totalBytesRead * 100) / contentLength).toInt().coerceIn(0, 100)
+                            onProgress(progress)
+                        }
+                    }
+                    outputStream.flush()
                 }
             }
 
-            outputStream.flush()
-            return@withContext tempFile
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao fazer download: ${e.message}", e)
-            return@withContext null
-        } finally {
-            try {
-                inputStream?.close()
-                outputStream?.close()
-                connection?.disconnect()
-            } catch (e: Exception) {
-                Log.w(TAG, "Erro ao fechar streams: ${e.message}")
+            if (tempFile.length() == 0L) {
+                Log.e(TAG, "Arquivo baixado está vazio")
+                tempFile.delete()
+                return null
             }
+
+            return tempFile
         }
     }
 
@@ -243,66 +264,6 @@ object ApkInstaller {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao instalar APK: ${e.message}", e)
             false
-        }
-    }
-
-    private fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Instalação de APK",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Notificações sobre download e instalação de APKs"
-            }
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun showNotification(
-        context: Context,
-        title: String,
-        message: String,
-        ongoing: Boolean,
-        notificationId: Int = NOTIFICATION_ID_INSTALL
-    ) {
-        try {
-            val intent = Intent(context, MainActivity::class.java)
-            val pendingIntent = PendingIntent.getActivity(
-                context,
-                notificationId,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-            )
-
-            val notification = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                Notification.Builder(context, NOTIFICATION_CHANNEL_ID)
-                    .setContentTitle(title)
-                    .setContentText(message)
-                    .setSmallIcon(R.drawable.ic_service_notification)
-                    .setContentIntent(pendingIntent)
-                    .setOngoing(ongoing)
-                    .setAutoCancel(!ongoing)
-                    .setPriority(Notification.PRIORITY_HIGH)
-                    .build()
-            } else {
-                @Suppress("DEPRECATION")
-                Notification.Builder(context)
-                    .setContentTitle(title)
-                    .setContentText(message)
-                    .setSmallIcon(R.drawable.ic_service_notification)
-                    .setContentIntent(pendingIntent)
-                    .setOngoing(ongoing)
-                    .setAutoCancel(!ongoing)
-                    .setPriority(Notification.PRIORITY_HIGH)
-                    .build()
-            }
-
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            notificationManager.notify(notificationId, notification)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao mostrar notificação: ${e.message}")
         }
     }
 }

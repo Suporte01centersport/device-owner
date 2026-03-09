@@ -251,62 +251,13 @@ object AppUpdater {
         }
     }
     
-    /**
-     * Mostra notificação de atualização com progresso
-     */
+    /** Sem notificação - apenas log (só web envia notificações) */
     private fun showUpdateNotification(context: Context, message: String, progress: Int) {
-        try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            
-            // Criar canal de notificação (Android 8+)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val channel = android.app.NotificationChannel(
-                    NOTIFICATION_CHANNEL_ID,
-                    "Atualizações do App",
-                    android.app.NotificationManager.IMPORTANCE_HIGH
-                )
-                channel.description = "Notificações de atualização do aplicativo"
-                notificationManager.createNotificationChannel(channel)
-            }
-            
-            // Criar notificação
-            val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                android.app.Notification.Builder(context, NOTIFICATION_CHANNEL_ID)
-            } else {
-                @Suppress("DEPRECATION")
-                android.app.Notification.Builder(context)
-            }
-            
-            builder.setSmallIcon(android.R.drawable.stat_sys_download)
-                .setContentTitle("📥 Atualizando MDM Center")
-                .setContentText(message)
-                .setOngoing(true)
-                .setAutoCancel(false)
-            
-            // Adicionar barra de progresso se houver
-            if (progress > 0) {
-                builder.setProgress(100, progress, false)
-            } else {
-                builder.setProgress(100, 0, true) // Indeterminado
-            }
-            
-            notificationManager.notify(NOTIFICATION_ID, builder.build())
-            
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao mostrar notificação", e)
-        }
+        Log.d(TAG, "Atualização: $message (progresso: $progress%)")
     }
     
-    /**
-     * Remove notificação de atualização
-     */
+    /** Remove notificação de atualização (não usado - sem notificação) */
     private fun hideUpdateNotification(context: Context) {
-        try {
-            val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
-            notificationManager.cancel(NOTIFICATION_ID)
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao remover notificação", e)
-        }
     }
     
     /**

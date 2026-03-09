@@ -98,7 +98,7 @@ async function getPublicIp() {
 
 /**
  * Obtém URL do APK acessível de qualquer rede (WiFi diferente do servidor).
- * Prioridade: MDM_PUBLIC_URL > IP público > IP local
+ * Prioridade: MDM_PUBLIC_URL > WEBSOCKET_CLIENT_HOST (mesma rede) > IP público > IP local
  */
 async function getApkUrlForAnyNetwork() {
     // 1. URL pública configurada (domínio, IP público, ngrok, etc.)
@@ -110,7 +110,15 @@ async function getApkUrlForAnyNetwork() {
         return apkUrl;
     }
 
-    // 2. IP público detectado automaticamente
+    // 2. IP configurado para clientes na mesma rede (celulares no WiFi)
+    const clientHost = process.env.WEBSOCKET_CLIENT_HOST || process.env.WEBSOCKET_HOST;
+    if (clientHost && !['localhost', '127.0.0.1', '0.0.0.0'].includes(clientHost)) {
+        const apkUrl = `http://${clientHost}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
+        console.log('📡 APK URL (WEBSOCKET_CLIENT_HOST - mesma rede):', apkUrl);
+        return apkUrl;
+    }
+
+    // 3. IP público detectado automaticamente
     const publicIp = await getPublicIp();
     if (publicIp) {
         const apkUrl = `http://${publicIp}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
@@ -118,7 +126,7 @@ async function getApkUrlForAnyNetwork() {
         return apkUrl;
     }
 
-    // 3. Fallback: IP local (apenas mesma rede)
+    // 4. Fallback: IP local (apenas mesma rede)
     const interfaces = os.networkInterfaces();
     let serverIp = 'localhost';
     for (const name of Object.keys(interfaces)) {
@@ -135,31 +143,46 @@ async function getApkUrlForAnyNetwork() {
     return apkUrl;
 }
 
-/** URL do WebSocket para clientes conectarem (celular e web em redes diferentes) */
+/** URL do WebSocket para clientes conectarem (celular e web na mesma rede WiFi) */
 async function getWebSocketUrlForClients() {
     const port = process.env.WEBSOCKET_PORT || '3001';
     const protocol = process.env.MDM_PUBLIC_URL?.startsWith('https') ? 'wss' : 'ws';
+    // 1. WEBSOCKET_CLIENT_HOST ou WEBSOCKET_HOST (IP real) - prioridade para mesma rede
+    const envHost = process.env.WEBSOCKET_CLIENT_HOST || process.env.WEBSOCKET_HOST;
+    if (envHost && !['localhost', '127.0.0.1', '0.0.0.0'].includes(envHost)) {
+        return `ws://${envHost}:${port}`;
+    }
     if (process.env.MDM_PUBLIC_URL) {
         try {
             const u = new URL(process.env.MDM_PUBLIC_URL);
-            const wsUrl = `${protocol}://${u.hostname}:${port}`;
-            return wsUrl;
+            return `${protocol}://${u.hostname}:${port}`;
         } catch (_) {}
     }
-    const publicIp = await getPublicIp();
-    if (publicIp) return `ws://${publicIp}:${port}`;
+    // 2. Priorizar IP local 192.168.x.x (WiFi) sobre 172.x (WSL/Docker)
     const interfaces = os.networkInterfaces();
-    let serverIp = 'localhost';
+    let bestIp = null;
+    let bestScore = 0;
+    const scoreIp = (addr) => {
+        if (addr.startsWith('192.168.')) return 3;
+        if (addr.startsWith('10.')) return 2;
+        if (addr.startsWith('172.')) return 1;
+        return 0;
+    };
     for (const name of Object.keys(interfaces)) {
-        for (const iface of interfaces[name]) {
-            if (iface.family === 'IPv4' && !iface.internal) {
-                serverIp = iface.address;
-                break;
+        if (name.toLowerCase().includes('vether') || name.toLowerCase().includes('docker')) continue;
+        for (const iface of interfaces[name] || []) {
+            if (iface.family !== 'IPv4' || iface.internal || iface.address.startsWith('169.')) continue;
+            const score = scoreIp(iface.address);
+            if (score > bestScore) {
+                bestScore = score;
+                bestIp = iface.address;
             }
         }
-        if (serverIp !== 'localhost') break;
     }
-    return `ws://${serverIp}:${port}`;
+    if (bestIp) return `ws://${bestIp}:${port}`;
+    const publicIp = await getPublicIp();
+    if (publicIp) return `ws://${publicIp}:${port}`;
+    return `ws://localhost:${port}`;
 }
 
 // Classes de otimização integradas
@@ -407,10 +430,16 @@ const server = http.createServer((req, res) => {
     if (path === '/apk/mdm.apk' && req.method === 'GET') {
         const pathMod = require('path');
         const projectRoot = pathMod.resolve(__dirname, '..', '..');
-        const apkPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+        const apkPath = fs.existsSync(debugPath) ? debugPath : (fs.existsSync(releasePath) ? releasePath : debugPath);
         if (fs.existsSync(apkPath)) {
+            const stat = fs.statSync(apkPath);
+            const fileSize = stat.size;
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
             res.setHeader('Content-Disposition', 'attachment; filename="mdm-launcher.apk"');
+            res.setHeader('Content-Length', String(fileSize));
+            res.setHeader('Accept-Ranges', 'bytes');
             const stream = fs.createReadStream(apkPath);
             stream.pipe(res);
         } else {
@@ -661,6 +690,26 @@ const server = http.createServer((req, res) => {
                     handleLockDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
                 } else if (path.includes('/unlock')) {
                     handleUnlockDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
+                } else if (path.includes('/start-alarm')) {
+                    const result = handleStartAlarm({ connectionId: 'http_api' }, { deviceId: deviceId });
+                    res.writeHead(result?.success ? 200 : 400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(result?.success ? { success: true, message: 'Alarme iniciado' } : { success: false, error: result?.error || 'Dispositivo não conectado' }));
+                    return;
+                } else if (path.includes('/stop-alarm')) {
+                    const result = handleStopAlarm({ connectionId: 'http_api' }, { deviceId: deviceId });
+                    res.writeHead(result?.success ? 200 : 400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(result?.success ? { success: true, message: 'Alarme parado' } : { success: false, error: result?.error || 'Dispositivo não conectado' }));
+                    return;
+                } else if (path.includes('/wake-device')) {
+                    const result = handleWakeDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
+                    res.writeHead(result?.success ? 200 : 400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify(result?.success ? { success: true, message: 'Comando enviado' } : { success: false, error: result?.error || 'Dispositivo não conectado' }));
+                    return;
+                } else if (path.includes('/reboot')) {
+                    handleRebootDevice({ connectionId: 'http_api' }, { deviceId: deviceId });
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Comando de reinicialização enviado' }));
+                    return;
                 } else if (path.includes('/delete')) {
                     await handleDeleteDevice({ deviceId }, { connectionId: 'http_api' });
                 } else if (path.includes('/app-permissions')) {
@@ -1492,6 +1541,9 @@ async function handleMessage(ws, data) {
         case 'stop_alarm':
             handleStopAlarm(ws, data);
             break;
+        case 'wake_device':
+            handleWakeDevice(ws, data);
+            break;
         case 'notification_received':
             handleNotificationReceived(ws, data);
             break;
@@ -1527,6 +1579,14 @@ async function handleMessage(ws, data) {
                 success: data.success !== false,
                 deviceId: data.deviceId,
                 message: data.success ? 'Dispositivo reiniciando...' : (data.reason || 'Falha ao reiniciar')
+            });
+            break;
+        case 'wake_device_confirmed':
+            notifyWebClients({
+                type: 'wake_device_result',
+                success: data.success !== false,
+                deviceId: data.deviceId,
+                message: data.success ? 'Tela acordada' : (data.reason || 'Falha ao acordar')
             });
             break;
         case 'geofence_event':
@@ -3167,16 +3227,17 @@ function handleStartAlarm(ws, data) {
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         deviceWs.send(JSON.stringify({ type: 'start_alarm', timestamp: Date.now() }));
         log.info(`Comando start_alarm enviado`, { deviceId, connectionId: ws.connectionId });
-    } else {
-        log.warn(`Dispositivo não encontrado ou desconectado para alarme`, { deviceId, connectionId: ws.connectionId });
-        notifyWebClients({
-            type: 'alarm_device_result',
-            success: false,
-            deviceId,
-            action: 'start',
-            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
-        });
+        return { success: true };
     }
+    log.warn(`Dispositivo não encontrado ou desconectado para alarme`, { deviceId, connectionId: ws.connectionId });
+    notifyWebClients({
+        type: 'alarm_device_result',
+        success: false,
+        deviceId,
+        action: 'start',
+        message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+    });
+    return { success: false, error: 'Dispositivo não conectado' };
 }
 
 function handleStopAlarm(ws, data) {
@@ -3185,16 +3246,17 @@ function handleStopAlarm(ws, data) {
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         deviceWs.send(JSON.stringify({ type: 'stop_alarm', timestamp: Date.now() }));
         log.info(`Comando stop_alarm enviado`, { deviceId, connectionId: ws.connectionId });
-    } else {
-        log.warn(`Dispositivo não encontrado ou desconectado para parar alarme`, { deviceId, connectionId: ws.connectionId });
-        notifyWebClients({
-            type: 'alarm_device_result',
-            success: false,
-            deviceId,
-            action: 'stop',
-            message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
-        });
+        return { success: true };
     }
+    log.warn(`Dispositivo não encontrado ou desconectado para parar alarme`, { deviceId, connectionId: ws.connectionId });
+    notifyWebClients({
+        type: 'alarm_device_result',
+        success: false,
+        deviceId,
+        action: 'stop',
+        message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+    });
+    return { success: false, error: 'Dispositivo não conectado' };
 }
 
 function handleRebootDevice(ws, data) {
@@ -3213,6 +3275,24 @@ function handleRebootDevice(ws, data) {
             message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
         });
     }
+}
+
+function handleWakeDevice(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'wake_device', timestamp: Date.now() }));
+        log.info(`Comando wake_device enviado`, { deviceId, connectionId: ws.connectionId });
+        return { success: true };
+    }
+    log.warn(`Dispositivo não encontrado ou desconectado para acordar`, { deviceId, connectionId: ws.connectionId });
+    notifyWebClients({
+        type: 'wake_device_result',
+        success: false,
+        deviceId,
+        message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+    });
+    return { success: false, error: 'Dispositivo não conectado' };
 }
 
 function handleLockDevice(ws, data) {

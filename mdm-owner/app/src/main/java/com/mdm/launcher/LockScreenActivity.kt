@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.view.KeyEvent
 import android.view.MotionEvent
 import android.view.WindowManager
 import android.util.Log
@@ -94,6 +95,20 @@ class LockScreenActivity : AppCompatActivity() {
     /** Consumir todos os toques e gestos - impede deslizar para desbloquear */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
         return true
+    }
+
+    /** Consumir teclas físicas - impede sair da tela de cadeado com power/volume/home/etc */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            val hardwareKeys = intArrayOf(
+                KeyEvent.KEYCODE_POWER, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
+                KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME,
+                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH,
+                KeyEvent.KEYCODE_ESCAPE
+            )
+            if (event.keyCode in hardwareKeys) return true
+        }
+        return super.dispatchKeyEvent(event)
     }
 
     override fun onTouchEvent(event: MotionEvent): Boolean {

@@ -31,6 +31,7 @@ import android.os.Looper
 import java.lang.Runtime
 import android.provider.Settings
 import android.util.Log
+import android.view.KeyEvent
 import android.view.View
 import android.view.View.MeasureSpec
 import android.view.ViewGroup
@@ -59,6 +60,7 @@ import com.mdm.launcher.service.WebSocketService
 import com.mdm.launcher.service.LocationService
 import com.mdm.launcher.ui.AppAdapter
 import com.mdm.launcher.utils.DeviceInfoCollector
+import com.mdm.launcher.utils.DevicePolicyHelper
 import com.mdm.launcher.utils.LocationHistoryManager
 import com.mdm.launcher.utils.GeofenceManager
 import com.mdm.launcher.utils.GeofenceEvent
@@ -133,9 +135,9 @@ class MainActivity : AppCompatActivity() {
     // Controle de interação do usuário
     private var lastInteractionTime = System.currentTimeMillis()
     
-    // Debug: Contador para remover Device Owner (10 cliques rápidos no botão config)
-    private var configButtonClickCount = 0
-    private var lastConfigButtonClickTime = 0L
+    // Rastreamento de teclas para sirene: power + volume = alerta
+    private var lastAlarmSirenTime = 0L
+    private val ALARM_SIREN_COOLDOWN_MS = 2000L // Evitar múltiplos disparos ao segurar
     
     // Serviço WebSocket em background
     private var webSocketService: WebSocketService? = null
@@ -292,6 +294,12 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "Activity não é root - finalizando instâncias extras")
             finish()
             return
+        }
+
+        // Lockdown imediato ao instalar MDM como Device Owner (parar downloads, matar apps, aplicar restrições)
+        if (intent?.getBooleanExtra(DeviceAdminReceiver.EXTRA_DO_LOCKDOWN, false) == true) {
+            intent?.removeExtra(DeviceAdminReceiver.EXTRA_DO_LOCKDOWN)
+            com.mdm.launcher.utils.DevicePolicyHelper.performLockdownOnInstall(this)
         }
         
         // ✅ NOVO: Garantir que Lock Task Mode está desabilitado ao iniciar
@@ -622,22 +630,61 @@ class MainActivity : AppCompatActivity() {
     
     private fun setupConfigButton() {
         configButton.setOnClickListener {
-            // Debug: 10 cliques rápidos para mostrar opção de remover Device Owner
-            val now = System.currentTimeMillis()
-            if (now - lastConfigButtonClickTime < 1000) {
-                configButtonClickCount++
-                if (configButtonClickCount >= 9) { // 10 cliques total
-                    showRemoveDeviceOwnerDialog()
-                    configButtonClickCount = 0
-                    return@setOnClickListener
-                }
-            } else {
-                configButtonClickCount = 0
-            }
-            lastConfigButtonClickTime = now
-            
             showDeviceNameDialog()
         }
+        configButton.setOnLongClickListener {
+            showWifiBluetoothPanelDialog()
+            true
+        }
+    }
+
+    /** Mini tela WiFi/Bluetooth - segurar o botão config para adicionar novos dispositivos */
+    private fun showWifiBluetoothPanelDialog() {
+        // Liberar WiFi/Bluetooth e exibir Settings ANTES do diálogo - DPM precisa de tempo para propagar
+        DevicePolicyHelper.temporarilyAllowWifiBluetoothConfig(this)
+        Toast.makeText(this, "WiFi e Bluetooth liberados - adicione novos dispositivos", Toast.LENGTH_SHORT).show()
+        val options = arrayOf("WiFi", "Bluetooth")
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Adicionar dispositivo (WiFi ou Bluetooth)")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> openWifiPanel()
+                    1 -> openBluetoothPanel()
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun openWifiPanel() {
+        // Delay para DPM propagar restrições liberadas
+        configButton.postDelayed({
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_WIFI_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                startActivity(intent)
+                Log.d(TAG, "Configurações WiFi abertas")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao abrir WiFi: ${e.message}")
+                Toast.makeText(this, "Não foi possível abrir WiFi. Tente pelo Quick Settings.", Toast.LENGTH_LONG).show()
+            }
+        }, 300)
+    }
+
+    private fun openBluetoothPanel() {
+        configButton.postDelayed({
+            try {
+                val intent = Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                }
+                startActivity(intent)
+                Log.d(TAG, "Configurações Bluetooth abertas")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao abrir Bluetooth: ${e.message}")
+                Toast.makeText(this, "Não foi possível abrir Bluetooth. Tente pelo Quick Settings.", Toast.LENGTH_LONG).show()
+            }
+        }, 300)
     }
     
     /**
@@ -937,15 +984,24 @@ class MainActivity : AppCompatActivity() {
             
             Log.d(TAG, "🔒 Aplicando restrições de Device Owner via comando remoto...")
             
+            // Liberar WiFi e Bluetooth (permite abrir ao segurar nos tiles do Quick Settings)
+            com.mdm.launcher.utils.DevicePolicyHelper.liberateWifiBluetooth(this)
+            
+            // Remover restrições de instalação (permite atualizações do MDM e outros apps)
+            try {
+                dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_INSTALL_APPS)
+                dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES)
+                Log.d(TAG, "Restrições de instalação removidas")
+            } catch (_: Exception) {}
+            
             // NOTA: Não bloqueia DISALLOW_DEBUGGING_FEATURES para manter ADB ativo
             // NOTA: Removido DISALLOW_SAFE_BOOT - causava boot loop no Realme UI
+            // NÃO incluir DISALLOW_CONFIG_WIFI e DISALLOW_CONFIG_BLUETOOTH - permite abrir ao segurar nos tiles do Quick Settings
+            // NÃO incluir DISALLOW_INSTALL_* - permite instalar apps (ex: atualizações do MDM)
             val restrictions = listOf(
                 android.os.UserManager.DISALLOW_FACTORY_RESET,
                 android.os.UserManager.DISALLOW_ADD_USER,
                 android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
-                android.os.UserManager.DISALLOW_CONFIG_WIFI,
-                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH,
-                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
                 android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
                 android.os.UserManager.DISALLOW_REMOVE_USER,
                 android.os.UserManager.DISALLOW_UNINSTALL_APPS,
@@ -2364,6 +2420,11 @@ class MainActivity : AppCompatActivity() {
             Log.d(TAG, "==================================")
             
             val filteredApps = installedApps.filter { app ->
+                // Não exibir o próprio MDM na grade (é o launcher, não um app para abrir)
+                if (app.packageName == packageName) {
+                    Log.d(TAG, "⏭️ MDM Center oculto da grade (é o launcher)")
+                    return@filter false
+                }
                 val isAllowed = allowedApps.contains(app.packageName)
                 if (!isAllowed) {
                     Log.d(TAG, "❌ App ${app.appName} (${app.packageName}) não está na lista de permitidos")
@@ -3032,11 +3093,13 @@ class MainActivity : AppCompatActivity() {
                     .build()
             }
             
-            // Gerar ID único para a notificação
+            // Gerar ID único para a notificação - tag mdm_web para permitir (bloqueia outras)
             val notificationId = System.currentTimeMillis().toInt()
-            
-            // Mostrar notificação
-            notificationManager.notify(notificationId, notification)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                notificationManager.notify(com.mdm.launcher.service.MdmNotificationListenerService.WEB_NOTIFICATION_TAG, notificationId, notification)
+            } else {
+                notificationManager.notify(notificationId, notification)
+            }
             Log.d(TAG, "Notificação exibida com sucesso (ID: $notificationId)")
             
             // Mostrar toast de confirmação
@@ -3376,7 +3439,10 @@ class MainActivity : AppCompatActivity() {
     
     override fun onResume() {
         super.onResume()
-        
+        // Garantir timeout de 5 min e WiFi/Bluetooth liberados sempre que o app estiver em foco
+        com.mdm.launcher.utils.DevicePolicyHelper.applyFiveMinuteScreenTimeout(this)
+        com.mdm.launcher.utils.DevicePolicyHelper.liberateWifiBluetooth(this)
+        com.mdm.launcher.utils.DevicePolicyHelper.reapplyWifiBluetoothRestrictions(this)
         val currentTime = System.currentTimeMillis()
         val timeSinceLastResume = currentTime - lastResumeTime
         
@@ -3928,6 +3994,59 @@ class MainActivity : AppCompatActivity() {
             false
         }
     }
+
+    private fun isScreenOn(): Boolean {
+        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT_WATCH) {
+            pm.isInteractive
+        } else {
+            @Suppress("DEPRECATION")
+            pm.isScreenOn
+        }
+    }
+    
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            when (event.keyCode) {
+                KeyEvent.KEYCODE_POWER -> {
+                    // Power: deixa o sistema tratar (apenas desliga tela, sem sirene/cadeado)
+                    return false
+                }
+                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                    startAlarmSiren()
+                    return true
+                }
+                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
+                KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH, KeyEvent.KEYCODE_ESCAPE -> {
+                    com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                    return true
+                }
+            }
+        }
+        return super.dispatchKeyEvent(event)
+    }
+    
+    private fun startAlarmSiren() {
+        if (!isDeviceOwner()) return
+        val now = System.currentTimeMillis()
+        if (now - lastAlarmSirenTime < ALARM_SIREN_COOLDOWN_MS) return // Debounce
+        // Não iniciar sirene quando tela está apagada (bloqueio por timeout ou 1 click no power)
+        if (!isScreenOn()) return
+        lastAlarmSirenTime = now
+        try {
+            val alarmIntent = Intent(this, com.mdm.launcher.service.AlarmService::class.java).apply {
+                action = "START"
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(alarmIntent)
+            } else {
+                startService(alarmIntent)
+            }
+            Log.d(TAG, "Sirene de alerta iniciada (tecla power/volume)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
+        }
+    }
     
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
@@ -4055,90 +4174,6 @@ class MainActivity : AppCompatActivity() {
         periodicSyncRunnable?.let { runnable ->
             handler.removeCallbacks(runnable)
             periodicSyncRunnable = null
-        }
-    }
-    
-    /**
-     * Mostra dialog para remover Device Owner (DEBUG)
-     */
-    private fun showRemoveDeviceOwnerDialog() {
-        val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-        val isDeviceOwner = devicePolicyManager.isDeviceOwnerApp(packageName)
-        
-        if (!isDeviceOwner) {
-            Toast.makeText(this, "Não é Device Owner", Toast.LENGTH_SHORT).show()
-            return
-        }
-        
-        val builder = android.app.AlertDialog.Builder(this)
-        builder.setTitle("⚠️ Remover Device Owner")
-        builder.setMessage("ATENÇÃO: Isso removerá as permissões de Device Owner do app.\n\nO app poderá ser desinstalado normalmente após isso.\n\nContinuar?")
-        
-        builder.setPositiveButton("SIM, REMOVER") { dialog, _ ->
-            removeDeviceOwner()
-            dialog.dismiss()
-        }
-        
-        builder.setNegativeButton("Cancelar") { dialog, _ ->
-            dialog.dismiss()
-        }
-        
-        builder.show()
-    }
-    
-    /**
-     * Remove Device Owner e limpa o app
-     */
-    private fun removeDeviceOwner() {
-        try {
-            val devicePolicyManager = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
-            
-            Log.d(TAG, "🗑️ Tentando remover Device Owner...")
-            
-            // Verificar se é Device Owner
-            if (!devicePolicyManager.isDeviceOwnerApp(packageName)) {
-                Toast.makeText(this, "Não é Device Owner", Toast.LENGTH_SHORT).show()
-                return
-            }
-            
-            // Limpar Device Owner
-            devicePolicyManager.clearDeviceOwnerApp(packageName)
-            
-            Log.d(TAG, "✅ Device Owner removido com sucesso!")
-            
-            Toast.makeText(this, "✅ Device Owner removido!\n\nVocê pode desinstalar o app agora.", Toast.LENGTH_LONG).show()
-            
-            // Limpar dados do app
-            val prefs = getSharedPreferences("mdm_launcher", MODE_PRIVATE)
-            prefs.edit().clear().apply()
-            
-            // Mostrar mensagem final
-            val builder = android.app.AlertDialog.Builder(this)
-            builder.setTitle("✅ Sucesso!")
-            builder.setMessage("Device Owner removido com sucesso!\n\nO app pode ser desinstalado normalmente agora.\n\nDeseja abrir as configurações para desinstalar?")
-            builder.setPositiveButton("Sim") { _, _ ->
-                try {
-                    val intent = Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-                    intent.data = android.net.Uri.parse("package:$packageName")
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Erro ao abrir configurações", e)
-                }
-            }
-            builder.setNegativeButton("Depois") { dialog, _ ->
-                dialog.dismiss()
-                finish()
-            }
-            builder.setCancelable(false)
-            builder.show()
-            
-        } catch (e: SecurityException) {
-            Log.e(TAG, "❌ Erro de segurança ao remover Device Owner", e)
-            Toast.makeText(this, "❌ Erro: Não foi possível remover Device Owner", Toast.LENGTH_LONG).show()
-        } catch (e: Exception) {
-            Log.e(TAG, "❌ Erro ao remover Device Owner", e)
-            Toast.makeText(this, "❌ Erro: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
     

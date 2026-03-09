@@ -9,11 +9,18 @@ class DeviceAdminReceiver : DeviceAdminReceiver() {
     
     companion object {
         private const val TAG = "DeviceAdminReceiver"
+        const val EXTRA_DO_LOCKDOWN = "do_lockdown"
     }
     
     override fun onEnabled(context: Context, intent: Intent) {
         super.onEnabled(context, intent)
-        Log.d(TAG, "Device Admin habilitado")
+        Log.d(TAG, "Device Admin habilitado - disparando lockdown imediato")
+        // Trazer MDM para frente e executar lockdown (parar downloads, matar apps, aplicar restrições)
+        val launchIntent = Intent(context, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            putExtra(EXTRA_DO_LOCKDOWN, true)
+        }
+        context.startActivity(launchIntent)
     }
     
     override fun onDisabled(context: Context, intent: Intent) {

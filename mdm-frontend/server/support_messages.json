@@ -106,27 +106,5 @@
     "receivedAt": 1761572306512,
     "status": "resolved",
     "updatedAt": 1761572312618
-  },
-  {
-    "id": "support_1772814555554_tuo1ijy7j",
-    "deviceId": "611ca78fb7607e46",
-    "deviceName": "realme RMX3834",
-    "message": "Ii",
-    "timestamp": 1772814555738,
-    "androidVersion": "13",
-    "model": "RMX3834",
-    "receivedAt": 1772814555554,
-    "status": "pending"
-  },
-  {
-    "id": "support_1772816468658_yhgcj6e89",
-    "deviceId": "611ca78fb7607e46",
-    "deviceName": "realme RMX3834",
-    "message": "Oi",
-    "timestamp": 1772816467863,
-    "androidVersion": "13",
-    "model": "RMX3834",
-    "receivedAt": 1772816468658,
-    "status": "pending"
   }
 ]

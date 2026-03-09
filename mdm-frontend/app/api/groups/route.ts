@@ -6,18 +6,31 @@ import DeviceGroupModel from '../../../server/database/models/DeviceGroup.js'
 export async function GET() {
   try {
     const rows = await DeviceGroupModel.findAll()
-    const data = (rows || []).map((g: any) => ({
-      id: g.id?.toString?.() || g.id,
-      name: g.name,
-      description: g.description || '',
-      color: g.color || '#3B82F6',
-      deviceCount: Number(g.device_count || g.deviceCount || 0),
-      devices: [],
-      appPolicies: [],
-      allowedNetworks: g.allowed_networks || [],
-      allowedLocation: g.allowed_location || null,
-      createdAt: g.created_at || g.createdAt || new Date().toISOString(),
-      updatedAt: g.updated_at || g.updatedAt || new Date().toISOString()
+    const data = await Promise.all((rows || []).map(async (g: any) => {
+      const groupId = g.id?.toString?.() || g.id
+      const [policies] = await Promise.all([
+        DeviceGroupModel.getGroupPolicies(groupId).catch(() => [])
+      ])
+      const appPolicies = (policies || []).map((p: any) => ({
+        id: p.id?.toString?.() || p.id,
+        packageName: p.package_name,
+        appName: p.app_name,
+        policyType: p.policy_type || 'allow',
+        isAllowed: p.policy_type !== 'block'
+      }))
+      return {
+        id: groupId,
+        name: g.name,
+        description: g.description || '',
+        color: g.color || '#3B82F6',
+        deviceCount: Number(g.device_count || g.deviceCount || 0),
+        devices: [],
+        appPolicies,
+        allowedNetworks: g.allowed_networks || [],
+        allowedLocation: g.allowed_location || null,
+        createdAt: g.created_at || g.createdAt || new Date().toISOString(),
+        updatedAt: g.updated_at || g.updatedAt || new Date().toISOString()
+      }
     }))
 
     return NextResponse.json({ success: true, data })

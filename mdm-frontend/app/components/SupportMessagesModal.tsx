@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import LocationMapModal from './LocationMapModal'
+import { playNotificationSound } from '../lib/notification-sound'
 
 interface SupportMessage {
   id: string
@@ -21,7 +22,7 @@ interface SupportMessagesModalProps {
   isOpen: boolean
   onClose: () => void
   onMessageStatusUpdate?: () => void
-  sendMessage?: (message: any) => boolean | void
+  sendMessage?: (message: any) => boolean | Promise<boolean> | void
   alarmError?: { deviceId: string } | null
   onAlarmErrorHandled?: () => void
 }
@@ -34,6 +35,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
   const [isSending, setIsSending] = useState(false)
   const [showLocationModal, setShowLocationModal] = useState(false)
   const [alarmOn, setAlarmOn] = useState(false)
+  const [isRebooting, setIsRebooting] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [sentHistory, setSentHistory] = useState<Array<{ id: string; message: string; timestamp: number; deviceName: string }>>([])
 
@@ -185,21 +187,38 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         setShowLocationModal(true)
         break
       case 'alarm':
+        playNotificationSound()
         if (alarmOn) {
-          sendMessage({ type: 'stop_alarm', deviceId: device.deviceId, timestamp: Date.now() })
-          setAlarmOn(false)
-          alert('Alarme parado')
+          const stopOk = await sendMessage({ type: 'stop_alarm', deviceId: device.deviceId, timestamp: Date.now() })
+          if (!stopOk) {
+            alert('Não foi possível parar o alarme. Verifique se o servidor está rodando e o dispositivo conectado.')
+          } else {
+            setAlarmOn(false)
+            alert('Alarme parado')
+          }
         } else {
-          sendMessage({ type: 'start_alarm', deviceId: device.deviceId, timestamp: Date.now() })
-          setAlarmOn(true)
-          alert('Alarme iniciado - toque novamente para parar')
+          const startOk = await sendMessage({ type: 'start_alarm', deviceId: device.deviceId, timestamp: Date.now() })
+          if (!startOk) {
+            alert('Não foi possível iniciar o alarme. Verifique se o servidor está rodando e o dispositivo está online na mesma rede.')
+          } else {
+            setAlarmOn(true)
+            alert('Alarme iniciado - toque novamente para parar')
+          }
         }
         break
       case 'reboot':
+        if (isRebooting) return
         if (!confirm('Reiniciar o dispositivo agora?')) return
-        const rebootOk = await sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })
-        if (!rebootOk) {
-          alert('Não foi possível reiniciar. Verifique se o servidor está rodando e o dispositivo conectado.')
+        setIsRebooting(true)
+        try {
+          const rebootOk = await sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })
+          if (!rebootOk) {
+            alert('Não foi possível reiniciar. Verifique se o servidor está rodando e o dispositivo conectado.')
+          } else {
+            alert('Comando de reiniciar enviado. O dispositivo reiniciará em alguns segundos.')
+          }
+        } finally {
+          setIsRebooting(false)
         }
         break
     }
@@ -422,11 +441,12 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   </button>
                   <button
                     onClick={() => handleControlAction('reboot')}
-                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface hover:border-red-200 transition-colors"
+                    disabled={isRebooting}
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface hover:border-red-200 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                     title="Reiniciar dispositivo"
                   >
-                    <span className="text-2xl">🔄</span>
-                    <span className="text-xs font-medium text-primary">Reiniciar</span>
+                    <span className="text-2xl">{isRebooting ? '⏳' : '🔄'}</span>
+                    <span className="text-xs font-medium text-primary">{isRebooting ? 'Reiniciando...' : 'Reiniciar'}</span>
                   </button>
                 </div>
               </div>

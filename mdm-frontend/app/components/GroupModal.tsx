@@ -1167,6 +1167,10 @@ interface GroupModalProps {
   group: DeviceGroup | null
   isOpen: boolean
   onClose: () => void
+  /** Abre o modal de atribuição de dispositivos ao grupo */
+  onAddDevices?: () => void
+  /** Abre o modal de adicionar política de app */
+  onAddPolicy?: () => void
 }
 
 type TabKey = 'overview' | 'devices' | 'policies' | 'monitoring' | 'history'
@@ -1386,7 +1390,7 @@ function HistoryTab({ groupId }: HistoryTabProps) {
   )
 }
 
-export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) {
+export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAddPolicy }: GroupModalProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('overview')
   const [isLoading, setIsLoading] = useState(false)
   const [stats, setStats] = useState<any | null>(null)
@@ -2350,6 +2354,27 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
 
           {!isLoading && activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* Ações rápidas */}
+              {onAddDevices && (
+                <div className="flex gap-3">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddDevices() }}
+                    className="btn btn-primary"
+                  >
+                    <span>➕</span>
+                    Adicionar dispositivo
+                  </button>
+                  {onAddPolicy && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onAddPolicy() }}
+                      className="btn btn-secondary"
+                    >
+                      <span>📋</span>
+                      Nova política
+                    </button>
+                  )}
+                </div>
+              )}
               {/* Cards de Estatísticas */}
               <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <div className="card p-4">
@@ -2526,7 +2551,19 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
           )}
 
           {!isLoading && activeTab === 'devices' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-6">
+              {onAddDevices && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddDevices() }}
+                    className="btn btn-primary"
+                  >
+                    <span>➕</span>
+                    Adicionar dispositivo
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <h4 className="text-sm font-semibold text-secondary mb-2">Usuários do sistema</h4>
                 {users.length === 0 ? (
@@ -2606,17 +2643,29 @@ export default function GroupModal({ group, isOpen, onClose }: GroupModalProps) 
                   })
                 )}
               </div>
+              </div>
             </div>
           )}
 
           {!isLoading && activeTab === 'policies' && (
             <div className="space-y-6">
-              <div>
-                <h3 className="text-lg font-semibold text-primary mb-2">Políticas de Apps do Grupo</h3>
-                <p className="text-sm text-secondary mb-4">
-                  Selecione os apps que serão forçados para exibição em todos os dispositivos deste grupo. 
-                  As políticas do grupo têm prioridade sobre políticas individuais de dispositivos.
-                </p>
+              <div className="flex justify-between items-start gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold text-primary mb-2">Políticas de Apps do Grupo</h3>
+                  <p className="text-sm text-secondary mb-4">
+                    Selecione os apps que serão forçados para exibição em todos os dispositivos deste grupo. 
+                    As políticas do grupo têm prioridade sobre políticas individuais de dispositivos.
+                  </p>
+                </div>
+                {onAddPolicy && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onAddPolicy() }}
+                    className="btn btn-secondary shrink-0"
+                  >
+                    <span>📋</span>
+                    Nova política
+                  </button>
+                )}
               </div>
 
               {devices.length === 0 ? (

@@ -11,14 +11,12 @@ export interface PresetApp {
 export const PRESET_APPS: PresetApp[] = [
   // WMS e apps prioritários
   { packageName: 'com.centersporti.wmsmobile', appName: 'WMS', emoji: '📦' },
-  // Telefone e comunicação
-  { packageName: 'com.android.dialer', appName: 'Telefone', emoji: '📞' },
+  // Telefone e comunicação (apenas Google)
   { packageName: 'com.google.android.dialer', appName: 'Telefone (Google)', emoji: '📞' },
   { packageName: 'com.android.contacts', appName: 'Contatos', emoji: '👤' },
   { packageName: 'com.google.android.contacts', appName: 'Contatos (Google)', emoji: '👤' },
   { packageName: 'com.google.android.apps.messaging', appName: 'Mensagens', emoji: '💬' },
   { packageName: 'com.android.mms', appName: 'SMS', emoji: '💬' },
-  { packageName: 'com.whatsapp', appName: 'WhatsApp', emoji: '💚' },
   // Email e produtividade
   { packageName: 'com.google.android.gm', appName: 'Gmail', emoji: '✉️' },
   { packageName: 'com.google.android.apps.docs', appName: 'Google Drive', emoji: '📁' },
@@ -34,11 +32,9 @@ export const PRESET_APPS: PresetApp[] = [
   { packageName: 'com.google.android.apps.photos', appName: 'Google Fotos', emoji: '📷' },
   // Utilitários
   { packageName: 'com.android.calculator2', appName: 'Calculadora', emoji: '🔢' },
-  { packageName: 'com.android.calculator', appName: 'Calculadora (AOSP)', emoji: '🔢' },
   { packageName: 'com.android.deskclock', appName: 'Relógio', emoji: '⏰' },
   { packageName: 'com.google.android.deskclock', appName: 'Relógio (Google)', emoji: '⏰' },
   { packageName: 'com.android.camera2', appName: 'Câmera', emoji: '📸' },
-  { packageName: 'com.android.camera', appName: 'Câmera (AOSP)', emoji: '📸' },
   { packageName: 'com.android.documentsui', appName: 'Arquivos', emoji: '📂' },
   { packageName: 'com.google.android.apps.nbu.files', appName: 'Arquivos (Google)', emoji: '📂' },
   // Loja e sistema

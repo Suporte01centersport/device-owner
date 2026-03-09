@@ -12,9 +12,28 @@ interface UpdateAppModalProps {
 }
 
 export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: UpdateAppModalProps) {
-  const [apkUrl, setApkUrl] = useState('https://github.com/suporte04centersport/qrcode/releases/download/v1/app-debug.apk')
-  const [version, setVersion] = useState('1.0.1')
+  const [apkUrl, setApkUrl] = useState('')
+  const [version, setVersion] = useState('1.1')
   const [showConfirm, setShowConfirm] = useState(false)
+  const [loadingUrl, setLoadingUrl] = useState(false)
+
+  // Carregar URL do APK MDM ao abrir o modal
+  useEffect(() => {
+    if (isOpen) {
+      setLoadingUrl(true)
+      fetch('/api/apk-url')
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.url) {
+            setApkUrl(data.url)
+          } else {
+            setApkUrl('')
+          }
+        })
+        .catch(() => setApkUrl(''))
+        .finally(() => setLoadingUrl(false))
+    }
+  }, [isOpen])
 
   // Fechar ao pressionar ESC
   useEffect(() => {
@@ -73,17 +92,18 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-secondary mb-2">
-                URL do APK *
+                URL do APK MDM *
               </label>
               <input
                 type="url"
                 value={apkUrl}
                 onChange={(e) => setApkUrl(e.target.value)}
-                placeholder="https://github.com/.../app-debug.apk"
+                placeholder={loadingUrl ? 'Carregando URL do servidor...' : 'http://IP:3001/apk/mdm.apk'}
                 className="input w-full"
+                disabled={loadingUrl}
               />
               <p className="text-xs text-muted mt-1">
-                URL direta do arquivo APK (GitHub Releases, etc)
+                {loadingUrl ? 'Obtendo URL do servidor...' : 'URL do APK MDM (gerada automaticamente). Use "Atualizar em massa" para fazer o build primeiro.'}
               </p>
             </div>
 

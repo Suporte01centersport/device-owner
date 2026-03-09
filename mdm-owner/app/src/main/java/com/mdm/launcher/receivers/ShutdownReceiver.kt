@@ -1,23 +1,21 @@
 package com.mdm.launcher.receivers
 
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
-import com.mdm.launcher.DeviceAdminReceiver
 
 /**
  * Intercepta tentativa de desligar/reiniciar o dispositivo.
  * - Inicia a SIRENE (alarme) quando usuário aperta e segura o botão power e escolhe desligar/reiniciar
- * - Força reinício em vez de desligar (modo kiosk)
  *
  * NÃO dispara em: clique simples no power (bloquear/desbloquear tela) - isso é normal.
  * SÓ dispara em: apertar e segurar power → menu → desligar/reiniciar.
  *
- * IMPORTANTE: ACTION_SHUTDOWN é enviado no desligamento/reboot, NÃO no lock/unlock.
- * Se chamarmos reboot() durante um reboot que nós mesmos iniciamos, causa boot loop.
+ * IMPORTANTE: Não chamamos dpm.reboot() aqui - ACTION_SHUTDOWN é enviado tanto em shutdown quanto em reboot.
+ * Se o usuário escolheu "reiniciar", o sistema já está reiniciando. Chamar reboot() de novo causa loop infinito.
+ * Apenas iniciamos o alarme para alertar sobre a tentativa.
  */
 class ShutdownReceiver : BroadcastReceiver() {
 
@@ -44,7 +42,9 @@ class ShutdownReceiver : BroadcastReceiver() {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
 
             if (dpm.isDeviceOwnerApp(context.packageName)) {
-                // 1. INICIAR SIRENE - tentativa não autorizada de desligar/reiniciar
+                // INICIAR SIRENE - tentativa não autorizada de desligar/reiniciar
+                // NÃO chamamos dpm.reboot() - se o usuário escolheu "reiniciar", o sistema já está reiniciando.
+                // Chamar reboot() de novo causa loop infinito.
                 Log.w(TAG, "Tentativa de desligar/reiniciar detectada - INICIANDO SIRENE")
                 try {
                     val alarmIntent = Intent(context, com.mdm.launcher.service.AlarmService::class.java).apply {
@@ -58,11 +58,6 @@ class ShutdownReceiver : BroadcastReceiver() {
                 } catch (e: Exception) {
                     Log.e(TAG, "Erro ao iniciar sirene: ${e.message}")
                 }
-
-                // 2. Forçar REINÍCIO em vez de desligar (mantém dispositivo ligado)
-                Log.w(TAG, "Forçando REINÍCIO em vez de desligar")
-                val adminComponent = ComponentName(context, DeviceAdminReceiver::class.java)
-                dpm.reboot(adminComponent)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao processar shutdown", e)

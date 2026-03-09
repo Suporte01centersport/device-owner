@@ -127,6 +127,94 @@ class DeviceModel {
         }
     }
 
+    // Listar dispositivos que não estão em nenhum grupo
+    static async findFreeDevices(organizationId = null) {
+        try {
+            let queryText = `
+                SELECT d.*, o.name as organization_name
+                FROM devices d
+                LEFT JOIN organizations o ON d.organization_id = o.id
+                LEFT JOIN device_group_memberships dgm ON d.id = dgm.device_id
+                WHERE d.deleted_at IS NULL AND dgm.device_id IS NULL
+            `;
+            const params = organizationId ? [organizationId] : [];
+            if (organizationId) {
+                queryText += ' AND d.organization_id = $1';
+            }
+            queryText += ' ORDER BY d.last_seen DESC';
+            const result = await query(queryText, params);
+            return result.rows.map(device => this._mapDeviceRow(device));
+        } catch (error) {
+            console.error('Erro ao buscar dispositivos livres:', error);
+            throw error;
+        }
+    }
+
+    static _mapDeviceRow(device) {
+        return {
+            id: device.id,
+            deviceId: device.device_id,
+            name: device.name || device.model || 'Dispositivo Desconhecido',
+            model: device.model,
+            manufacturer: device.manufacturer,
+            androidVersion: device.android_version,
+            osType: device.os_type || 'Android',
+            apiLevel: device.api_level,
+            serialNumber: device.serial_number || null,
+            imei: device.imei || null,
+            meid: device.meid || null,
+            macAddress: device.mac_address,
+            ipAddress: device.ip_address,
+            batteryLevel: device.battery_level || 0,
+            batteryStatus: device.battery_status,
+            isCharging: device.is_charging,
+            storageTotal: device.storage_total || 0,
+            storageUsed: device.storage_used || 0,
+            memoryTotal: device.memory_total || 0,
+            memoryUsed: device.memory_used || 0,
+            cpuArchitecture: device.cpu_architecture,
+            screenResolution: device.screen_resolution,
+            screenDensity: device.screen_density,
+            networkType: device.network_type,
+            wifiSSID: device.wifi_ssid,
+            isWifiEnabled: device.is_wifi_enabled,
+            isBluetoothEnabled: device.is_bluetooth_enabled,
+            isLocationEnabled: device.is_location_enabled,
+            isDeveloperOptionsEnabled: device.is_developer_options_enabled,
+            isAdbEnabled: device.is_adb_enabled,
+            isUnknownSourcesEnabled: device.is_unknown_sources_enabled,
+            isDeviceOwner: device.is_device_owner,
+            isProfileOwner: device.is_profile_owner,
+            isKioskMode: device.is_kiosk_mode,
+            appVersion: device.app_version,
+            timezone: device.timezone,
+            language: device.language,
+            country: device.country,
+            complianceStatus: device.compliance_status || 'unknown',
+            status: device.status,
+            lastSeen: device.last_seen,
+            installedAppsCount: 0,
+            installedApps: [],
+            allowedApps: [],
+            restrictions: {
+                wifiDisabled: device.wifi_disabled || false,
+                bluetoothDisabled: device.bluetooth_disabled || false,
+                cameraDisabled: device.camera_disabled || false,
+                statusBarDisabled: device.status_bar_disabled || false,
+                installAppsDisabled: device.install_apps_disabled || false,
+                uninstallAppsDisabled: device.uninstall_apps_disabled || false,
+                settingsDisabled: device.settings_disabled || false,
+                systemNotificationsDisabled: device.system_notifications_disabled || false,
+                screenCaptureDisabled: device.screen_capture_disabled || false,
+                sharingDisabled: device.sharing_disabled || false,
+                outgoingCallsDisabled: device.outgoing_calls_disabled || false,
+                smsDisabled: device.sms_disabled || false,
+                userCreationDisabled: device.user_creation_disabled || false,
+                userRemovalDisabled: device.user_removal_disabled || false
+            }
+        };
+    }
+
     // Listar todos os dispositivos
     static async findAll(organizationId = null, filters = {}) {
         try {
