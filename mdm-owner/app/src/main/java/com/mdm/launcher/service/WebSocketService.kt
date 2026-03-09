@@ -2,7 +2,6 @@ package com.mdm.launcher.service
 
 import android.app.*
 import android.content.*
-import android.bluetooth.BluetoothDevice
 import android.database.ContentObserver
 import android.media.AudioManager
 import android.net.Uri
@@ -77,8 +76,6 @@ class WebSocketService : Service() {
     /** Regra: volume (+ ou -) em qualquer app = inicia sirene de alerta */
     private var volumeContentObserver: ContentObserver? = null
 
-    /** Bloqueia pareamento Bluetooth de dispositivos que não sejam barcode scanners */
-    private var bluetoothPairingReceiver: BroadcastReceiver? = null
     private var lastVolumeMusic = -1
     private var lastVolumeRing = -1
     private var lastVolumeAlarm = -1
@@ -121,7 +118,7 @@ class WebSocketService : Service() {
         ConnectionStateManager.scheduleHealthChecks(this)
         registerKioskScreenReceiver()
         registerVolumeObserver()
-        registerBluetoothPairingReceiver()
+        // BluetoothPairingReceiver registrado no manifest - sempre ativo
         setupKeyCaptureOverlay()
     }
 
@@ -260,22 +257,6 @@ class WebSocketService : Service() {
         }
     }
 
-    /** Bloqueia pareamento Bluetooth de dispositivos que não sejam barcode scanners (fones, caixas de som, etc.) */
-    private fun registerBluetoothPairingReceiver() {
-        try {
-            bluetoothPairingReceiver = com.mdm.launcher.receivers.BluetoothPairingReceiver()
-            val filter = IntentFilter(BluetoothDevice.ACTION_PAIRING_REQUEST)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                registerReceiver(bluetoothPairingReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                registerReceiver(bluetoothPairingReceiver, filter)
-            }
-            Log.d(TAG, "Receiver de pareamento Bluetooth registrado - apenas barcode scanners permitidos")
-        } catch (e: Exception) {
-            Log.e(TAG, "Erro ao registrar receiver Bluetooth: ${e.message}")
-        }
-    }
-
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         startForeground(NOTIFICATION_ID, createNotification())
         isServiceRunning = true
@@ -326,9 +307,6 @@ class WebSocketService : Service() {
         } catch (e: Exception) {}
         try {
             volumeContentObserver?.let { contentResolver.unregisterContentObserver(it) }
-        } catch (e: Exception) {}
-        try {
-            bluetoothPairingReceiver?.let { unregisterReceiver(it) }
         } catch (e: Exception) {}
         try {
             keyCaptureOverlay?.let {
@@ -505,6 +483,14 @@ class WebSocketService : Service() {
                                         putExtra(UpdateProgressActivity.EXTRA_PROGRESS, progress)
                                         putExtra(UpdateProgressActivity.EXTRA_STATUS, status)
                                     })
+                                    // Enviar progresso para o painel web
+                                    webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                        "type" to "update_app_progress",
+                                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                                        "progress" to progress,
+                                        "status" to status,
+                                        "timestamp" to System.currentTimeMillis()
+                                    )))
                                 },
                                 onComplete = { success, error ->
                                     sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {

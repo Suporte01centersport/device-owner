@@ -1,19 +1,29 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Device } from '../types/device'
 
 interface BulkUpdateModalProps {
   devices: Device[]
   isOpen: boolean
   onClose: () => void
-  onBulkUpdateMdm: (deviceIds: string[]) => Promise<void>
+  onBulkUpdateMdm: (deviceIds: string[], onProgress?: (progress: ProgressUpdate) => void, cancelRef?: React.MutableRefObject<boolean>) => Promise<void>
+}
+
+interface ProgressUpdate {
+  currentDevice: number
+  totalDevices: number
+  percentage: number
+  stage: 'compilation' | 'sending' | 'downloading' | 'installing' | 'complete'
+  message: string
 }
 
 export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdateMdm }: BulkUpdateModalProps) {
   const [selectedDevices, setSelectedDevices] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
+  const [progress, setProgress] = useState<ProgressUpdate | null>(null)
+  const cancelRef = useRef(false)
 
   // Filtrar apenas dispositivos online
   const onlineDevices = devices.filter(d => d.status === 'online')
@@ -61,13 +71,29 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdate
       alert('⚠️ Selecione pelo menos um dispositivo.')
       return
     }
+    cancelRef.current = false
     setIsLoading(true)
+    setProgress(null)
     try {
-      await onBulkUpdateMdm(Array.from(selectedDevices))
-      onClose()
+      await onBulkUpdateMdm(Array.from(selectedDevices), (progressUpdate) => {
+        if (!cancelRef.current) {
+          setProgress(progressUpdate)
+        }
+      }, cancelRef)
+      if (!cancelRef.current) {
+        onClose()
+      }
     } finally {
       setIsLoading(false)
+      setProgress(null)
     }
+  }
+
+  const handleCancel = () => {
+    cancelRef.current = true
+    setIsLoading(false)
+    setProgress(null)
+    onClose()
   }
 
   return (
@@ -168,10 +194,70 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdate
               <li>O download consumirá Wi-Fi dos dispositivos.</li>
             </ul>
           </div>
+
+          {/* Barra de progresso enquanto compila/envia */}
+          {isLoading && progress && (
+            <div className="mt-4 space-y-3">
+              {/* Estágio do processo */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700">Etapa:</span>
+                <span className="text-sm font-bold text-blue-600">
+                  {progress.stage === 'compilation' && '🔨 Compilando MDM'}
+                  {progress.stage === 'sending' && '📤 Enviando para dispositivos'}
+                  {progress.stage === 'downloading' && '⬇️ Baixando no dispositivo'}
+                  {progress.stage === 'installing' && '⚙️ Instalando'}
+                  {progress.stage === 'complete' && '✅ Concluído'}
+                </span>
+              </div>
+
+              {/* Progresso do dispositivo */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-gray-700">Dispositivo:</span>
+                <span className="text-sm text-gray-600">
+                  {progress.currentDevice} de {progress.totalDevices}
+                </span>
+              </div>
+
+              {/* Barra de progresso visual */}
+              <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                <div 
+                  className="h-full bg-gradient-to-r from-blue-500 to-green-500 transition-all duration-500"
+                  style={{ width: `${progress.percentage}%` }}
+                />
+              </div>
+
+              {/* Percentual */}
+              <div className="text-center">
+                <span className="text-lg font-bold text-blue-600">{Math.round(progress.percentage)}%</span>
+              </div>
+
+              {/* Mensagem descritiva */}
+              <p className="text-xs text-gray-600 text-center">
+                {progress.message}
+              </p>
+            </div>
+          )}
+
+          {/* Barra de progresso genérica enquanto está carregando (sem dados de progresso) */}
+          {isLoading && !progress && (
+            <div className="mt-4">
+              <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                <div className="h-full bg-green-500 w-1/2 animate-pulse" />
+              </div>
+              <p className="mt-2 text-xs text-gray-600">
+                Compilando o MDM e enviando atualização para os dispositivos selecionados. Aguarde...
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="modal-footer">
-          <button onClick={onClose} className="btn btn-secondary" disabled={isLoading}>Cancelar</button>
+          <button 
+            onClick={handleCancel} 
+            className={`btn ${isLoading ? 'btn-danger' : 'btn-secondary'}`}
+          >
+            {isLoading ? '❌ Cancelar Atualização' : 'Cancelar'}
+          </button>
           <button 
             onClick={handleUpdateMdm}
             className="btn btn-success"

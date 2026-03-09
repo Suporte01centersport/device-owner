@@ -62,7 +62,14 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
         const res = await fetch(`/api/groups/${selectedGroupId}/policies`)
         if (res.ok) {
           const data = await res.json()
-          const packages = (data.data || []).map((p: any) => p.package_name).filter((p: string) => p !== MDM_PACKAGE)
+          let packages = (data.data || []).map((p: any) => p.package_name).filter((p: string) => p !== MDM_PACKAGE)
+          
+          // Garantir que WMS sempre está incluído
+          const wmsPackage = 'com.centersporti.wmsmobile'
+          if (!packages.includes(wmsPackage)) {
+            packages = [wmsPackage, ...packages]
+          }
+          
           setSelectedApps(new Set(packages))
           const presetPkgs = new Set(PRESET_APPS.map(a => a.packageName))
           const extras = packages.filter((p: string) => !presetPkgs.has(p))
@@ -80,13 +87,21 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     if (filterType !== 'device' || !selectedDeviceId) return
     const device = mobileDevices.find(d => d.deviceId === selectedDeviceId)
     if (device?.allowedApps) {
-      const filtered = device.allowedApps.filter(p => p !== MDM_PACKAGE)
+      let filtered = device.allowedApps.filter(p => p !== MDM_PACKAGE)
+      
+      // Garantir que WMS sempre está incluído
+      const wmsPackage = 'com.centersporti.wmsmobile'
+      if (!filtered.includes(wmsPackage)) {
+        filtered = [wmsPackage, ...filtered]
+      }
+      
       setSelectedApps(new Set(filtered))
       const presetPkgs = new Set(PRESET_APPS.map(a => a.packageName))
       const extras = filtered.filter(p => !presetPkgs.has(p))
       setCustomApps(extras.map(p => ({ packageName: p, appName: p.split('.').pop() || p })))
     } else {
-      setSelectedApps(new Set())
+      // Se não tiver allowedApps, começar com WMS obrigatório
+      setSelectedApps(new Set(['com.centersporti.wmsmobile']))
       setCustomApps([])
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só carregar quando seleção muda, não quando devices atualiza (evita sobrescrever checkboxes)
@@ -121,7 +136,14 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
   }
 
   const handleSave = async () => {
-    const packageList = Array.from(selectedApps).filter(p => p !== MDM_PACKAGE)
+    let packageList = Array.from(selectedApps).filter(p => p !== MDM_PACKAGE)
+    
+    // Garantir que WMS sempre está incluído (é obrigatório)
+    const wmsPackage = 'com.centersporti.wmsmobile'
+    if (!packageList.includes(wmsPackage)) {
+      packageList = [wmsPackage, ...packageList]
+    }
+    
     if (filterType === 'device') {
       if (!selectedDeviceId) {
         alert('Selecione um celular')
@@ -241,40 +263,51 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
           {filterType === 'device' && (
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-white whitespace-nowrap">Celular:</label>
-              <select
-                value={selectedDeviceId}
-                onChange={(e) => setSelectedDeviceId(e.target.value)}
-                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white [&_option]:text-white [&_option]:bg-background"
-              >
-                <option value="" disabled className="text-white bg-background">Selecione o celular</option>
-                {mobileDevices.length === 0 ? (
-                  <option value="" disabled className="text-white bg-background">Nenhum celular conectado</option>
-                ) : (
-                  mobileDevices.map((d) => (
-                    <option key={d.deviceId} value={d.deviceId} className="text-white bg-background">
-                      {d.name || d.model || d.deviceId} {d.status === 'online' ? '(online)' : '(offline)'}
-                    </option>
-                  ))
-                )}
-              </select>
+              <div className="relative flex-1 max-w-md">
+                <select
+                  value={selectedDeviceId}
+                  onChange={(e) => setSelectedDeviceId(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-white/40 rounded-lg bg-background text-white font-medium text-base hover:border-white/60 focus:border-primary focus:outline-none transition-colors [&_option]:text-white [&_option]:bg-background appearance-none cursor-pointer select-none"
+                >
+                  {/* Opção placeholder só para evitar valor inválido */}
+                  <option
+                    value=""
+                    disabled
+                    className="text-white/60 bg-background"
+                  >
+                    Selecione o celular
+                  </option>
+                  {mobileDevices.length === 0 ? (
+                    <option value="" disabled className="text-white/60 bg-background">Nenhum celular conectado</option>
+                  ) : (
+                    mobileDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId} className="text-white bg-background font-medium">
+                        {d.name || d.model || d.deviceId} {d.status === 'online' ? '🟢' : '🔴'}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
             </div>
           )}
 
           {filterType === 'group' && (
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-white whitespace-nowrap">Grupo:</label>
-              <select
-                value={selectedGroupId}
-                onChange={(e) => setSelectedGroupId(e.target.value)}
-                className="input w-auto min-w-[220px] px-3 py-2 border border-white/30 rounded-lg bg-background text-white [&_option]:text-white [&_option]:bg-background"
-              >
-                <option value="" className="text-white bg-background">Selecione um grupo</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id} className="text-white bg-background">
-                    {g.name}
-                  </option>
-                ))}
-              </select>
+              <div className="relative flex-1 max-w-md">
+                <select
+                  value={selectedGroupId}
+                  onChange={(e) => setSelectedGroupId(e.target.value)}
+                  className="w-full px-3 py-2 border-2 border-white/40 rounded-lg bg-background text-white font-medium text-base hover:border-white/60 focus:border-primary focus:outline-none transition-colors [&_option]:text-white [&_option]:bg-background appearance-none cursor-pointer"
+                >
+                  <option value="" className="text-white/60 bg-background">Selecione um grupo</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id} className="text-white bg-background font-medium">
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           )}
         </div>
@@ -332,6 +365,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                     emoji={app.emoji}
                     size={48}
                     className="ring-1 ring-white/10"
+                    iconUrl={(app as any).iconUrl}
                   />
                   <div className="min-w-0 flex-1">
                     <div className="font-semibold text-white truncate">{app.appName}</div>

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import LocationMapModal from './LocationMapModal'
-import { playNotificationSound } from '../lib/notification-sound'
 
 interface SupportMessage {
   id: string
@@ -34,7 +33,6 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
   const [outgoingMessage, setOutgoingMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [showLocationModal, setShowLocationModal] = useState(false)
-  const [alarmOn, setAlarmOn] = useState(false)
   const [isRebooting, setIsRebooting] = useState(false)
   const [showHistoryModal, setShowHistoryModal] = useState(false)
   const [sentHistory, setSentHistory] = useState<Array<{ id: string; message: string; timestamp: number; deviceName: string }>>([])
@@ -45,10 +43,9 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
     }
   }, [isOpen, device.deviceId])
 
-  // Sincronizar alarmOn quando receber erro (dispositivo não conectado)
+  // Notificar parent quando receber erro de alarme (dispositivo não conectado)
   useEffect(() => {
     if (alarmError && alarmError.deviceId === device.deviceId && isOpen) {
-      setAlarmOn(false)
       onAlarmErrorHandled?.()
     }
   }, [alarmError, device.deviceId, isOpen, onAlarmErrorHandled])
@@ -185,26 +182,6 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       case 'locate':
         sendMessage({ type: 'request_location', deviceId: device.deviceId, timestamp: Date.now() })
         setShowLocationModal(true)
-        break
-      case 'alarm':
-        playNotificationSound()
-        if (alarmOn) {
-          const stopOk = await sendMessage({ type: 'stop_alarm', deviceId: device.deviceId, timestamp: Date.now() })
-          if (!stopOk) {
-            alert('Não foi possível parar o alarme. Verifique se o servidor está rodando e o dispositivo conectado.')
-          } else {
-            setAlarmOn(false)
-            alert('Alarme parado')
-          }
-        } else {
-          const startOk = await sendMessage({ type: 'start_alarm', deviceId: device.deviceId, timestamp: Date.now() })
-          if (!startOk) {
-            alert('Não foi possível iniciar o alarme. Verifique se o servidor está rodando e o dispositivo está online na mesma rede.')
-          } else {
-            setAlarmOn(true)
-            alert('Alarme iniciado - toque novamente para parar')
-          }
-        }
         break
       case 'reboot':
         if (isRebooting) return
@@ -404,7 +381,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   <span>🎛️</span>
                   Controle do Dispositivo
                 </h4>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <button
                     onClick={() => handleControlAction('lock')}
                     className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface transition-colors"
@@ -428,16 +405,6 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   >
                     <span className="text-2xl">📍</span>
                     <span className="text-xs font-medium text-primary">Localizar</span>
-                  </button>
-                  <button
-                    onClick={() => handleControlAction('alarm')}
-                    className={`flex flex-col items-center gap-2 p-3 rounded-lg border transition-colors ${
-                      alarmOn ? 'border-red-500 bg-red-50' : 'border-border bg-background hover:bg-surface'
-                    }`}
-                    title={alarmOn ? 'Parar alarme' : 'Iniciar alarme sonoro'}
-                  >
-                    <span className="text-2xl">{alarmOn ? '⏹️' : '🔊'}</span>
-                    <span className="text-xs font-medium text-primary">{alarmOn ? 'Parar Alerta' : 'Som Alerta'}</span>
                   </button>
                   <button
                     onClick={() => handleControlAction('reboot')}

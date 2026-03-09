@@ -184,6 +184,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Bloqueia pareamento Bluetooth - só permite dispositivos com "barcoder" no nome -->
+        <receiver
+            android:name=".receivers.BluetoothPairingReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter android:priority="999">
+                <action android:name="android.bluetooth.device.action.PAIRING_REQUEST" />
+            </intent-filter>
+        </receiver>
+
         <!-- Intercepta desligamento e força reinício (modo kiosk) -->
         <receiver
             android:name=".receivers.ShutdownReceiver"

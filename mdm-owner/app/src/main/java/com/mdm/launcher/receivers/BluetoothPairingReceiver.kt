@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 
 /**
  * Bloqueia pareamento Bluetooth - APENAS dispositivos com "barcoder" no nome são permitidos.
@@ -32,7 +33,21 @@ class BluetoothPairingReceiver : BroadcastReceiver() {
 
         if (!isAllowedDevice(device)) {
             Log.w(TAG, "Bloqueando pareamento: ${device.name} (${device.address}) - nome deve conter 'barcoder'")
+            // Mensagem imediata para o usuário
+            Toast.makeText(
+                context.applicationContext,
+                "Pareamento não permitido.",
+                Toast.LENGTH_SHORT
+            ).show()
             rejectPairing(device)
+            // Impede que o sistema continue o fluxo de pareamento
+            try {
+                abortBroadcast()
+            } catch (_: Exception) {
+                // Alguns dispositivos podem não tratar como broadcast ordenado; ignorar erro
+            }
+        } else {
+            Log.d(TAG, "Pareamento permitido: ${device.name} (${device.address})")
         }
     }
 

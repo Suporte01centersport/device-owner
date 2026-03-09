@@ -1,62 +1,45 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 interface AppIconProps {
   packageName: string
   emoji: string
   size?: number
   className?: string
+  iconUrl?: string // URL direta do preset (Android-style)
 }
 
 /**
- * Exibe o ícone real do app (Play Store) ou fallback para emoji.
+ * Exibe o ícone real do app (preset iconUrl, Play Store ou fallback emoji).
  */
-export default function AppIcon({ packageName, emoji, size = 48, className = '' }: AppIconProps) {
-  const [iconUrl, setIconUrl] = useState<string | null>(null)
+export default function AppIcon({ packageName, emoji, size = 48, className = '', iconUrl: presetIconUrl }: AppIconProps) {
   const [failed, setFailed] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    const fetchIcon = async () => {
-      try {
-        const res = await fetch(`/api/app-icon?package=${encodeURIComponent(packageName)}`)
-        const data = await res.json()
-        if (!cancelled && data?.iconUrl) {
-          setIconUrl(data.iconUrl)
-        }
-      } catch {
-        if (!cancelled) setFailed(true)
-      }
-    }
-    fetchIcon()
-    return () => { cancelled = true }
-  }, [packageName])
-
-  const showEmoji = failed || !iconUrl
-
-  if (showEmoji) {
+  // Se tiver URL direta do preset, usar ela (sem fetch)
+  if (presetIconUrl && !failed) {
     return (
-      <div
-        className={`flex items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-primary/40 shrink-0 ${className}`}
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={presetIconUrl}
+        alt=""
+        width={size}
+        height={size}
+        className={`rounded-2xl object-cover shrink-0 ${className}`}
         style={{ width: size, height: size }}
-      >
-        <span className="text-xl" style={{ fontSize: size * 0.5 }}>{emoji}</span>
-      </div>
+        onError={() => setFailed(true)}
+        referrerPolicy="no-referrer"
+      />
     )
   }
 
+  // Fallback: emoji com fundo colorido estilo Android
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img
-      src={iconUrl!}
-      alt=""
-      width={size}
-      height={size}
-      className={`rounded-xl object-cover shrink-0 ${className}`}
+    <div
+      className={`flex items-center justify-center rounded-2xl bg-gradient-to-br from-primary/30 to-primary/60 shrink-0 ${className}`}
       style={{ width: size, height: size }}
-      onError={() => setFailed(true)}
-      referrerPolicy="no-referrer"
-    />
+    >
+      <span style={{ fontSize: size * 0.52 }}>{emoji}</span>
+    </div>
   )
 }

@@ -35,6 +35,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.View.MeasureSpec
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -285,6 +286,18 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+        
+        // Garantir que ao ligar a tela o launcher apareça imediatamente, sem deslizar
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+        }
         
         // Garantir que esta é a única instância da MainActivity
         if (!isTaskRoot) {

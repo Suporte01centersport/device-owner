@@ -10,6 +10,8 @@
     "dev:websocket": "node -r dotenv/config server/websocket.js dotenv_config_path=.env.development",
     "dev:all": "concurrently -k -n ws,web -c blue,green \"npm run dev:websocket\" \"next dev -p 3000\"",
     "dev:all:network": "concurrently -k -n ws,web -c blue,green \"npm run dev:websocket\" \"next dev -p 3000 -H 0.0.0.0\"",
+    "kill-node": "powershell -Command \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force\"",
+    "dev:restart": "npm run kill-node && npm run dev:all",
     "build": "next build",
     "start": "next start -p 3000",
     "start:prod": "cross-env NODE_ENV=production node -r dotenv/config server/websocket.js dotenv_config_path=.env.production & next start -p 3000",

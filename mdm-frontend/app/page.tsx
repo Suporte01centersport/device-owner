@@ -58,6 +58,7 @@ export default function Home() {
   const [isFormattingDevice, setIsFormattingDevice] = useState(false)
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
+  const [updateProgress, setUpdateProgress] = useState<{ deviceId: string; deviceName: string; progress: number; status: string; startTime: number; startProgress: number } | null>(null)
   const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3001')
   const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
   const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
@@ -697,12 +698,50 @@ export default function Home() {
           setAlarmError({ deviceId: message.deviceId })
         }
         break
+      case 'update_app_progress':
+        setUpdateProgress(prev => {
+          const device = devices.find(d => d.deviceId === message.deviceId)
+          const deviceName = device?.name || message.deviceId
+          if (prev?.deviceId === message.deviceId) {
+            return { ...prev, progress: message.progress ?? 0, status: message.status || prev.status }
+          }
+          // Primeiro progresso recebido - criar estado se ainda não existe
+          if (!prev) {
+            const p = message.progress ?? 0
+            return { deviceId: message.deviceId, deviceName, progress: p, status: message.status || 'Atualizando...', startTime: Date.now(), startProgress: p }
+          }
+          return prev
+        })
+        break
+      case 'update_app_complete':
+        setUpdateProgress(prev => {
+          if (prev?.deviceId === message.deviceId) {
+            setTimeout(() => {
+              alert(`✅ Atualização concluída com sucesso! O dispositivo ${prev.deviceName} foi atualizado.`)
+              syncWithServer()
+            }, 300)
+            return null
+          }
+          return prev
+        })
+        break
+      case 'update_app_error':
+        setUpdateProgress(prev => {
+          if (prev?.deviceId === message.deviceId) {
+            setTimeout(() => {
+              alert(`❌ Erro na atualização do dispositivo ${prev.deviceName}:\n${message.error || 'Erro desconhecido'}`)
+            }, 300)
+            return null
+          }
+          return prev
+        })
+        break
       default:
         // Ignorar mensagens desconhecidas silenciosamente (evitar spam de logs)
         // console.log('Mensagem WebSocket não reconhecida:', message)
         break
     }
-  }, [updateDevices, updateAdminPassword, syncWithServer])
+  }, [updateDevices, updateAdminPassword, syncWithServer, devices])
 
   const sendMessage = useCallback(async (message: any) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -1092,7 +1131,10 @@ export default function Home() {
     const deviceName = updateDevice.name
     const deviceId = updateDevice.deviceId
 
-    // Fechar modal imediatamente - UX rápida
+    // Mostrar barra de progresso IMEDIATAMENTE ao clicar
+    setUpdateProgress({ deviceId, deviceName, progress: 0, status: 'Enviando comando ao dispositivo...', startTime: Date.now(), startProgress: 0 })
+
+    // Fechar modal
     setIsUpdateModalOpen(false)
     setUpdateDevice(null)
 
@@ -1111,37 +1153,122 @@ export default function Home() {
       .then(res => res.json())
       .then(result => {
         if (!result.success) {
+          setUpdateProgress(null)
           alert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
-        } else if (isMdmApk) {
-          alert(`✅ Build concluído e atualização enviada para ${deviceName}! O dispositivo baixará e instalará o MDM automaticamente.`)
-          syncWithServer()
+        } else {
+          // Atualizar status - dispositivo enviará progresso via WebSocket
+          setUpdateProgress(prev => prev ? { ...prev, status: 'Aguardando resposta do dispositivo...' } : null)
+          if (isMdmApk) {
+            syncWithServer()
+          }
         }
       })
       .catch(err => {
         console.error('Erro ao atualizar app:', err)
+        setUpdateProgress(null)
         alert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.`)
       })
   }, [updateDevice, syncWithServer])
 
-  const handleBulkUpdateMdm = useCallback(async (deviceIds: string[]) => {
+  const handleBulkUpdateMdm = useCallback(async (deviceIds: string[], onProgress?: (progress: any) => void, cancelRef?: React.MutableRefObject<boolean>) => {
+    if (!deviceIds || deviceIds.length === 0) return
     try {
+      // Etapa 1: Compilando (0-30%)
+      if (cancelRef?.current) return
+      
+      onProgress?.({
+        currentDevice: 0,
+        totalDevices: deviceIds.length,
+        percentage: 5,
+        stage: 'compilation',
+        message: 'Preparando o build do MDM...'
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 1000))
+      if (cancelRef?.current) return
+
+      onProgress?.({
+        currentDevice: 0,
+        totalDevices: deviceIds.length,
+        percentage: 15,
+        stage: 'compilation',
+        message: 'Compilando o APK...'
+      })
+
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      if (cancelRef?.current) return
+
       const response = await fetch('/api/devices/bulk-update-mdm', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ deviceIds })
       })
       const result = await response.json()
-      if (result.success) {
-        alert(`✅ Build concluído e atualização enviada via WiFi para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos baixarão e instalarão o MDM automaticamente.`)
-        syncWithServer()
+
+      if (result.success && !cancelRef?.current) {
+        // Etapa 2: Enviando (30-50%)
+        onProgress?.({
+          currentDevice: 0,
+          totalDevices: deviceIds.length,
+          percentage: 30,
+          stage: 'sending',
+          message: 'Enviando para dispositivos via WiFi...'
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        if (cancelRef?.current) return
+
+        // Etapa 3: Baixando (50-70%)
+        onProgress?.({
+          currentDevice: 0,
+          totalDevices: deviceIds.length,
+          percentage: 50,
+          stage: 'downloading',
+          message: 'Dispositivos baixando atualização...'
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 3000))
+        if (cancelRef?.current) return
+
+        // Etapa 4: Instalando (70-95%)
+        onProgress?.({
+          currentDevice: 0,
+          totalDevices: deviceIds.length,
+          percentage: 75,
+          stage: 'installing',
+          message: 'Instalando MDM atualizado nos dispositivos...'
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 2000))
+        if (cancelRef?.current) return
+
+        // Conclusão (100%)
+        onProgress?.({
+          currentDevice: deviceIds.length,
+          totalDevices: deviceIds.length,
+          percentage: 100,
+          stage: 'complete',
+          message: 'Atualização concluída com sucesso!'
+        })
+
+        await new Promise(resolve => setTimeout(resolve, 1000))
+
+        if (!cancelRef?.current) {
+          alert(`✅ Build concluído e atualização enviada via WiFi para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos baixarão e instalarão o MDM automaticamente.`)
+          syncWithServer()
+        }
+      } else if (cancelRef?.current) {
+        alert('⚠️ Atualização cancelada pelo usuário.')
       } else {
         alert(`❌ Erro: ${result.error || 'Falha ao enviar atualização'}`)
       }
     } catch (error) {
-      console.error('Erro ao atualizar MDM em massa:', error)
-      alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.')
+      if (!cancelRef?.current) {
+        console.error('Erro ao atualizar MDM em massa:', error)
+        alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.')
+      }
     }
-  }, [])
+  }, [syncWithServer])
 
   const loadUnreadSupportCount = useCallback(async () => {
     try {
@@ -1323,18 +1450,6 @@ export default function Home() {
                 </button>
                 <button 
                   className="btn btn-secondary"
-                  onClick={() => setIsConfigModalOpen(true)}
-                >
-                  <span>👥</span>
-                  Usuários
-                  {usersCount > 0 && (
-                    <span className="ml-2 px-2 py-0.5 bg-blue-100 text-blue-800 rounded-full text-xs">
-                      {usersCount}
-                    </span>
-                  )}
-                </button>
-                <button 
-                  className="btn btn-secondary"
                   onClick={() => setIsBulkUpdateModalOpen(true)}
                   disabled={devices.length === 0}
                 >
@@ -1409,6 +1524,14 @@ export default function Home() {
                     onUpdate={() => {
                       setUpdateDevice(device)
                       setIsUpdateModalOpen(true)
+                    }}
+                    onFormat={() => {
+                      setUpdateDevice(device)
+                      sendMessage({
+                        type: 'format_device',
+                        deviceId: device.deviceId,
+                        timestamp: Date.now()
+                      })
                     }}
                     onLigar={() => sendMessage({ type: 'wake_device', deviceId: device.deviceId, timestamp: Date.now() })}
                     onDesligar={() => sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })}
@@ -1787,6 +1910,55 @@ export default function Home() {
           onAlarmErrorHandled={() => setAlarmError(null)}
         />
       )}
+
+      {/* Barra de progresso da atualização por dispositivo */}
+      {updateProgress && (() => {
+        const elapsed = (Date.now() - updateProgress.startTime) / 1000 // segundos
+        const done = updateProgress.progress - updateProgress.startProgress
+        const remaining = 100 - updateProgress.progress
+        let etaText = ''
+        if (done > 2 && elapsed > 3) {
+          const rate = done / elapsed // % por segundo
+          const etaSec = remaining / rate
+          if (etaSec < 60) etaText = `~${Math.ceil(etaSec)}s restantes`
+          else if (etaSec < 3600) etaText = `~${Math.ceil(etaSec / 60)}min restantes`
+          else etaText = `~${Math.ceil(etaSec / 3600)}h restantes`
+        } else if (updateProgress.progress < 5) {
+          etaText = 'Calculando tempo...'
+        }
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-md w-full mx-4 relative">
+              <button
+                type="button"
+                onClick={() => setUpdateProgress(null)}
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                title="Fechar (a atualização continua no dispositivo)"
+              >
+                ✕
+              </button>
+              <h3 className="text-lg font-semibold text-primary mb-1 pr-8">
+                📥 Atualizando {updateProgress.deviceName}
+              </h3>
+              <p className="text-sm text-secondary mb-3">{updateProgress.status}</p>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden mb-3">
+                <div
+                  className="h-full bg-primary transition-all duration-300 ease-out"
+                  style={{ width: `${updateProgress.progress}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold text-primary">{updateProgress.progress}%</span>
+                {etaText && (
+                  <span className="text-sm font-medium text-secondary bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                    ⏱ {etaText}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Update App Modal */}
       {isUpdateModalOpen && updateDevice && (

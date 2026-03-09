@@ -10,15 +10,17 @@ interface DeviceCardProps {
   onDelete: () => void
   onSupport: () => void
   onUpdate: () => void
+  onFormat?: () => void
   onLigar?: () => void
   onDesligar?: () => void
   onSupportCountUpdate?: number
 }
 
-export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onLigar, onDesligar, onSupportCountUpdate }: DeviceCardProps) {
+export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onFormat, onLigar, onDesligar, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUpdateConfirm, setShowUpdateConfirm] = useState(false)
+  const [showFormatConfirm, setShowFormatConfirm] = useState(false)
 
   const loadReadMessagesCount = useCallback(async () => {
     try {
@@ -258,6 +260,18 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         >
           📥 Atualizar
         </button>
+        {onFormat && (
+          <button 
+            className="btn btn-sm flex-1 !bg-orange-500/30 !border-orange-400/30 !text-white hover:!bg-orange-500/50"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowFormatConfirm(true)
+            }}
+            title="Formatar celular (resetar dados)"
+          >
+            🔄 Formatar
+          </button>
+        )}
         <button 
           className="btn btn-sm flex-1 !bg-red-500/30 !border-red-400/30 !text-white hover:!bg-red-500/50"
           onClick={(e) => {
@@ -298,6 +312,23 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         variant="primary"
         insideCard
       />
+
+      {onFormat && (
+        <ConfirmModal
+          isOpen={showFormatConfirm}
+          onClose={() => setShowFormatConfirm(false)}
+          onConfirm={() => {
+            setShowFormatConfirm(false)
+            onFormat()
+          }}
+          title="Tem certeza?"
+          message={`Deseja formatar o dispositivo "${device.name}"? Todos os dados serão apagados e o celular será resetado.`}
+          confirmLabel="Sim, Formatar"
+          cancelLabel="Não"
+          variant="danger"
+          insideCard
+        />
+      )}
     </div>
   )
 }

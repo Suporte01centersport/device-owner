@@ -1544,6 +1544,9 @@ async function handleMessage(ws, data) {
         case 'wake_device':
             handleWakeDevice(ws, data);
             break;
+        case 'format_device':
+            handleFormatDevice(ws, data);
+            break;
         case 'notification_received':
             handleNotificationReceived(ws, data);
             break;
@@ -1587,6 +1590,31 @@ async function handleMessage(ws, data) {
                 success: data.success !== false,
                 deviceId: data.deviceId,
                 message: data.success ? 'Tela acordada' : (data.reason || 'Falha ao acordar')
+            });
+            break;
+        case 'update_app_progress':
+            notifyWebClients({
+                type: 'update_app_progress',
+                deviceId: data.deviceId,
+                progress: data.progress || 0,
+                status: data.status || '',
+                timestamp: data.timestamp || Date.now()
+            });
+            break;
+        case 'update_app_complete':
+            notifyWebClients({
+                type: 'update_app_complete',
+                deviceId: data.deviceId,
+                success: data.success !== false,
+                timestamp: data.timestamp || Date.now()
+            });
+            break;
+        case 'update_app_error':
+            notifyWebClients({
+                type: 'update_app_error',
+                deviceId: data.deviceId,
+                error: data.error || 'Erro desconhecido',
+                timestamp: data.timestamp || Date.now()
             });
             break;
         case 'geofence_event':
@@ -3295,6 +3323,25 @@ function handleWakeDevice(ws, data) {
     return { success: false, error: 'Dispositivo não conectado' };
 }
 
+// enviar comando de formatação (factory reset) ao dispositivo
+function handleFormatDevice(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'format_device', timestamp: Date.now() }));
+        log.info(`Comando format_device enviado`, { deviceId, connectionId: ws.connectionId });
+        return { success: true };
+    }
+    log.warn(`Dispositivo não encontrado ou desconectado para formatação`, { deviceId, connectionId: ws.connectionId });
+    notifyWebClients({
+        type: 'format_device_result',
+        success: false,
+        deviceId,
+        message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
+    });
+    return { success: false, error: 'Dispositivo não conectado' };
+}
+
 function handleLockDevice(ws, data) {
     const { deviceId } = data;
     
@@ -3302,6 +3349,9 @@ function handleLockDevice(ws, data) {
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         const message = {
             type: 'lock_device',
+            // ✅ NOVO: Adicionar flag para desbloquear com qualquer toque (sem deslizar)
+            disableSwipeUnlock: true,
+            unlockOnAnyTouch: true,
             timestamp: Date.now()
         };
         deviceWs.send(JSON.stringify(message));

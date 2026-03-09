@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 interface SidebarProps {
   isOpen: boolean
   onClose: () => void
@@ -65,13 +67,14 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
 
       {/* Sidebar */}
       <div className={`sidebar ${isOpen ? 'open' : ''}`}>
-        {/* Header */}
+        {/* Header - Logo no canto superior esquerdo */}
         <div className="p-6 border-b border-border">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white text-xl font-bold">M</span>
+            {/* Logo da empresa */}
+            <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
+              <img src="/logo.png" alt="Logo" className="w-full h-full object-contain" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg font-bold text-primary">MDM Center</h1>
               <p className="text-xs text-secondary">Device Management</p>
             </div>
