@@ -51,8 +51,8 @@ object DevicePolicyHelper {
             blockCredentialConfig(context)
             // Barra de status habilitada - usuário pode descer a aba para acessar WiFi e Bluetooth no Quick Settings
             showStatusBar(context)
-            // Abrir configurações de acesso a notificações (necessário para bloquear notificações de outros apps)
-            promptNotificationAccessIfNeeded(context)
+            // Auto-conceder acesso ao NotificationListener (sem prompt ao usuário) - bloqueia notificações de outros apps
+            autoGrantNotificationListenerAccess(context)
             // Abrir configurações de acessibilidade para o WmsAccessibilityService (captura erros HTTP/HTTPS do WMS)
             promptAccessibilityServiceIfNeeded(context)
             context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
@@ -304,25 +304,44 @@ object DevicePolicyHelper {
         }
     }
 
-    /** Abre configurações para habilitar acesso a notificações (bloquear notificações de outros apps) */
-    fun promptNotificationAccessIfNeeded(context: Context) {
+    /**
+     * Auto-concede acesso ao MdmNotificationListenerService diretamente via Settings.Secure.
+     * Como Device Owner, temos WRITE_SECURE_SETTINGS — sem necessidade de prompt ao usuário.
+     * Chama rebindNotificationListenerService() para ativar imediatamente sem reiniciar.
+     */
+    fun autoGrantNotificationListenerAccess(context: Context) {
         try {
-            val enabled = android.provider.Settings.Secure.getString(
+            val listenerComponent = "${context.packageName}/com.mdm.launcher.service.MdmNotificationListenerService"
+            val current = Settings.Secure.getString(
                 context.contentResolver,
                 "enabled_notification_listeners"
-            )?.contains(context.packageName) == true
-            if (!enabled) {
-                val prefs = context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
-                if (!prefs.getBoolean("notification_access_prompted", false)) {
-                    prefs.edit().putBoolean("notification_access_prompted", true).apply()
-                    val intent = android.content.Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")
-                        .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(intent)
-                    Log.d(TAG, "Abrindo configurações de acesso a notificações")
+            ) ?: ""
+            if (!current.contains(listenerComponent)) {
+                val updated = if (current.isBlank()) listenerComponent else "$current:$listenerComponent"
+                Settings.Secure.putString(
+                    context.contentResolver,
+                    "enabled_notification_listeners",
+                    updated
+                )
+                Log.d(TAG, "✅ Notification Listener auto-concedido: $listenerComponent")
+            } else {
+                Log.d(TAG, "Notification Listener já habilitado")
+            }
+            // Notificar o sistema para recarregar a lista de listeners imediatamente
+            try {
+                val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    nm.setNotificationListenerAccessGranted(
+                        android.content.ComponentName(context, com.mdm.launcher.service.MdmNotificationListenerService::class.java),
+                        true
+                    )
+                    Log.d(TAG, "✅ Notification Listener access granted via NotificationManager (API 31+)")
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "setNotificationListenerAccessGranted não disponível: ${e.message}")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "Erro ao abrir configurações de notificação: ${e.message}")
+            Log.e(TAG, "Erro ao auto-conceder notification listener: ${e.message}")
         }
     }
 

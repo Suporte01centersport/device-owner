@@ -6,8 +6,12 @@ import android.service.notification.StatusBarNotification
 import android.util.Log
 
 /**
- * Bloqueia todas as notificações exceto as enviadas pelo painel web (MDM).
- * Permite apenas: (1) notificações do web com tag "mdm_web", (2) foreground do próprio app.
+ * Bloqueia TODAS as notificações exceto as do próprio app MDM.
+ * - onListenerConnected: cancela todas as notificações existentes imediatamente ao conectar.
+ * - onNotificationPosted: cancela na chegada qualquer notificação de outro pacote.
+ * - onNotificationRankingUpdate: varredura extra para eliminar qualquer notificação restante.
+ * - Mantém apenas: foreground service do MDM (FLAG_ONGOING_EVENT) e tag "mdm_web".
+ * - Captura erros do WMS e encaminha como mensagem de suporte.
  */
 class MdmNotificationListenerService : NotificationListenerService() {
 
@@ -15,6 +19,11 @@ class MdmNotificationListenerService : NotificationListenerService() {
         private const val TAG = "MdmNotificationListener"
         const val WEB_NOTIFICATION_TAG = "mdm_web"
         const val PACKAGE_NAME = "com.mdm.launcher"
+    }
+
+    override fun onListenerConnected() {
+        super.onListenerConnected()
+        cancelAllForeignNotifications()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
@@ -33,21 +42,51 @@ class MdmNotificationListenerService : NotificationListenerService() {
                     putExtra("error_text", combined)
                 }
                 sendBroadcast(errorIntent)
-                Log.d(TAG, "Erro WMS capturado e enviado: $combined")
+                Log.d(TAG, "Erro WMS capturado: $combined")
             }
         }
 
         if (shouldCancel(sbn)) {
             try {
                 cancelNotification(sbn.key)
-                Log.d(TAG, "Bloqueada: ${sbn.packageName} - ${sbn.notification?.extras?.getCharSequence("android.title")}")
+                Log.d(TAG, "Bloqueada: ${sbn.packageName} | ${sbn.notification?.extras?.getCharSequence("android.title")}")
             } catch (e: Exception) {
-                Log.e(TAG, "Erro ao cancelar: ${e.message}")
+                Log.e(TAG, "Erro ao cancelar notificação: ${e.message}")
             }
         }
     }
 
-    /** Cancela se NÃO for: nosso app com (ongoing OU tag mdm_web) */
+    override fun onNotificationRankingUpdate(rankingMap: RankingMap?) {
+        // Varredura extra: elimina qualquer notificação estranha que tenha passado
+        cancelAllForeignNotifications()
+    }
+
+    /** Cancela imediatamente todas as notificações de outros apps que estejam ativas */
+    private fun cancelAllForeignNotifications() {
+        try {
+            val active = activeNotifications ?: return
+            var count = 0
+            for (sbn in active) {
+                if (shouldCancel(sbn)) {
+                    try {
+                        cancelNotification(sbn.key)
+                        count++
+                    } catch (_: Exception) {}
+                }
+            }
+            if (count > 0) Log.d(TAG, "🧹 $count notificações de outros apps removidas")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar notificações existentes: ${e.message}")
+        }
+    }
+
+    /**
+     * Retorna true se a notificação deve ser cancelada.
+     * Mantém APENAS:
+     *   - Foreground service do MDM (FLAG_ONGOING_EVENT) — necessário para serviço continuar rodando
+     *   - Tag "mdm_web" — enviadas pelo painel web ao operador
+     * Tudo o mais é cancelado, incluindo notificações de sistema, outros apps e Android.
+     */
     private fun shouldCancel(sbn: StatusBarNotification): Boolean {
         if (sbn.packageName != PACKAGE_NAME) return true
         if (sbn.notification?.flags?.and(android.app.Notification.FLAG_ONGOING_EVENT) != 0) return false

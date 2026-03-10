@@ -1,0 +1,10 @@
+C:\Desenvolvimento\device-owner\mdm-owner\app\build\outputs\apk\debug
+adb install -r app-debug.apk
+colocar apk pra rodar
+
+cd "C:\Desenvolvimento\device-owner\mdm-frontend"
+npm install
+npm run dev
+rodar front
+
+start-dev-windows.bat
