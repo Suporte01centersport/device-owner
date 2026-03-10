@@ -131,98 +131,62 @@ export async function PUT(request: NextRequest) {
     }
     const organizationId = firstRow.id
 
+    // Verificar quais colunas existem ANTES da transação para evitar abort de transação
+    const colCheck = await query(`
+      SELECT column_name FROM information_schema.columns
+      WHERE table_name = 'device_users'
+    `)
+    const existingCols: Set<string> = new Set((colCheck.rows as any[]).map((r: any) => r.column_name))
+    const hasRole = existingCols.has('role')
+    const hasUnlockPassword = existingCols.has('unlock_password')
+    const hasBirthYear = existingCols.has('birth_year')
+    const hasDeviceModel = existingCols.has('device_model')
+    const hasDeviceSerial = existingCols.has('device_serial_number')
+
     // Usar transação para garantir consistência
     const results = await transaction(async (client) => {
       const savedUsers = []
-      
+
       for (const user of users) {
         const { id: userId, name, cpf, birth_year, device_model, device_serial_number, role, unlock_password } = user || {}
-        
+
         if (!userId || !name || !cpf) {
           console.warn('Usuário inválido ignorado:', user)
           continue
         }
 
-        // Limpar CPF (remover caracteres não numéricos)
         const cleanCpf = (typeof cpf === 'string' ? cpf : String(cpf || '')).replace(/\D/g, '')
-        const birthYear = birth_year != null ? parseInt(String(birth_year), 10) : null
-        const model = device_model ? String(device_model).trim() : null
-        const serial = device_serial_number ? String(device_serial_number).trim() : null
+        const birthYear = (hasBirthYear && birth_year != null) ? parseInt(String(birth_year), 10) : null
+        const model = (hasDeviceModel && device_model) ? String(device_model).trim() : null
+        const serial = (hasDeviceSerial && device_serial_number) ? String(device_serial_number).trim() : null
         const userRole = (role === 'líder' || role === 'operador') ? role : 'operador'
-        const pwd = (unlock_password && userRole === 'líder') ? String(unlock_password).trim().slice(0, 10) : null
+        const pwd = (hasUnlockPassword && unlock_password && userRole === 'líder') ? String(unlock_password).trim().slice(0, 10) : null
 
-        // Upsert: criar ou atualizar (com role e unlock_password)
-        let upsertResult
-        try {
-          upsertResult = await client.query(`
-            INSERT INTO device_users (
-              organization_id, user_id, name, cpf, birth_year, device_model, device_serial_number, role, unlock_password, is_active
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT (user_id) DO UPDATE SET
-              name = EXCLUDED.name,
-              cpf = EXCLUDED.cpf,
-              birth_year = COALESCE(EXCLUDED.birth_year, device_users.birth_year),
-              device_model = COALESCE(EXCLUDED.device_model, device_users.device_model),
-              device_serial_number = COALESCE(EXCLUDED.device_serial_number, device_users.device_serial_number),
-              role = COALESCE(EXCLUDED.role, device_users.role),
-              unlock_password = COALESCE(EXCLUDED.unlock_password, device_users.unlock_password),
-              updated_at = NOW()
-            RETURNING *
-          `, [organizationId, userId, name, cleanCpf, birthYear, model, serial, userRole, pwd, true])
-        } catch (colErr: any) {
-          const errMsg = String(colErr?.message || '')
-          const colErrCode = String(colErr?.code || '')
-          // Fallback se colunas não existirem (migrations não rodaram)
-          if (colErrCode.includes('42703') || errMsg.includes('role') || errMsg.includes('unlock_password') || errMsg.includes('birth_year') || errMsg.includes('device_model') || errMsg.includes('device_serial_number')) {
-            try {
-              // Tentar sem role/unlock_password
-              upsertResult = await client.query(`
-                INSERT INTO device_users (
-                  organization_id, user_id, name, cpf, birth_year, device_model, device_serial_number, is_active
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (user_id) DO UPDATE SET
-                  name = EXCLUDED.name,
-                  cpf = EXCLUDED.cpf,
-                  birth_year = COALESCE(EXCLUDED.birth_year, device_users.birth_year),
-                  device_model = COALESCE(EXCLUDED.device_model, device_users.device_model),
-                  device_serial_number = COALESCE(EXCLUDED.device_serial_number, device_users.device_serial_number),
-                  updated_at = NOW()
-                RETURNING *
-              `, [organizationId, userId, name, cleanCpf, birthYear, model, serial, true])
-            } catch (innerErr: any) {
-              const innerMsg = String(innerErr?.message || '')
-              // Fallback mínimo: só colunas base (id, user_id, name, cpf, organization_id, is_active)
-              if (innerMsg.includes('birth_year') || innerMsg.includes('device_model') || innerMsg.includes('device_serial_number')) {
-                upsertResult = await client.query(`
-                  INSERT INTO device_users (organization_id, user_id, name, cpf, is_active)
-                  VALUES ($1, $2, $3, $4, $5)
-                  ON CONFLICT (user_id) DO UPDATE SET
-                    name = EXCLUDED.name,
-                    cpf = EXCLUDED.cpf,
-                    updated_at = NOW()
-                  RETURNING *
-                `, [organizationId, userId, name, cleanCpf, true])
-                if (upsertResult.rows?.[0]) {
-                  (upsertResult.rows[0] as any).birth_year = birthYear
-                  ;(upsertResult.rows[0] as any).device_model = model
-                  ;(upsertResult.rows[0] as any).device_serial_number = serial
-                  ;(upsertResult.rows[0] as any).role = userRole
-                  ;(upsertResult.rows[0] as any).unlock_password = pwd
-                }
-              } else {
-                throw innerErr
-              }
-            }
-          } else {
-            throw colErr
-          }
-        }
+        // Construir INSERT dinamicamente com base nas colunas que existem
+        const cols = ['organization_id', 'user_id', 'name', 'cpf', 'is_active']
+        const vals: any[] = [organizationId, userId, name, cleanCpf, true]
+        const updateSet = ['name = EXCLUDED.name', 'cpf = EXCLUDED.cpf', 'updated_at = NOW()']
+
+        if (hasBirthYear) { cols.push('birth_year'); vals.push(birthYear); updateSet.push('birth_year = COALESCE(EXCLUDED.birth_year, device_users.birth_year)') }
+        if (hasDeviceModel) { cols.push('device_model'); vals.push(model); updateSet.push('device_model = COALESCE(EXCLUDED.device_model, device_users.device_model)') }
+        if (hasDeviceSerial) { cols.push('device_serial_number'); vals.push(serial); updateSet.push('device_serial_number = COALESCE(EXCLUDED.device_serial_number, device_users.device_serial_number)') }
+        if (hasRole) { cols.push('role'); vals.push(userRole); updateSet.push('role = COALESCE(EXCLUDED.role, device_users.role)') }
+        if (hasUnlockPassword) { cols.push('unlock_password'); vals.push(pwd); updateSet.push('unlock_password = COALESCE(EXCLUDED.unlock_password, device_users.unlock_password)') }
+
+        const placeholders = vals.map((_, i) => `$${i + 1}`).join(', ')
+        const sql = `
+          INSERT INTO device_users (${cols.join(', ')})
+          VALUES (${placeholders})
+          ON CONFLICT (user_id) DO UPDATE SET ${updateSet.join(', ')}
+          RETURNING *
+        `
+        const upsertResult = await client.query(sql, vals)
 
         if (upsertResult.rows && upsertResult.rows.length > 0) {
           savedUsers.push(upsertResult.rows[0])
         }
       }
-      
+
       return savedUsers
     })
 
