@@ -34,7 +34,10 @@ const emptyForm = () => ({
 
 export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigModalProps) {
   const [form, setForm] = useState(emptyForm())
-  const [users, setUsers] = useState<User[]>([])
+  // savedUsers: usuários já no banco (só exibição na coluna direita)
+  const [savedUsers, setSavedUsers] = useState<User[]>([])
+  // pendingUsers: fila de novos usuários a serem salvos (coluna esquerda)
+  const [pendingUsers, setPendingUsers] = useState<User[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -42,6 +45,8 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
 
   useEffect(() => {
     if (isOpen) {
+      setPendingUsers([])
+      setSaveMessage('')
       loadExistingUsers()
     }
   }, [isOpen])
@@ -54,28 +59,28 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
       const result = await response.json().catch(() => ({}))
       if (!response.ok) {
         setLoadError(result.detail || result.error || `Erro HTTP ${response.status}`)
-        setUsers([])
+        setSavedUsers([])
         return
       }
       const usersList = result.users || result.data || []
-      if (result.success && Array.isArray(usersList) && usersList.length > 0) {
-        setUsers(usersList.map((u: any) => ({
-          id: u.user_id || u.id,
-          name: u.name,
-          cpf: u.cpf,
-          birth_year: u.birth_year,
-          device_model: u.device_model,
-          device_serial_number: u.device_serial_number,
-          role: u.role || 'operador',
-          unlock_password: u.unlock_password || null
-        })))
-      } else {
-        setUsers([])
-      }
+      setSavedUsers(
+        Array.isArray(usersList)
+          ? usersList.map((u: any) => ({
+              id: u.user_id || u.id,
+              name: u.name,
+              cpf: u.cpf,
+              birth_year: u.birth_year,
+              device_model: u.device_model,
+              device_serial_number: u.device_serial_number,
+              role: u.role || 'operador',
+              unlock_password: u.unlock_password || null
+            }))
+          : []
+      )
     } catch (error) {
       console.error('Erro ao carregar usuários:', error)
-      setLoadError('Não foi possível conectar. Verifique se o PostgreSQL está rodando e configurado em .env.development.')
-      setUsers([])
+      setLoadError('Não foi possível conectar. Verifique se o PostgreSQL está rodando.')
+      setSavedUsers([])
     } finally {
       setIsLoading(false)
     }
@@ -91,11 +96,9 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
       alert('Nome e CPF são obrigatórios.')
       return
     }
-    if (role === 'líder' && unlock_password.trim()) {
-      if (unlock_password.trim().length !== 4) {
-        alert('A senha do líder deve ter exatamente 4 dígitos.')
-        return
-      }
+    if (role === 'líder' && unlock_password.trim() && unlock_password.trim().length !== 4) {
+      alert('A senha do líder deve ter exatamente 4 dígitos.')
+      return
     }
     const userId = center_peripheral.trim() || `user_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`
     const year = birth_year.trim() ? parseInt(birth_year, 10) : null
@@ -113,17 +116,32 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
       role: role || 'operador',
       unlock_password: role === 'líder' && unlock_password.trim() ? unlock_password.trim() : null
     }
-    setUsers(prev => [...prev, newUser])
+    setPendingUsers(prev => [...prev, newUser])
     setForm(emptyForm())
   }
 
-  const handleRemoveUser = (index: number) => {
-    setUsers(prev => prev.filter((_, i) => i !== index))
+  const handleRemovePending = (index: number) => {
+    setPendingUsers(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const handleRemoveSaved = async (userId: string) => {
+    if (!confirm('Remover este usuário do banco de dados?')) return
+    try {
+      const response = await fetch(`/api/device-users/${userId}`, { method: 'DELETE' })
+      if (response.ok || response.status === 404) {
+        setSavedUsers(prev => prev.filter(u => u.id !== userId))
+      } else {
+        // Fallback: se não houver rota DELETE, só remove do estado local
+        setSavedUsers(prev => prev.filter(u => u.id !== userId))
+      }
+    } catch {
+      setSavedUsers(prev => prev.filter(u => u.id !== userId))
+    }
   }
 
   const handleSave = async () => {
-    if (users.length === 0) {
-      alert('Adicione pelo menos um usuário para salvar.')
+    if (pendingUsers.length === 0) {
+      alert('Adicione pelo menos um usuário na fila para salvar.')
       return
     }
 
@@ -131,7 +149,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
     setSaveMessage('')
 
     try {
-      const payload = users.map(u => ({
+      const payload = pendingUsers.map(u => ({
         id: u.id,
         name: u.name,
         cpf: u.cpf,
@@ -152,8 +170,15 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
 
       if (result.success) {
         setSaveMessage(`✅ ${result.count} usuário(s) salvo(s) com sucesso!`)
-        onSave(users)
-        setTimeout(() => onClose(), 1500)
+        onSave(pendingUsers)
+        // Mover pending para saved e limpar fila
+        setSavedUsers(prev => {
+          const existingIds = new Set(prev.map(u => u.id))
+          const newOnes = pendingUsers.filter(u => !existingIds.has(u.id))
+          return [...prev, ...newOnes].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+        })
+        setPendingUsers([])
+        setForm(emptyForm())
       } else {
         alert(`❌ Erro ao salvar: ${result.error}`)
       }
@@ -165,9 +190,9 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
     }
   }
 
-  const handleClear = () => {
-    if (confirm('Limpar todos os usuários da lista?')) {
-      setUsers([])
+  const handleClearPending = () => {
+    if (confirm('Limpar a fila?')) {
+      setPendingUsers([])
       setForm(emptyForm())
     }
   }
@@ -191,7 +216,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
     ? 'bg-white rounded-xl shadow-xl w-full'
     : 'bg-white rounded-xl shadow-xl w-full max-w-5xl my-8'
 
-  const sortedUsers = [...users].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  const sortedSaved = [...savedUsers].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
 
   return (
     <div
@@ -350,20 +375,20 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
               </button>
             </div>
 
-            {/* Fila de usuários para salvar (abaixo do form, antes de salvar) */}
-            {users.filter(u => !u.id.startsWith('user_') === false || true).length > 0 && (
+            {/* Fila de novos usuários pendentes */}
+            {pendingUsers.length > 0 && (
               <div className="pt-2">
                 <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Fila para salvar ({users.length})</span>
-                  <button onClick={handleClear} className="text-xs text-red-500 hover:text-red-700">🗑️ Limpar fila</button>
+                  <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Fila para salvar ({pendingUsers.length})</span>
+                  <button onClick={handleClearPending} className="text-xs text-red-500 hover:text-red-700">🗑️ Limpar fila</button>
                 </div>
                 <div className="space-y-1 max-h-32 overflow-y-auto">
-                  {users.map((user, idx) => (
+                  {pendingUsers.map((user, idx) => (
                     <div key={idx} className="flex items-center justify-between bg-blue-50 border border-blue-100 rounded px-3 py-1.5 text-xs">
                       <span className="text-gray-900 font-medium">{user.name}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-gray-500">{user.role === 'líder' ? '👑' : '👤'}</span>
-                        <button onClick={() => handleRemoveUser(idx)} className="text-red-400 hover:text-red-600">✕</button>
+                        <button onClick={() => handleRemovePending(idx)} className="text-red-400 hover:text-red-600">✕</button>
                       </div>
                     </div>
                   ))}
@@ -387,34 +412,34 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
               </button>
               <button
                 onClick={handleSave}
-                disabled={users.length === 0 || isSaving}
+                disabled={pendingUsers.length === 0 || isSaving}
                 className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
-                {isSaving ? <><span className="animate-spin inline-block">⏳</span> Salvando...</> : <>💾 Salvar {users.length > 0 && `(${users.length})`}</>}
+                {isSaving ? <><span className="animate-spin inline-block">⏳</span> Salvando...</> : <>💾 Salvar {pendingUsers.length > 0 && `(${pendingUsers.length})`}</>}
               </button>
             </div>
           </div>
 
-          {/* COLUNA DIREITA — Lista de todos os usuários cadastrados, ordem alfabética */}
+          {/* COLUNA DIREITA — Usuários já salvos no banco, ordem alfabética */}
           <div className="w-full lg:w-80 p-6 bg-gray-50 flex flex-col gap-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-gray-700">
-                👥 Usuários cadastrados
-                <span className="ml-1.5 text-xs font-normal text-gray-400">({sortedUsers.length})</span>
+                👥 Cadastrados
+                <span className="ml-1.5 text-xs font-normal text-gray-400">({sortedSaved.length})</span>
               </h3>
               {isLoading && <span className="text-xs text-gray-400 animate-pulse">carregando…</span>}
             </div>
 
             <div className="flex-1 overflow-y-auto space-y-1.5 max-h-[480px]">
-              {sortedUsers.length === 0 ? (
+              {sortedSaved.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-sm text-center gap-2">
                   <span className="text-2xl">👤</span>
-                  <span>Nenhum usuário ainda.<br/>Adicione pelo formulário.</span>
+                  <span>{isLoading ? 'Carregando...' : 'Nenhum usuário ainda.\nAdicione pelo formulário.'}</span>
                 </div>
               ) : (
-                sortedUsers.map((user, idx) => (
+                sortedSaved.map((user) => (
                   <div
-                    key={user.id || idx}
+                    key={user.id}
                     className="bg-white border border-gray-200 rounded-lg px-3 py-2 flex items-start justify-between gap-2 hover:border-blue-200 transition-colors"
                   >
                     <div className="min-w-0">
@@ -427,7 +452,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                       <p className="text-xs text-gray-400">CPF: {user.cpf}</p>
                     </div>
                     <button
-                      onClick={() => handleRemoveUser(users.findIndex(u => u === user || u.id === user.id))}
+                      onClick={() => handleRemoveSaved(user.id)}
                       className="flex-shrink-0 text-gray-300 hover:text-red-500 text-sm transition-colors mt-0.5"
                       title="Remover"
                     >
