@@ -201,9 +201,14 @@ export const usePersistence = (config: Partial<PersistenceConfig> = {}) => {
       return serverDevice
     })
     
-    setDevices(mergedDevices)
-    saveDevices(mergedDevices)
-    console.log('✅ Dispositivos mesclados: dados técnicos do servidor + vínculos de usuário da web')
+    // Comparar com estado atual para evitar re-render desnecessário (que causa piscar)
+    setDevices(prev => {
+      const prevIds = prev.map(d => `${d.deviceId}:${d.status}:${d.batteryLevel}:${d.assignedUserId || ''}`).join('|')
+      const newIds = mergedDevices.map(d => `${d.deviceId}:${d.status}:${d.batteryLevel}:${d.assignedUserId || ''}`).join('|')
+      if (prevIds === newIds && prev.length === mergedDevices.length) return prev
+      saveDevices(mergedDevices)
+      return mergedDevices
+    })
 
     // Atualizar senha se fornecida pelo servidor
     if (serverPassword !== undefined && serverPassword !== adminPassword) {

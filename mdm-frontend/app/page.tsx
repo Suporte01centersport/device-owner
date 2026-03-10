@@ -198,14 +198,14 @@ export default function Home() {
             timestamp: Date.now()
           }))
           
-          // Solicitar lista várias vezes nos primeiros 10s (celular pode demorar a conectar após add-device)
+          // Solicitar lista 1x imediato + 1 fallback em 3s (evitar múltiplos re-renders que piscam a tela)
           const requestList = () => {
             if (websocket && websocket.readyState === WebSocket.OPEN) {
               websocket.send(JSON.stringify({ type: 'request_devices_list', timestamp: Date.now() }))
             }
           }
           requestList()
-          ;[2000, 4000, 6000, 8000, 10000].forEach(ms => setTimeout(requestList, ms))
+          setTimeout(requestList, 3000)
           
           // Aguardar um pouco antes de solicitar a senha
           setTimeout(() => {
