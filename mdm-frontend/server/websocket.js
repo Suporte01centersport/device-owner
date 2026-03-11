@@ -2395,18 +2395,18 @@ persistentDevices.set(deviceId, deviceData);
         pendingKioskAppsForAll = null;
     }
 
-    // Reenviar allowedApps salvos para o dispositivo ao reconectar
+    // Reenviar allowedApps salvos para o dispositivo ao reconectar (silencioso - sem notificar web clients)
     const savedDeviceApps = persistentDevices.get(deviceId);
     if (savedDeviceApps && Array.isArray(savedDeviceApps.allowedApps) && savedDeviceApps.allowedApps.length > 0) {
-        log.info('Reenviando allowedApps salvos para dispositivo reconectado', {
+        log.info('Reenviando allowedApps salvos para dispositivo reconectado (silencioso)', {
             deviceId, allowedAppsCount: savedDeviceApps.allowedApps.length
         });
         ws.send(JSON.stringify({
             type: 'update_app_permissions',
-            data: { allowedApps: savedDeviceApps.allowedApps },
+            data: { allowedApps: savedDeviceApps.allowedApps, isReconnect: true },
             timestamp: Date.now()
         }));
-        console.log(`📲 allowedApps reenviados para ${deviceId}: ${savedDeviceApps.allowedApps.length} apps`);
+        console.log(`📲 allowedApps reenviados para ${deviceId}: ${savedDeviceApps.allowedApps.length} apps (silencioso)`);
     } else {
         // Verificar se o dispositivo pertence a algum grupo com políticas
         try {
@@ -2420,10 +2420,25 @@ persistentDevices.set(deviceId, deviceData);
                 `, [dbDevForApps.rows[0].id]);
                 if (policyResult.rows.length > 0) {
                     const groupApps = policyResult.rows.map(r => r.package_name);
-                    log.info('Aplicando políticas de grupo ao dispositivo reconectado', {
+                    log.info('Aplicando políticas de grupo ao dispositivo reconectado (silencioso)', {
                         deviceId, groupAppsCount: groupApps.length
                     });
-                    applyAppPermissionsToDevice(deviceId, groupApps);
+                    // Enviar direto ao dispositivo sem notificar web clients (é reconexão)
+                    const deviceWsForApps = connectedDevices.get(deviceId);
+                    if (deviceWsForApps && deviceWsForApps.readyState === WebSocket.OPEN) {
+                        deviceWsForApps.send(JSON.stringify({
+                            type: 'update_app_permissions',
+                            data: { allowedApps: groupApps, isReconnect: true },
+                            timestamp: Date.now()
+                        }));
+                    }
+                    // Atualizar persistentDevices sem notificar web clients
+                    if (persistentDevices.has(deviceId)) {
+                        const dev = persistentDevices.get(deviceId);
+                        dev.allowedApps = groupApps;
+                        persistentDevices.set(deviceId, dev);
+                        saveDeviceToDatabase(dev).catch(err => log.warn('Erro ao salvar no banco', { error: err.message }));
+                    }
                 }
             }
         } catch (err) {
@@ -4515,9 +4530,21 @@ function sendAppUpdateCommand(deviceIds, apkUrl, version = 'latest') {
     
     targetDevices.forEach(deviceId => {
         const deviceWs = connectedDevices.get(deviceId);
-        
+
         if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
             try {
+                // Primeiro, garantir que restrição de instalação esteja liberada
+                // Envia set_device_restrictions com installAppsDisabled=false antes do update
+                const savedRestrictions = getRestrictionsForDevice(deviceId);
+                if (savedRestrictions && savedRestrictions.installAppsDisabled) {
+                    console.log(`🔓 Liberando restrição de instalação para ${deviceId} antes do update`);
+                    const tempRestrictions = { ...savedRestrictions, installAppsDisabled: false };
+                    deviceWs.send(JSON.stringify({
+                        type: 'set_device_restrictions',
+                        data: tempRestrictions,
+                        timestamp: Date.now()
+                    }));
+                }
                 deviceWs.send(JSON.stringify(updateCommand));
                 successCount++;
                 results.push({ deviceId, success: true, message: 'Comando enviado' });

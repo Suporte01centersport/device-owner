@@ -37,6 +37,7 @@ class WebSocketService : Service() {
     @Volatile private var isInitializing = false
     private var healthCheckJob: Job? = null
     @Volatile private var isScreenActive = true
+    @Volatile private var isUpdatingApk = false
     private var networkMonitor: NetworkMonitor? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -79,6 +80,7 @@ class WebSocketService : Service() {
                 }
                 "com.mdm.launcher.UPDATE_SUCCESS" -> {
                     Log.d(TAG, "Instalação de APK concluída com sucesso (via AppUpdateReceiver)")
+                    isUpdatingApk = false
                     sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
                         setPackage(packageName)
                     })
@@ -92,6 +94,7 @@ class WebSocketService : Service() {
                 "com.mdm.launcher.UPDATE_FAILURE" -> {
                     val errorMsg = intent.getStringExtra("error_message") ?: "Erro desconhecido"
                     Log.e(TAG, "Instalação de APK falhou (via AppUpdateReceiver): $errorMsg")
+                    isUpdatingApk = false
                     sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
                         setPackage(packageName)
                     })
@@ -581,6 +584,7 @@ class WebSocketService : Service() {
 
                     if (!apkUrl.isNullOrEmpty()) {
                         Log.d(TAG, "Comando de atualização recebido: $apkUrl (versão: ${version ?: "N/A"})")
+                        isUpdatingApk = true
                         // Liberar restrições de instalação temporariamente para permitir atualização
                         try {
                             val dpmUpdate = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
@@ -642,6 +646,7 @@ class WebSocketService : Service() {
                                     if (success) {
                                         // session.commit() foi feito - a instalação real é assíncrona
                                         // O AppUpdateReceiver vai notificar o resultado final
+                                        // isUpdatingApk será limpo pelo AppUpdateReceiver (UPDATE_SUCCESS/UPDATE_FAILURE)
                                         Log.d(TAG, "APK enviado ao PackageInstaller, aguardando resultado...")
                                         sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_PROGRESS).apply {
                                             setPackage(packageName)
@@ -657,6 +662,7 @@ class WebSocketService : Service() {
                                         )))
                                     } else {
                                         Log.e(TAG, "Erro na atualização: $error")
+                                        isUpdatingApk = false
                                         sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
                                             setPackage(packageName)
                                         })
@@ -879,8 +885,11 @@ class WebSocketService : Service() {
                                 dpm.setScreenCaptureDisabled(adminComponent, data["screenshotDisabled"] == true)
                                 // Status bar
                                 dpm.setStatusBarDisabled(adminComponent, data["statusBarDisabled"] == true)
-                                // Instalar apps
-                                if (data["installAppsDisabled"] == true) {
+                                // Instalar apps (pular se APK update em andamento)
+                                if (isUpdatingApk) {
+                                    Log.d(TAG, "Pulando restrição DISALLOW_INSTALL_APPS - atualização de APK em andamento")
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
+                                } else if (data["installAppsDisabled"] == true) {
                                     dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
                                 } else {
                                     dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)

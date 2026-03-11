@@ -2135,36 +2135,23 @@ class MainActivity : AppCompatActivity() {
             
             when (type) {
                 "update_app_permissions" -> {
-                    Log.d(TAG, "═══════════════════════════════════════════")
-                    Log.d(TAG, "📱 UPDATE_APP_PERMISSIONS RECEBIDO")
-                    Log.d(TAG, "═══════════════════════════════════════════")
                     val data = jsonObject["data"] as? Map<*, *>
-                    Log.d(TAG, "Data recebida: $data")
+                    val isReconnect = data?.get("isReconnect") == true
                     val allowedAppsList = data?.get("allowedApps") as? List<*>
-                    Log.d(TAG, "Apps permitidos recebidos (raw): $allowedAppsList")
-                    Log.d(TAG, "Tipo: ${allowedAppsList?.javaClass?.name}")
+
+                    Log.d(TAG, "═══════════════════════════════════════════")
+                    Log.d(TAG, "📱 UPDATE_APP_PERMISSIONS RECEBIDO (reconexão=$isReconnect)")
+                    Log.d(TAG, "═══════════════════════════════════════════")
                     Log.d(TAG, "Quantidade: ${allowedAppsList?.size ?: 0}")
-                    
+
                     val previousAllowedApps = allowedApps.toList()
                     allowedApps = allowedAppsList?.map { it.toString() } ?: emptyList()
-                    
-                    Log.d(TAG, "───────────────────────────────────────────")
-                    Log.d(TAG, "Apps permitidos ANTES: ${previousAllowedApps.size}")
-                    previousAllowedApps.forEach { Log.d(TAG, "  - $it") }
-                    Log.d(TAG, "───────────────────────────────────────────")
-                    Log.d(TAG, "Apps permitidos DEPOIS: ${allowedApps.size}")
-                    allowedApps.forEach { Log.d(TAG, "  - $it") }
-                    Log.d(TAG, "───────────────────────────────────────────")
-                    Log.d(TAG, "Apps instalados ATUAIS: ${installedApps.size}")
-                    Log.d(TAG, "───────────────────────────────────────────")
-                    
-                    saveData() // Salvar dados recebidos da web
-                    Log.d(TAG, "✅ Dados salvos em SharedPreferences")
 
-                    // NÃO ativar kiosk automaticamente - sempre mostrar launcher para seleção
-                    // if (allowedApps.size == 1) {
-                    //     setKioskMode(allowedApps[0], true)
-                    // }
+                    // Verificar se permissões realmente mudaram
+                    val permissionsChanged = previousAllowedApps.sorted() != allowedApps.sorted()
+                    Log.d(TAG, "Permissões mudaram: $permissionsChanged (antes=${previousAllowedApps.size}, depois=${allowedApps.size})")
+
+                    saveData() // Salvar dados recebidos da web
 
                     // FORÇAR RECARGA dos apps instalados se lista estiver vazia ou desatualizada
                     if (installedApps.isEmpty()) {
@@ -2175,32 +2162,32 @@ class MainActivity : AppCompatActivity() {
                                 installedApps = deviceInfo.installedApps
                                 lastAppUpdateTime = System.currentTimeMillis()
                                 Log.d(TAG, "✅ Apps instalados recarregados: ${installedApps.size}")
-                                
-                                // Agora atualizar a lista
+
                                 markUserInteraction()
                                 updateAppsList()
-                                Log.d(TAG, "✅ Apps list atualizada no launcher após recarga")
-                                
-                                // Feedback visual
-                                runOnUiThread {
-                                    Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+
+                                // Feedback visual apenas se não for reconexão E permissões mudaram
+                                if (!isReconnect && permissionsChanged) {
+                                    runOnUiThread {
+                                        Toast.makeText(this@MainActivity, "Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                                    }
                                 }
                             } catch (e: Exception) {
                                 Log.e(TAG, "❌ Erro ao recarregar apps instalados", e)
                             }
                         }
                     } else {
-                        // Apps instalados já existem, apenas atualizar filtro
                         markUserInteraction()
                         updateAppsList()
-                        Log.d(TAG, "✅ Apps list atualizada no launcher")
-                        
-                        // Feedback visual
-                        runOnUiThread {
-                            Toast.makeText(this@MainActivity, "✅ Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+
+                        // Feedback visual apenas se não for reconexão E permissões mudaram
+                        if (!isReconnect && permissionsChanged) {
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "Permissões atualizadas: ${allowedApps.size} apps", Toast.LENGTH_SHORT).show()
+                            }
                         }
                     }
-                    
+
                     Log.d(TAG, "═══════════════════════════════════════════")
                 }
                 "set_admin_password" -> {
