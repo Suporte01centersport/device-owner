@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="#FF000000"
+    android:padding="32dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🔌"
+        android:textSize="80sp"
+        android:textColor="#FFFFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="USB Bloqueado"
+        android:textSize="24sp"
+        android:textColor="#FFFFFFFF"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Digite a senha para liberar o USB"
+        android:textSize="16sp"
+        android:textColor="#FFCCCCCC"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <EditText
+        android:id="@+id/usb_password_input"
+        android:layout_width="match_parent"
+        android:layout_height="56dp"
+        android:minHeight="56dp"
+        android:inputType="numberPassword"
+        android:maxLength="4"
+        android:hint="Senha (4 dígitos)"
+        android:textColor="#FFFFFFFF"
+        android:textColorHint="#FFCCCCCC"
+        android:background="@drawable/lock_input_bg"
+        android:padding="16dp"
+        android:textSize="24sp"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"
+        android:cursorVisible="true"
+        android:focusable="true"
+        android:focusableInTouchMode="true" />
+
+    <Button
+        android:id="@+id/usb_unlock_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="56dp"
+        android:text="Desbloquear USB"
+        android:textSize="16sp"
+        android:textColor="#FFFFFFFF"
+        android:background="@drawable/btn_lock_unlock"
+        android:padding="16dp"
+        android:layout_marginBottom="12dp" />
+
+    <Button
+        android:id="@+id/usb_cancel_btn"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minHeight="48dp"
+        android:text="Cancelar"
+        android:textSize="14sp"
+        android:textColor="#FFAAAAAA"
+        android:background="@android:color/transparent"
+        android:padding="12dp" />
+
+</LinearLayout>

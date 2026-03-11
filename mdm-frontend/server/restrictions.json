@@ -12,7 +12,7 @@
     "uninstallAppsDisabled": true,
     "settingsDisabled": true,
     "factoryResetDisabled": true,
-    "usbDisabled": true,
+    "usbDisabled": false,
     "nfcDisabled": true,
     "hotspotDisabled": true,
     "locationDisabled": true,
@@ -26,5 +26,5 @@
     "smsDisabled": true
   },
   "perDevice": {},
-  "updatedAt": "2026-03-11T17:57:57.715Z"
+  "updatedAt": "2026-03-11T18:30:46.498Z"
 }

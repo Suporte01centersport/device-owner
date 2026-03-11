@@ -62,8 +62,9 @@ export default function Home() {
   const [isFormattingDevice, setIsFormattingDevice] = useState(false)
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
-  const [updateProgress, setUpdateProgress] = useState<{ deviceId: string; deviceName: string; progress: number; status: string; startTime: number; startProgress: number } | null>(null)
+  const [updateProgress, setUpdateProgress] = useState<{ deviceId: string; deviceName: string; progress: number; status: string; startTime: number; startProgress: number; lastProgressTime: number } | null>(null)
   const updateAlertShownRef = useRef(false)
+  const updateProgressRef = useRef(updateProgress)
   const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3001')
   const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
   const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
@@ -103,6 +104,32 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null)
   const [reconnectTrigger, setReconnectTrigger] = useState(0)
   useEffect(() => { wsRef.current = ws }, [ws])
+
+  // Manter ref do updateProgress sincronizada
+  useEffect(() => { updateProgressRef.current = updateProgress }, [updateProgress])
+
+  // Timeout: se não receber progresso em 90s, assumir que o dispositivo atualizou e reconectou (auto-update mata o app)
+  useEffect(() => {
+    if (!updateProgress) return
+    const timer = setInterval(() => {
+      const up = updateProgressRef.current
+      if (!up) { clearInterval(timer); return }
+      const now = Date.now()
+      const staleMs = now - up.lastProgressTime
+      if (staleMs > 90000) {
+        // Verificar se dispositivo voltou online (reconectou após auto-update)
+        const dev = devices.find(d => d.deviceId === up.deviceId)
+        if (dev && dev.status === 'online') {
+          setUpdateProgress(null)
+          showAlert(`✅ O dispositivo ${up.deviceName} está online novamente. A atualização provavelmente foi concluída com sucesso.`)
+        } else {
+          setUpdateProgress(prev => prev ? { ...prev, status: 'Sem resposta do dispositivo... A atualização pode ter sido concluída.' } : null)
+        }
+      }
+    }, 10000)
+    return () => clearInterval(timer)
+  }, [updateProgress?.deviceId, devices])
+
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [currentView, setCurrentView] = useState('dashboard')
   const [showPassword, setShowPassword] = useState<boolean>(false)
@@ -708,12 +735,12 @@ export default function Home() {
           const device = devices.find(d => d.deviceId === message.deviceId)
           const deviceName = device?.name || message.deviceId
           if (prev?.deviceId === message.deviceId) {
-            return { ...prev, progress: message.progress ?? 0, status: message.status || prev.status }
+            return { ...prev, progress: message.progress ?? 0, status: message.status || prev.status, lastProgressTime: Date.now() }
           }
           // Primeiro progresso recebido - criar estado se ainda não existe
           if (!prev) {
             const p = message.progress ?? 0
-            return { deviceId: message.deviceId, deviceName, progress: p, status: message.status || 'Atualizando...', startTime: Date.now(), startProgress: p }
+            return { deviceId: message.deviceId, deviceName, progress: p, status: message.status || 'Atualizando...', startTime: Date.now(), startProgress: p, lastProgressTime: Date.now() }
           }
           return prev
         })
@@ -1144,7 +1171,7 @@ export default function Home() {
     const deviceId = dev.deviceId
 
     // Mostrar barra de progresso IMEDIATAMENTE ao clicar
-    setUpdateProgress({ deviceId, deviceName, progress: 0, status: 'Enviando comando ao dispositivo...', startTime: Date.now(), startProgress: 0 })
+    setUpdateProgress({ deviceId, deviceName, progress: 0, status: 'Enviando comando ao dispositivo...', startTime: Date.now(), startProgress: 0, lastProgressTime: Date.now() })
 
     // Fechar modal
     setIsUpdateModalOpen(false)
@@ -1577,7 +1604,7 @@ export default function Home() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Configurações do Servidor - texto branco */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
                   <h3 className="text-lg font-semibold text-white mb-4">Configurações do Servidor</h3>
                   <div className="space-y-4">
                     <div>
@@ -1605,7 +1632,7 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
                   <h3 className="text-lg font-semibold text-white mb-4">Configurações de Dispositivo</h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">
@@ -1620,7 +1647,7 @@ export default function Home() {
                           onChange={(e) => setSettingsAutoUpdate(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--surface)] after:border-[var(--border)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1635,17 +1662,17 @@ export default function Home() {
                           onChange={(e) => setSettingsLocationTracking(e.target.checked)}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-[var(--surface)] after:border-[var(--border)] after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
                       </label>
                     </div>
                   </div>
                 </div>
 
-                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
                   <h3 className="text-lg font-semibold text-white mb-4">Senha de Administrador</h3>
                   
                   {/* Senha Atual */}
-                <div className="mb-6 p-4 bg-white/5 border border-white/20 rounded-lg">
+                <div className="mb-6 p-4 bg-[var(--surface)]/5 border border-white/20 rounded-lg">
                     <div className="flex items-center justify-between">
                         <div className="flex-1">
                             <div className="text-sm font-medium text-white">Senha Atual:</div>
@@ -1713,7 +1740,7 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-white border border-white/30 rounded-lg p-3">
+                    <div className="bg-[var(--surface)] border border-white/30 rounded-lg p-3">
                       <div className="text-xs font-bold text-red-600">
                         <span className="font-bold text-red-600">📋 Instruções:</span>
                         <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
@@ -1730,7 +1757,7 @@ export default function Home() {
 
               {/* Sidebar de Informações - texto branco */}
               <div className="space-y-6">
-                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
                   <h3 className="text-lg font-semibold text-white mb-4">Status do Sistema</h3>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
@@ -1752,20 +1779,20 @@ export default function Home() {
                   </div>
                 </div>
 
-                <div className="card p-6 bg-white/10 border border-white/20 text-white">
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
                   <h3 className="text-lg font-semibold text-white mb-4">Ações Rápidas</h3>
                   <div className="space-y-3">
                     <button
                       onClick={() => setShowRestartConfirm(true)}
                       disabled={isRestarting}
-                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30 disabled:opacity-70"
+                      className="btn w-full !bg-[var(--surface)]/20 !border-white/30 !text-white hover:!bg-[var(--surface)]/30 disabled:opacity-70"
                     >
                       <span>{isRestarting ? '⏳' : '🔄'}</span>
                       {isRestarting ? 'Reiniciando...' : 'Reiniciar Servidor'}
                     </button>
                     <button
                       onClick={() => setShowBackupConfirm(true)}
-                      className="btn w-full !bg-white/20 !border-white/30 !text-white hover:!bg-white/30"
+                      className="btn w-full !bg-[var(--surface)]/20 !border-white/30 !text-white hover:!bg-[var(--surface)]/30"
                     >
                       <span>💾</span>
                       Backup de Configurações

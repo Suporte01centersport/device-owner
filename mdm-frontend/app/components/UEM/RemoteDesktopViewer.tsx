@@ -530,12 +530,12 @@ export default function RemoteDesktopViewer({
       >
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold">Acesso Remoto - {computer.name}</h2>
-          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500/150/150' : 'bg-red-500/150/150'}`}></div>
           <span className="text-sm">{isConnected ? 'Conectado' : 'Desconectado'}</span>
         </div>
         <div className="flex items-center gap-2">
           {remoteScreenSize && (
-            <div className="text-sm text-gray-400 mr-4">
+            <div className="text-sm text-[var(--text-muted)] mr-4">
               {remoteScreenSize.width}x{remoteScreenSize.height}px
             </div>
           )}
@@ -544,14 +544,14 @@ export default function RemoteDesktopViewer({
             <div className="flex items-center gap-1 bg-gray-700 rounded px-2 py-1">
               <button
                 onClick={handleZoomOut}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+                className="px-3 py-1.5 bg-gray-600 hover:bg-[var(--surface-elevated)]0 rounded text-sm font-medium transition-colors"
                 title="Diminuir zoom"
               >
                 −
               </button>
               <button
                 onClick={handleZoomFit}
-                className="px-3 py-1.5 rounded text-sm font-medium transition-colors bg-gray-600 text-white hover:bg-gray-500"
+                className="px-3 py-1.5 rounded text-sm font-medium transition-colors bg-gray-600 text-white hover:bg-[var(--surface-elevated)]0"
                 title="Ajustar ao tamanho da tela"
               >
                 Ajustar
@@ -561,14 +561,14 @@ export default function RemoteDesktopViewer({
               </span>
               <button
                 onClick={handleZoomIn}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+                className="px-3 py-1.5 bg-gray-600 hover:bg-[var(--surface-elevated)]0 rounded text-sm font-medium transition-colors"
                 title="Aumentar zoom"
               >
                 +
               </button>
               <button
                 onClick={handleZoomReset}
-                className="px-3 py-1.5 bg-gray-600 hover:bg-gray-500 rounded text-sm font-medium transition-colors"
+                className="px-3 py-1.5 bg-gray-600 hover:bg-[var(--surface-elevated)]0 rounded text-sm font-medium transition-colors"
                 title="Resetar zoom (100%)"
               >
                 ⟲
@@ -578,13 +578,13 @@ export default function RemoteDesktopViewer({
           
           <button
             onClick={toggleFullscreen}
-            className="px-4 py-2 bg-blue-500 hover:bg-blue-600 rounded font-medium transition-colors"
+            className="px-4 py-2 bg-blue-500/150/150 hover:bg-blue-600 rounded font-medium transition-colors"
           >
             {isFullscreen ? 'Sair da Tela Cheia' : 'Tela Cheia'}
           </button>
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-red-500 hover:bg-red-600 rounded font-medium transition-colors"
+            className="px-4 py-2 bg-red-500/150/150 hover:bg-red-600 rounded font-medium transition-colors"
           >
             Fechar
           </button>
@@ -625,14 +625,14 @@ export default function RemoteDesktopViewer({
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p>Conectando ao computador remoto...</p>
-            <p className="text-sm text-gray-400 mt-2">Aguardando conexão WebSocket na porta 3001</p>
+            <p className="text-sm text-[var(--text-muted)] mt-2">Aguardando conexão WebSocket na porta 3001</p>
           </div>
         )}
         
         {!isConnected && !error && !isConnecting && (
           <div className="text-white text-center">
             <p className="text-yellow-500">Aguardando sessão de desktop remoto...</p>
-            <p className="text-sm text-gray-400 mt-2">WebSocket conectado, aguardando frames do computador remoto</p>
+            <p className="text-sm text-[var(--text-muted)] mt-2">WebSocket conectado, aguardando frames do computador remoto</p>
           </div>
         )}
 
@@ -640,7 +640,7 @@ export default function RemoteDesktopViewer({
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p>Aguardando frames do computador remoto...</p>
-            <p className="text-sm text-gray-400 mt-2">
+            <p className="text-sm text-[var(--text-muted)] mt-2">
               Verifique se o agente está online e recebendo comandos.
               <br />
               Confira o console do agente para ver se está capturando a tela.

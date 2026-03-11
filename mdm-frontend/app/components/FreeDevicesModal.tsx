@@ -41,7 +41,7 @@ export default function FreeDevicesModal({
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" onClick={onClose}>
       <div
-        className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--surface)] rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
@@ -51,7 +51,7 @@ export default function FreeDevicesModal({
               Dispositivos que não estão em nenhum grupo. Atribua a um grupo para aplicar políticas.
             </p>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-black text-xl">
+          <button onClick={onClose} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl">
             ✕
           </button>
         </div>
@@ -67,7 +67,7 @@ export default function FreeDevicesModal({
               <div
                 key={device.deviceId || device.id}
                 className={`p-4 border rounded-lg flex items-center justify-between ${
-                  selectedDevice?.deviceId === device.deviceId ? 'border-primary bg-blue-50' : 'border-border hover:bg-gray-50'
+                  selectedDevice?.deviceId === device.deviceId ? 'border-primary bg-blue-500/150/15' : 'border-border hover:bg-[var(--surface-elevated)]'
                 }`}
               >
                 <div className="flex-1">

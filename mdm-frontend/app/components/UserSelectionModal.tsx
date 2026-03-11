@@ -32,19 +32,19 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
   const loadUsers = async () => {
     setIsLoading(true)
     setError('')
-    
+
     try {
       const response = await fetch('/api/device-users?active=true')
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
-      
+
       const result = await response.json()
-      
+
       if (result.success) {
         // Suporta tanto 'users' quanto 'data' para compatibilidade
         const usersList = result.users || result.data || []
-        
+
         // Mapear para o formato esperado
         const mappedUsers = usersList.map((u: any) => ({
           id: u.id, // UUID do banco
@@ -96,24 +96,24 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
   if (!isOpen) return null
 
   return (
-    <div 
+    <div
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
-      <div 
-        className="bg-white rounded-xl shadow-xl max-w-md w-full"
+      <div
+        className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl max-w-md w-full"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="p-6 border-b border-gray-200">
+        <div className="p-6 border-b border-[var(--border)]">
           <div className="flex justify-between items-center">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">👤 Vincular Usuário</h2>
-              <p className="text-sm text-gray-600 mt-1">Selecione um usuário para vincular ao dispositivo</p>
+              <h2 className="text-xl font-bold text-[var(--text-primary)]">👤 Vincular Usuário</h2>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">Selecione um usuário para vincular ao dispositivo</p>
             </div>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors rounded-lg hover:bg-gray-100"
+              className="w-8 h-8 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors rounded-lg hover:bg-[var(--surface-elevated)]"
             >
               ✕
             </button>
@@ -121,22 +121,22 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
         </div>
 
         {/* Search */}
-        <div className="p-4 border-b border-gray-200">
+        <div className="p-4 border-b border-[var(--border)]">
           <input
             type="text"
             placeholder="Buscar por nome ou CPF..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             disabled={isLoading}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
+            className="w-full px-4 py-2 border border-[var(--border)] bg-[var(--surface-elevated)] text-[var(--text-primary)] rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:opacity-50"
           />
           {error && (
-            <p className="text-xs mt-2 text-red-600">
+            <p className="text-xs mt-2 text-red-400">
               ❌ {error}
             </p>
           )}
           {!isLoading && users.length === 0 && !error && (
-            <p className="text-xs mt-2 text-orange-600">
+            <p className="text-xs mt-2 text-orange-400">
               ⚠️ Nenhum usuário configurado. Clique em "👥 Usuários" para adicionar.
             </p>
           )}
@@ -148,7 +148,7 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
                 <div className="animate-spin text-4xl mb-3">⏳</div>
-                <p className="text-gray-600">Carregando usuários...</p>
+                <p className="text-[var(--text-secondary)]">Carregando usuários...</p>
               </div>
             </div>
           ) : (
@@ -157,16 +157,16 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
             <div className="mb-4">
               <button
                 onClick={handleRemoveUser}
-                className="w-full p-3 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition-colors text-left"
+                className="w-full p-3 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 rounded-lg transition-colors text-left"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center">
                       <span className="text-xl">🚫</span>
                     </div>
                     <div>
-                      <p className="font-medium text-red-900">Remover Usuário</p>
-                      <p className="text-sm text-red-600">Desvincular usuário atual</p>
+                      <p className="font-medium text-red-300">Remover Usuário</p>
+                      <p className="text-sm text-red-400">Desvincular usuário atual</p>
                     </div>
                   </div>
                 </div>
@@ -176,18 +176,18 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
 
           {filteredUsers.length === 0 ? (
             <div className="text-center py-8">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <div className="w-16 h-16 bg-[var(--surface-elevated)] rounded-full flex items-center justify-center mx-auto mb-3">
                 <span className="text-2xl">{users.length === 0 ? '📋' : '🔍'}</span>
               </div>
-              <p className="text-gray-600 font-medium">
+              <p className="text-[var(--text-secondary)] font-medium">
                 {users.length === 0 ? 'Lista vazia' : 'Nenhum usuário encontrado'}
               </p>
               {users.length === 0 ? (
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-[var(--text-muted)] mt-2">
                   Configure a planilha ou verifique se há dados válidos
                 </p>
               ) : (
-                <p className="text-sm text-gray-500 mt-2">
+                <p className="text-sm text-[var(--text-muted)] mt-2">
                   Tente outro termo de busca
                 </p>
               )}
@@ -198,8 +198,8 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
                 <button
                   key={user.id}
                   onClick={() => handleSelectUser(user)}
-                  className={`w-full p-3 hover:bg-blue-50 border border-gray-200 rounded-lg transition-colors text-left ${
-                    currentUserId === user.id ? 'bg-blue-50 border-blue-300' : 'bg-white'
+                  className={`w-full p-3 hover:bg-blue-500/15 border border-[var(--border)] rounded-lg transition-colors text-left ${
+                    currentUserId === user.id ? 'bg-blue-500/15 border-blue-500/30' : 'bg-[var(--surface-elevated)]'
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -210,13 +210,13 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
                         </span>
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{user.name}</p>
-                        <p className="text-sm text-gray-600">{user.cpf}</p>
+                        <p className="font-medium text-[var(--text-primary)]">{user.name}</p>
+                        <p className="text-sm text-[var(--text-secondary)]">{user.cpf}</p>
                       </div>
                     </div>
                     {currentUserId === user.id && (
                       <div className="flex items-center gap-2">
-                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded-full font-medium">
+                        <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full font-medium">
                           Vinculado
                         </span>
                       </div>
@@ -231,10 +231,10 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-gray-200">
+        <div className="p-4 border-t border-[var(--border)]">
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors"
+            className="w-full px-4 py-2 bg-[var(--surface-elevated)] hover:bg-[var(--border)] text-[var(--text-primary)] rounded-lg transition-colors"
           >
             Cancelar
           </button>
@@ -243,4 +243,3 @@ export default function UserSelectionModal({ isOpen, onClose, onSelectUser, curr
     </div>
   )
 }
-

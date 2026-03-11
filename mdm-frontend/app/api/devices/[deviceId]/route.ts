@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
 import DeviceModel from '../../../../server/database/models/Device.js'
+import { query } from '../../../../server/database/config.js'
 
 // DELETE /api/devices/[deviceId] - deletar dispositivo (fallback quando WebSocket não conectado)
 export async function DELETE(
@@ -19,6 +20,14 @@ export async function DELETE(
     }
 
     await DeviceModel.delete(deviceId)
+
+    // Persistir na tabela de dispositivos deletados para bloquear reconexão
+    try {
+      await query(`INSERT INTO deleted_devices (device_id) VALUES ($1) ON CONFLICT (device_id) DO NOTHING`, [deviceId])
+    } catch (e) {
+      console.error('Falha ao persistir dispositivo deletado:', e)
+    }
+
     return NextResponse.json({
       success: true,
       message: 'Dispositivo deletado com sucesso',

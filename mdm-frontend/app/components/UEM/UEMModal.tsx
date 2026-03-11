@@ -348,7 +348,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-primary text-primary bg-blue-50'
+                    ? 'border-primary text-primary bg-blue-500/150/150/15'
                     : 'border-transparent text-secondary hover:text-primary hover:bg-border-light'
                 }`}
               >
@@ -466,7 +466,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                   <h3 className="text-lg font-semibold text-primary">Informações Básicas</h3>
                   <div className="space-y-3">
                     {computer.assignedUserName && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="bg-blue-500/150/150/15 border border-blue-500/30 rounded-lg p-3">
                         <div className="flex flex-col gap-1">
                           <span className="text-primary font-semibold">{computer.assignedUserName}</span>
                         </div>
@@ -586,7 +586,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                 <div 
                   className={`card p-4 transition-all border-2 ${
                     isPrivateIP(computer.ipAddress)
-                      ? 'border-yellow-300 bg-yellow-50 cursor-not-allowed' 
+                      ? 'border-yellow-500/30 bg-yellow-500/150/150/15 cursor-not-allowed' 
                       : 'border-transparent hover:border-primary hover:shadow-lg cursor-pointer'
                   }`}
                   onClick={isPrivateIP(computer.ipAddress) ? undefined : handleLocationCardClick}
@@ -681,9 +681,9 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                           <span className="text-primary font-mono text-sm">{computer.ipAddress || 'N/A'}</span>
                         </div>
                         <div className="mt-3 pt-3 border-t border-border">
-                          <div className="bg-yellow-100 border border-yellow-300 rounded-lg p-3">
-                            <p className="text-xs text-yellow-800 font-medium mb-1">⚠️ IP Privado</p>
-                            <p className="text-xs text-yellow-700">
+                          <div className="bg-yellow-500/150/150/15 border border-yellow-500/30 rounded-lg p-3">
+                            <p className="text-xs text-yellow-300 font-medium mb-1">⚠️ IP Privado</p>
+                            <p className="text-xs text-yellow-300">
                               Localização GPS não disponível e IP é privado. O agente tentará obter localização via IP público automaticamente quando conectado à internet.
                             </p>
                           </div>
@@ -696,9 +696,9 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                           <span className="text-primary font-mono text-sm">{computer.ipAddress}</span>
                         </div>
                         <div className="mt-3 pt-3 border-t border-border">
-                          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <p className="text-xs text-blue-800 font-medium mb-1">🔄 Buscando localização...</p>
-                            <p className="text-xs text-blue-700">
+                          <div className="bg-blue-500/150/150/15 border border-blue-500/30 rounded-lg p-3">
+                            <p className="text-xs text-blue-300 font-medium mb-1">🔄 Buscando localização...</p>
+                            <p className="text-xs text-blue-300">
                               A localização está sendo obtida automaticamente. Clique para atualizar.
                             </p>
                           </div>
@@ -711,8 +711,8 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                           <span className="text-primary text-sm">Sem informações</span>
                         </div>
                         <div className="mt-3 pt-3 border-t border-border">
-                          <div className="bg-gray-100 border border-gray-300 rounded-lg p-3">
-                            <p className="text-xs text-gray-700">
+                          <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-3">
+                            <p className="text-xs text-[var(--text-primary)]">
                               IP não disponível. Aguarde o agente enviar informações de rede.
                             </p>
                           </div>
@@ -1109,7 +1109,7 @@ function LocationMapModal({
         <div className="flex-1 overflow-hidden">
           {mapError ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-500">
+              <div className="text-center text-[var(--text-secondary)]">
                 <div className="text-4xl mb-2">🗺️</div>
                 <p className="text-lg font-medium">Erro ao carregar mapa</p>
                 <p className="text-sm">{mapError}</p>
@@ -1117,7 +1117,7 @@ function LocationMapModal({
             </div>
           ) : !isMapLoaded ? (
             <div className="flex items-center justify-center h-full">
-              <div className="text-center text-gray-500">
+              <div className="text-center text-[var(--text-secondary)]">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
                 <p className="text-lg font-medium">Carregando mapa...</p>
               </div>
@@ -1130,7 +1130,7 @@ function LocationMapModal({
           )}
         </div>
 
-        <div className="p-4 border-t border-border bg-gray-50">
+        <div className="p-4 border-t border-border bg-[var(--surface-elevated)]">
           <div className="text-sm text-muted text-center">
             <p>📍 Localização aproximada baseada no endereço IP público: <strong>{computer.ipAddress}</strong></p>
             {computer.locationAccuracy && (

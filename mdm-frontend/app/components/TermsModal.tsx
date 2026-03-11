@@ -1091,7 +1091,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
                   <td style={{ padding: '4px', verticalAlign: 'middle' }}>
                     <button
                       onClick={() => handleRemoveDeviceEntry(index)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="text-red-400 hover:text-red-300 text-sm"
                       type="button"
                     >
                       ✕
@@ -1104,7 +1104,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
         </table>
         <button
           onClick={handleAddDeviceEntry}
-          className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-2 text-sm text-blue-400 hover:text-blue-300"
           type="button"
         >
           + Adicionar material
@@ -1178,7 +1178,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
         onClick={onClose}
       >
         <div 
-          className="bg-white rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+          className="bg-[var(--surface)] rounded-lg shadow-xl max-w-5xl w-full mx-4 max-h-[90vh] overflow-y-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -1186,7 +1186,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
             <h2 className="text-xl font-bold">Termo de Responsabilidade</h2>
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 text-2xl"
+              className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-2xl"
               aria-label="Fechar"
             >
               ×

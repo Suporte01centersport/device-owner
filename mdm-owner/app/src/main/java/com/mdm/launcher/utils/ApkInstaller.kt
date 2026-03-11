@@ -89,22 +89,25 @@ object ApkInstaller {
                 return@withContext
             }
 
-            Log.d(TAG, "APK baixado: ${tempFile!!.absolutePath}")
+            Log.d(TAG, "APK baixado: ${tempFile!!.absolutePath} (${tempFile!!.length()} bytes)")
             onProgress?.invoke(80)
 
             onProgress?.invoke(85)
-            val installSuccess = installApk(context, tempFile!!, dpm, componentName)
-            onProgress?.invoke(100)
+            val installError = installApk(context, tempFile!!, dpm, componentName)
 
-            if (installSuccess) {
-                Log.d(TAG, "APK instalado com sucesso!")
-                showToast(context, "Instalação concluída")
+            if (installError == null) {
+                onProgress?.invoke(100)
+                Log.d(TAG, "APK enviado ao PackageInstaller com sucesso!")
+                showToast(context, "Instalação em andamento...")
                 onComplete?.invoke(true, null)
+                // Agendar limpeza do arquivo após 60s (dar tempo ao PackageInstaller)
+                kotlinx.coroutines.delay(60000)
+                try { tempFile?.delete() } catch (_: Exception) {}
             } else {
-                val error = "Falha ao instalar APK"
-                Log.e(TAG, error)
-                showToast(context, error)
-                onComplete?.invoke(false, error)
+                Log.e(TAG, installError)
+                showToast(context, installError)
+                onComplete?.invoke(false, installError)
+                try { tempFile?.delete() } catch (_: Exception) {}
             }
 
         } catch (e: Exception) {
@@ -112,12 +115,7 @@ object ApkInstaller {
             Log.e(TAG, error, e)
             showToast(context, error)
             onComplete?.invoke(false, error)
-        } finally {
-            try {
-                tempFile?.delete()
-            } catch (e: Exception) {
-                Log.w(TAG, "Erro ao remover arquivo temporário: ${e.message}")
-            }
+            try { tempFile?.delete() } catch (_: Exception) {}
         }
     }
 
@@ -201,55 +199,63 @@ object ApkInstaller {
         }
     }
 
+    /**
+     * @return null se sucesso (commit feito), ou mensagem de erro
+     */
     private fun installApk(
         context: Context,
         apkFile: File,
         dpm: DevicePolicyManager,
         componentName: ComponentName
-    ): Boolean {
+    ): String? {
         return try {
-            Log.d(TAG, "Instalando APK via Device Owner: ${apkFile.absolutePath}")
+            Log.d(TAG, "Instalando APK via Device Owner: ${apkFile.absolutePath} (${apkFile.length()} bytes)")
+
+            if (apkFile.length() < 1000) {
+                return "APK muito pequeno (${apkFile.length()} bytes) - arquivo possivelmente corrompido"
+            }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 val packageInstaller = context.packageManager.packageInstaller
 
                 val sessionParams = PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL
-                )
+                ).apply {
+                    setSize(apkFile.length())
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                        setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                    }
+                }
 
                 val sessionId = packageInstaller.createSession(sessionParams)
+                Log.d(TAG, "Sessão criada (ID: $sessionId)")
                 val session = packageInstaller.openSession(sessionId)
 
-                val apkSize = apkFile.length()
-                val inputStream = FileInputStream(apkFile)
-                val outputStream = session.openWrite("apk", 0, apkSize)
-
-                val buffer = ByteArray(65536)
-                var bytesRead: Int
-                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                    outputStream.write(buffer, 0, bytesRead)
+                // Copiar APK para a sessão
+                FileInputStream(apkFile).use { inputStream ->
+                    session.openWrite("package", 0, apkFile.length()).use { outputStream ->
+                        inputStream.copyTo(outputStream, 65536)
+                        session.fsync(outputStream)
+                    }
                 }
+                Log.d(TAG, "APK copiado para sessão")
 
-                session.fsync(outputStream)
-                inputStream.close()
-                outputStream.close()
-
-                val intent = Intent("com.mdm.launcher.INSTALL_COMPLETE").apply {
-                    setPackage(context.packageName)
-                }
+                // Usar AppUpdateReceiver para receber resultado real
+                val intent = Intent(context, AppUpdateReceiver::class.java)
                 val pendingIntent = PendingIntent.getBroadcast(
                     context,
-                    0,
+                    sessionId,
                     intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
                 )
 
                 session.commit(pendingIntent.intentSender)
-                session.close()
+                // Não chamar session.close() após commit - o sistema gerencia a sessão
 
-                Log.d(TAG, "Sessão de instalação criada (ID: $sessionId)")
-                Thread.sleep(3000)
-                true
+                Log.d(TAG, "Sessão de instalação commitada (ID: $sessionId), aguardando resultado...")
+                // Aguardar para o PackageInstaller processar
+                Thread.sleep(5000)
+                null // sucesso
 
             } else {
                 val apkUri = Uri.fromFile(apkFile)
@@ -258,12 +264,12 @@ object ApkInstaller {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
                 }
                 context.startActivity(intent)
-                true
+                null // sucesso
             }
 
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao instalar APK: ${e.message}", e)
-            false
+            "Erro na instalação: ${e.message}"
         }
     }
 }

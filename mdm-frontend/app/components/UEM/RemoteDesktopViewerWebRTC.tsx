@@ -399,7 +399,7 @@ export default function RemoteDesktopViewerWebRTC({
       <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <h2 className="text-xl font-bold">Acesso Remoto WebRTC - {computer.name}</h2>
-          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
+          <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-green-500/150/150' : 'bg-red-500/150/150'}`}></div>
           <span className="text-sm">{isConnected ? 'Conectado (P2P)' : 'Conectando...'}</span>
         </div>
         <div className="flex gap-2">
@@ -443,7 +443,7 @@ export default function RemoteDesktopViewerWebRTC({
           <div className="text-white text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
             <p>Estabelecendo conexão WebRTC P2P...</p>
-            <p className="text-sm text-gray-400 mt-2">Aguardando sinalização e estabelecimento de conexão</p>
+            <p className="text-sm text-[var(--text-muted)] mt-2">Aguardando sinalização e estabelecimento de conexão</p>
           </div>
         )}
 
@@ -471,7 +471,7 @@ export default function RemoteDesktopViewerWebRTC({
             <span className="text-sm">
               Mouse: {mousePosition.x}, {mousePosition.y}
             </span>
-            <span className="text-xs text-gray-400">
+            <span className="text-xs text-[var(--text-muted)]">
               {isConnected ? 'Conexão P2P Ativa' : 'Conectando...'}
             </span>
           </div>

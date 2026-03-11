@@ -77,12 +77,40 @@ class WebSocketService : Service() {
                         "timestamp" to System.currentTimeMillis()
                     )))
                 }
+                "com.mdm.launcher.UPDATE_SUCCESS" -> {
+                    Log.d(TAG, "Instalação de APK concluída com sucesso (via AppUpdateReceiver)")
+                    sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
+                        setPackage(packageName)
+                    })
+                    webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                        "type" to "update_app_complete",
+                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                        "success" to true,
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                }
+                "com.mdm.launcher.UPDATE_FAILURE" -> {
+                    val errorMsg = intent.getStringExtra("error_message") ?: "Erro desconhecido"
+                    Log.e(TAG, "Instalação de APK falhou (via AppUpdateReceiver): $errorMsg")
+                    sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
+                        setPackage(packageName)
+                    })
+                    webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                        "type" to "update_app_error",
+                        "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
+                        "error" to errorMsg,
+                        "timestamp" to System.currentTimeMillis()
+                    )))
+                }
             }
         }
     }
 
     /** ACTION_SCREEN_ON só pode ser recebido por receiver dinâmico. Ao ligar tela, abre app kiosk. */
     private var screenOnReceiver: BroadcastReceiver? = null
+
+    /** Detecta conexão USB e mostra tela de senha se bloqueado */
+    private var usbConnectionReceiver: com.mdm.launcher.receivers.UsbConnectionReceiver? = null
 
     /** ACTION_SCREEN_OFF: não faz nada (evita sirene/cadeado ao power/timeout) */
     private var screenOffReceiver: BroadcastReceiver? = null
@@ -123,6 +151,8 @@ class WebSocketService : Service() {
             addAction("com.mdm.launcher.FORCE_RECONNECT")
             addAction("com.mdm.launcher.ALARM_STARTED")
             addAction("com.mdm.launcher.WMS_ERROR")
+            addAction("com.mdm.launcher.UPDATE_SUCCESS")
+            addAction("com.mdm.launcher.UPDATE_FAILURE")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(commandReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
@@ -136,6 +166,7 @@ class WebSocketService : Service() {
         registerKioskScreenReceiver()
         registerVolumeObserver()
         // BluetoothPairingReceiver registrado no manifest - sempre ativo
+        registerUsbConnectionReceiver()
         setupKeyCaptureOverlay()
     }
 
@@ -174,6 +205,18 @@ class WebSocketService : Service() {
             registerReceiver(screenOffReceiver, filter)
         }
         Log.d(TAG, "Receiver SCREEN_OFF registrado (sem sirene/cadeado ao desligar tela)")
+    }
+
+    /** Registra receiver para detectar conexão USB e mostrar tela de senha se bloqueado */
+    private fun registerUsbConnectionReceiver() {
+        usbConnectionReceiver = com.mdm.launcher.receivers.UsbConnectionReceiver()
+        val filter = IntentFilter("android.hardware.usb.action.USB_STATE")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(usbConnectionReceiver, filter, Context.RECEIVER_EXPORTED)
+        } else {
+            registerReceiver(usbConnectionReceiver, filter)
+        }
+        Log.d(TAG, "UsbConnectionReceiver registrado")
     }
 
     /** Regra: ao pressionar volume (+ ou -) em qualquer app = inicia sirene de alerta */
@@ -322,6 +365,9 @@ class WebSocketService : Service() {
         } catch (e: Exception) {}
         try {
             screenOffReceiver?.let { unregisterReceiver(it) }
+        } catch (e: Exception) {}
+        try {
+            usbConnectionReceiver?.let { unregisterReceiver(it) }
         } catch (e: Exception) {}
         try {
             volumeContentObserver?.let { contentResolver.unregisterContentObserver(it) }
@@ -535,6 +581,18 @@ class WebSocketService : Service() {
 
                     if (!apkUrl.isNullOrEmpty()) {
                         Log.d(TAG, "Comando de atualização recebido: $apkUrl (versão: ${version ?: "N/A"})")
+                        // Liberar restrições de instalação temporariamente para permitir atualização
+                        try {
+                            val dpmUpdate = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                            val adminUpdate = android.content.ComponentName(this@WebSocketService, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            if (dpmUpdate.isDeviceOwnerApp(packageName)) {
+                                dpmUpdate.clearUserRestriction(adminUpdate, android.os.UserManager.DISALLOW_INSTALL_APPS)
+                                dpmUpdate.clearUserRestriction(adminUpdate, android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES)
+                                Log.d(TAG, "Restrições de instalação removidas temporariamente para update")
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Erro ao liberar restrições de instalação: ${e.message}")
+                        }
                         val localApkUrl = com.mdm.launcher.utils.ServerDiscovery.getApkUrlFromConnection(this@WebSocketService)
                         val (primaryUrl, fallbackUrls) = if (localApkUrl != null) {
                             Log.d(TAG, "Usando URL do servidor conectado primeiro: $localApkUrl")
@@ -581,19 +639,27 @@ class WebSocketService : Service() {
                                     )))
                                 },
                                 onComplete = { success, error ->
-                                    sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
-                                        setPackage(packageName)
-                                    })
                                     if (success) {
-                                        Log.d(TAG, "Atualização concluída com sucesso")
+                                        // session.commit() foi feito - a instalação real é assíncrona
+                                        // O AppUpdateReceiver vai notificar o resultado final
+                                        Log.d(TAG, "APK enviado ao PackageInstaller, aguardando resultado...")
+                                        sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_PROGRESS).apply {
+                                            setPackage(packageName)
+                                            putExtra(UpdateProgressActivity.EXTRA_PROGRESS, 95)
+                                            putExtra(UpdateProgressActivity.EXTRA_STATUS, "Instalando...")
+                                        })
                                         webSocketClient?.sendMessage(gson.toJson(mapOf(
-                                            "type" to "update_app_complete",
+                                            "type" to "update_app_progress",
                                             "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
-                                            "success" to true,
+                                            "progress" to 95,
+                                            "status" to "Instalando...",
                                             "timestamp" to System.currentTimeMillis()
                                         )))
                                     } else {
                                         Log.e(TAG, "Erro na atualização: $error")
+                                        sendBroadcast(Intent(UpdateProgressActivity.ACTION_UPDATE_DONE).apply {
+                                            setPackage(packageName)
+                                        })
                                         webSocketClient?.sendMessage(gson.toJson(mapOf(
                                             "type" to "update_app_error",
                                             "deviceId" to DeviceIdManager.getDeviceId(this@WebSocketService),
@@ -831,11 +897,41 @@ class WebSocketService : Service() {
                                 } else {
                                     dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_FACTORY_RESET)
                                 }
-                                // USB
+                                // USB (bloqueia tudo: file transfer + ADB/depuração)
                                 if (data["usbDisabled"] == true) {
                                     dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
+                                    // Desabilitar ADB
+                                    try {
+                                        Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 0)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Não foi possível desabilitar ADB: ${e.message}")
+                                    }
+                                    // Salvar estado para UsbConnectionReceiver
+                                    getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+                                        .edit()
+                                        .putBoolean("usb_blocked", true)
+                                        .putBoolean("usb_temp_unlocked", false)
+                                        .apply()
+                                    Log.d(TAG, "USB totalmente bloqueado (file transfer + ADB)")
                                 } else {
                                     dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                                    // Nota: DISALLOW_DEBUGGING_FEATURES é controlado por developerOptionsDisabled
+                                    if (data["developerOptionsDisabled"] != true) {
+                                        dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
+                                    }
+                                    // Reabilitar ADB
+                                    try {
+                                        Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 1)
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Não foi possível reabilitar ADB: ${e.message}")
+                                    }
+                                    getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+                                        .edit()
+                                        .putBoolean("usb_blocked", false)
+                                        .putBoolean("usb_temp_unlocked", false)
+                                        .apply()
+                                    Log.d(TAG, "USB desbloqueado")
                                 }
                                 // Hotspot/tethering
                                 if (data["hotspotDisabled"] == true) {

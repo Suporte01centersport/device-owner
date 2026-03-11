@@ -29,13 +29,13 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-6 border-b border-border">
-          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] flex items-center gap-2">
             <span>💻</span>
             Conectar Computador
           </h3>
           <button
             onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center text-gray-700 hover:text-gray-900 transition-colors rounded-lg hover:bg-gray-100"
+            className="w-8 h-8 flex items-center justify-center text-[var(--text-primary)] hover:text-[var(--text-primary)] transition-colors rounded-lg hover:bg-[var(--surface-elevated)]"
           >
             ✕
           </button>
@@ -43,24 +43,24 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
 
         <div className="p-6 space-y-6">
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">1. Instale o UEM Agent no computador Windows</h4>
-            <p className="text-sm text-gray-900 mb-2">
+            <h4 className="font-medium text-[var(--text-primary)] mb-2">1. Instale o UEM Agent no computador Windows</h4>
+            <p className="text-sm text-[var(--text-primary)] mb-2">
               O UEM Agent é um agente que roda em segundo plano e conecta o computador ao painel de gerenciamento.
             </p>
-            <ul className="list-disc list-inside text-sm text-gray-900 space-y-1 ml-2">
+            <ul className="list-disc list-inside text-sm text-[var(--text-primary)] space-y-1 ml-2">
               <li>Requisitos: Windows 10/11, .NET 6.0 ou superior</li>
-              <li>Execute o instalador MSI (gere com <code className="bg-gray-100 px-1 rounded text-gray-900/90">dotnet publish</code> no projeto uem-agent)</li>
+              <li>Execute o instalador MSI (gere com <code className="bg-[var(--surface-elevated)] px-1 rounded text-[var(--text-primary)]/90">dotnet publish</code> no projeto uem-agent)</li>
               <li>O serviço será instalado e iniciado automaticamente</li>
             </ul>
           </div>
 
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">2. Configure a URL do servidor</h4>
-            <p className="text-sm text-gray-900 mb-2">
+            <h4 className="font-medium text-[var(--text-primary)] mb-2">2. Configure a URL do servidor</h4>
+            <p className="text-sm text-[var(--text-primary)] mb-2">
               O agente precisa se conectar ao servidor WebSocket. Use a URL abaixo:
             </p>
             <div className="flex gap-2 items-center">
-              <code className="flex-1 px-4 py-3 bg-gray-100 rounded-lg text-sm font-mono break-all text-gray-900/90">
+              <code className="flex-1 px-4 py-3 bg-[var(--surface-elevated)] rounded-lg text-sm font-mono break-all text-[var(--text-primary)]/90">
                 {serverUrl}
               </code>
               <button
@@ -70,16 +70,16 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
                 📋 Copiar
               </button>
             </div>
-            <p className="text-xs text-gray-900 mt-2">
+            <p className="text-xs text-[var(--text-primary)] mt-2">
               Em produção, use o IP ou hostname do seu servidor. Ex: ws://192.168.1.100:3001
             </p>
           </div>
 
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">3. Arquivos de configuração</h4>
-            <p className="text-sm text-gray-900 mb-2">
-              Edite o arquivo <code className="bg-gray-100 px-1 rounded text-gray-900/90">appsettings.json</code> ou{' '}
-              <code className="bg-gray-100 px-1 rounded text-gray-900/90">appsettings.Production.json</code> na pasta do agente:
+            <h4 className="font-medium text-[var(--text-primary)] mb-2">3. Arquivos de configuração</h4>
+            <p className="text-sm text-[var(--text-primary)] mb-2">
+              Edite o arquivo <code className="bg-[var(--surface-elevated)] px-1 rounded text-[var(--text-primary)]/90">appsettings.json</code> ou{' '}
+              <code className="bg-[var(--surface-elevated)] px-1 rounded text-[var(--text-primary)]/90">appsettings.Production.json</code> na pasta do agente:
             </p>
             <pre className="p-4 bg-gray-900 text-white/95 rounded-lg text-xs overflow-x-auto font-mono">
 {`{
@@ -92,8 +92,8 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
           </div>
 
           <div>
-            <h4 className="font-medium text-gray-900 mb-2">4. Após a instalação</h4>
-            <p className="text-sm text-gray-900">
+            <h4 className="font-medium text-[var(--text-primary)] mb-2">4. Após a instalação</h4>
+            <p className="text-sm text-[var(--text-primary)]">
               O computador aparecerá automaticamente na lista quando o agente se conectar ao servidor.
               Certifique-se de que a porta 3001 está acessível na rede.
             </p>

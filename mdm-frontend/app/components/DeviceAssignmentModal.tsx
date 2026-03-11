@@ -85,7 +85,7 @@ export default function DeviceAssignmentModal({
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-[var(--surface)] rounded-lg p-6 w-full max-w-6xl max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-lg font-semibold text-primary">
@@ -97,7 +97,7 @@ export default function DeviceAssignmentModal({
           </div>
           <button 
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl"
+            className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl"
           >
             ✕
           </button>
@@ -127,14 +127,14 @@ export default function DeviceAssignmentModal({
 
         {/* Seleção em massa */}
         {totalCount > 0 && (
-          <div className="flex items-center justify-between mb-4 p-3 bg-gray-50 rounded-lg">
+          <div className="flex items-center justify-between mb-4 p-3 bg-[var(--surface-elevated)] rounded-lg">
             <div className="flex items-center gap-3">
               <button
                 onClick={handleSelectAll}
                 className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                   allSelected 
                     ? 'bg-primary text-white' 
-                    : 'bg-white border border-border text-secondary hover:bg-gray-50'
+                    : 'bg-[var(--surface)] border border-border text-secondary hover:bg-[var(--surface-elevated)]'
                 }`}
               >
                 {allSelected ? 'Desmarcar Todos' : 'Marcar Todos'}
@@ -170,8 +170,8 @@ export default function DeviceAssignmentModal({
                 key={device.id}
                 className={`p-4 border rounded-lg transition-colors ${
                   assignedDevices.includes(device.id)
-                    ? 'border-primary bg-blue-50'
-                    : 'border-border bg-white hover:bg-gray-50'
+                    ? 'border-primary bg-blue-500/150/15'
+                    : 'border-border bg-[var(--surface)] hover:bg-[var(--surface-elevated)]'
                 }`}
               >
                 <div className="flex items-center justify-between">
@@ -180,10 +180,10 @@ export default function DeviceAssignmentModal({
                       type="checkbox"
                       checked={assignedDevices.includes(device.id)}
                       onChange={() => handleToggleDevice(device.id)}
-                      className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                      className="w-4 h-4 text-primary border-[var(--border)] rounded focus:ring-primary"
                     />
                     
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
+                    <div className="w-12 h-12 bg-[var(--surface-elevated)] rounded-lg flex items-center justify-center">
                       <span className="text-2xl">📱</span>
                     </div>
                     
@@ -222,7 +222,7 @@ export default function DeviceAssignmentModal({
         </div>
 
         {/* Resumo */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-6 p-4 bg-[var(--surface-elevated)] rounded-lg">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="font-medium text-primary">Total de Dispositivos:</span>

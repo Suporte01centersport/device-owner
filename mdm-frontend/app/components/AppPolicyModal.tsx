@@ -136,7 +136,7 @@ export default function AppPolicyModal({
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--surface)] rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
@@ -145,7 +145,7 @@ export default function AppPolicyModal({
           </h3>
           <button 
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl"
+            className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl"
           >
             ✕
           </button>
@@ -274,8 +274,8 @@ export default function AppPolicyModal({
                     key={policy.id}
                     className={`p-3 rounded-lg border ${
                       editingPolicy?.id === policy.id 
-                        ? 'border-primary bg-blue-50' 
-                        : 'border-border bg-white'
+                        ? 'border-primary bg-blue-500/150/15' 
+                        : 'border-border bg-[var(--surface)]'
                     }`}
                   >
                     <div className="flex items-center justify-between">
@@ -283,10 +283,10 @@ export default function AppPolicyModal({
                         <div className="flex items-center gap-2 mb-1">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                             policy.policyType === 'block' 
-                              ? 'bg-red-100 text-red-800' 
+                              ? 'bg-red-500/150/20 text-red-300' 
                               : policy.policyType === 'require'
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-blue-100 text-blue-800'
+                              ? 'bg-green-500/150/20 text-green-300'
+                              : 'bg-blue-500/150/20 text-blue-300'
                           }`}>
                             <span className="mr-1">
                               {policy.policyType === 'block' ? '🚫' : policy.policyType === 'require' ? '✅' : '✓'}
@@ -295,7 +295,7 @@ export default function AppPolicyModal({
                              policy.policyType === 'require' ? 'Obrigatório' : 'Permitido'}
                           </span>
                           {!policy.isAllowed && (
-                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-[var(--surface-elevated)] text-[var(--text-primary)]">
                               ❌ Desabilitado
                             </span>
                           )}
@@ -306,14 +306,14 @@ export default function AppPolicyModal({
                       <div className="flex gap-1">
                         <button 
                           onClick={() => handleEditPolicy(policy)}
-                          className="p-1 text-gray-500 hover:text-blue-600 transition-colors"
+                          className="p-1 text-[var(--text-secondary)] hover:text-blue-600 transition-colors"
                           title="Editar política"
                         >
                           ✏️
                         </button>
                         <button 
                           onClick={() => handleDeletePolicy(policy.id)}
-                          className="p-1 text-gray-500 hover:text-red-600 transition-colors"
+                          className="p-1 text-[var(--text-secondary)] hover:text-red-600 transition-colors"
                           title="Deletar política"
                         >
                           🗑️
@@ -328,23 +328,23 @@ export default function AppPolicyModal({
         </div>
 
         {/* Informações sobre tipos de política */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+        <div className="mt-6 p-4 bg-[var(--surface-elevated)] rounded-lg">
           <h5 className="font-medium text-primary mb-2">Tipos de Política:</h5>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 mr-2">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-500/150/20 text-blue-300 mr-2">
                 ✓ Permitir
               </span>
               <span className="text-secondary">Aplicativo pode ser usado</span>
             </div>
             <div>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 mr-2">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-500/150/20 text-red-300 mr-2">
                 🚫 Bloquear
               </span>
               <span className="text-secondary">Aplicativo é bloqueado</span>
             </div>
             <div>
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 mr-2">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-500/150/20 text-green-300 mr-2">
                 ✅ Obrigatório
               </span>
               <span className="text-secondary">Aplicativo deve estar instalado</span>

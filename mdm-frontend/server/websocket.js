@@ -388,6 +388,23 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    // Rota para desbloquear dispositivo deletado (usado pelo add-device)
+    const unblockMatch = req.method === 'POST' && req.url && req.url.match(/^\/api\/devices\/([^/]+)\/unblock$/);
+    if (unblockMatch) {
+        const deviceId = decodeURIComponent(unblockMatch[1]);
+        if (deletedDeviceIds.has(deviceId)) {
+            deletedDeviceIds.delete(deviceId);
+            query(`DELETE FROM deleted_devices WHERE device_id = $1`, [deviceId]).catch(() => {});
+            console.log(`✅ Dispositivo ${deviceId} desbloqueado para reconexão (add-device)`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Dispositivo desbloqueado' }));
+        } else {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Dispositivo não estava bloqueado' }));
+        }
+        return;
+    }
+
     // Rota para enviar comando de atualização de APK
     // API HTTP para enviar notificação ao dispositivo (fallback quando WebSocket falha)
     if (req.method === 'POST' && req.url === '/api/devices/send-notification') {
@@ -1152,18 +1169,33 @@ const persistentDevices = new Map();
 // até que se reconectem (quando removeremos o ID desta lista).
 const deletedDeviceIds = new Set();
 
-// Garante coluna de soft-delete no banco para não listar itens deletados após reinícios
-async function ensureSoftDeleteColumn() {
+// Garante coluna de soft-delete e tabela de dispositivos deletados permanentemente
+async function ensureDeletedDevicesSchema() {
     try {
         await query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`);
-        console.log('✅ Coluna deleted_at verificada/criada');
+        // Tabela persistente para bloquear reconexão de dispositivos deletados
+        await query(`
+            CREATE TABLE IF NOT EXISTS deleted_devices (
+                device_id VARCHAR(255) PRIMARY KEY,
+                deleted_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        `);
+        console.log('✅ Schema de deleção verificado/criado');
+        // Carregar dispositivos deletados na memória
+        const result = await query(`SELECT device_id FROM deleted_devices`);
+        for (const row of result.rows) {
+            deletedDeviceIds.add(row.device_id);
+        }
+        if (result.rows.length > 0) {
+            console.log(`🚫 ${result.rows.length} dispositivos deletados carregados na memória`);
+        }
     } catch (e) {
-        console.error('❌ Falha ao garantir coluna deleted_at:', e.message);
+        console.error('❌ Falha ao garantir schema de deleção:', e.message);
     }
 }
 
 // Executa verificação de schema assim que o módulo carrega
-ensureSoftDeleteColumn();
+ensureDeletedDevicesSchema();
 
 // Rastrear pings pendentes para validação de pong
 const pendingPings = new Map(); // deviceId -> { timestamp, timeoutId }
@@ -1954,17 +1986,17 @@ async function handleDeviceStatus(ws, data) {
         console.error('❌ DeviceId inválido:', deviceId);
         return;
     }
-    // Caso o dispositivo tenha sido marcado como deletado anteriormente,
-    // remove-o da lista de deletados ao receber novo status (reconexão).
+    // Se o dispositivo foi deletado, bloquear reconexão automática
     if (deletedDeviceIds.has(deviceId)) {
-        deletedDeviceIds.delete(deviceId);
-        console.log(`♻️ Dispositivo ${deviceId} reconectado — removido da lista de deletados`);
-    }
-    // Se havia marcação de deleted_at no banco, limpa ao reconectar
-    try {
-        await query(`UPDATE devices SET deleted_at = NULL, updated_at = NOW() WHERE device_id = $1`, [deviceId]);
-    } catch (e) {
-        console.error('❌ Falha ao limpar deleted_at no reconnect:', e.message);
+        console.log(`🚫 Dispositivo ${deviceId} foi deletado — bloqueando reconexão automática`);
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({
+                type: 'device_deleted_blocked',
+                message: 'Este dispositivo foi removido do sistema'
+            }));
+            ws.close(1000, 'Device was deleted');
+        }
+        return;
     }
     
     // Marcar como dispositivo Android
@@ -2985,11 +3017,29 @@ async function handleDeleteDevice(ws, data) {
             return;
         }
         
+        // Fechar conexão WebSocket do dispositivo antes de remover
+        const deletedDeviceWs = connectedDevices.get(deviceId);
+        if (deletedDeviceWs && deletedDeviceWs.readyState === WebSocket.OPEN) {
+            deletedDeviceWs.send(JSON.stringify({
+                type: 'device_deleted_blocked',
+                message: 'Este dispositivo foi removido do sistema'
+            }));
+            deletedDeviceWs.close(1000, 'Device was deleted');
+            console.log(`🔌 Conexão WebSocket do dispositivo ${deviceId} encerrada`);
+        }
+
         // Remover das listas em memória
         persistentDevices.delete(deviceId);
         deletedDeviceIds.add(deviceId);
         connectedDevices.delete(deviceId);
-        
+
+        // Persistir na tabela de dispositivos deletados para sobreviver reinícios
+        try {
+            await query(`INSERT INTO deleted_devices (device_id) VALUES ($1) ON CONFLICT (device_id) DO NOTHING`, [deviceId]);
+        } catch (e) {
+            console.error('❌ Falha ao persistir dispositivo deletado:', e.message);
+        }
+
         console.log(`🗑️ Dispositivo ${deviceId} removido permanentemente da memória e do banco de dados`);
 
         log.info(`Dispositivo deletado permanentemente`, {

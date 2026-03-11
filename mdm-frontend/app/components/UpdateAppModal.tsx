@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
-import ConfirmModal from './ConfirmModal'
 import { showAlert } from '../lib/dialog'
 
 interface UpdateAppModalProps {
@@ -15,7 +14,6 @@ interface UpdateAppModalProps {
 export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: UpdateAppModalProps) {
   const [apkUrl, setApkUrl] = useState('')
   const [version, setVersion] = useState('1.1')
-  const [showConfirm, setShowConfirm] = useState(false)
   const [loadingUrl, setLoadingUrl] = useState(false)
 
   // Carregar URL do APK MDM ao abrir o modal
@@ -56,11 +54,6 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
       showAlert('Por favor, insira a URL do APK')
       return
     }
-    setShowConfirm(true)
-  }
-
-  const handleConfirm = () => {
-    setShowConfirm(false)
     onConfirm(apkUrl, version)
   }
 
@@ -78,14 +71,14 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
         </div>
 
         <div className="modal-body">
-          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
-            <p className="text-sm text-blue-800">
+          <div className="mb-6 p-4 bg-blue-500/150/15 rounded-lg border border-blue-500/30">
+            <p className="text-sm text-blue-300">
               <strong>Dispositivo:</strong> {device.name}
             </p>
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-300">
               <strong>Modelo:</strong> {device.model}
             </p>
-            <p className="text-sm text-blue-800">
+            <p className="text-sm text-blue-300">
               <strong>Status:</strong> {device.status === 'online' ? '🟢 Online' : '🔴 Offline'}
             </p>
           </div>
@@ -124,9 +117,9 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
               </p>
             </div>
 
-            <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <h3 className="text-sm font-semibold text-yellow-800 mb-2">⚠️ Atenção</h3>
-              <ul className="text-xs text-yellow-700 space-y-1">
+            <div className="p-4 bg-yellow-500/150/15 rounded-lg border border-yellow-500/30">
+              <h3 className="text-sm font-semibold text-yellow-300 mb-2">⚠️ Atenção</h3>
+              <ul className="text-xs text-yellow-400 space-y-1">
                 <li>• O dispositivo deve estar online</li>
                 <li>• O app será atualizado automaticamente (Device Owner)</li>
                 <li>• O download será feito via internet móvel/WiFi</li>
@@ -153,16 +146,6 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
         </div>
       </div>
 
-      <ConfirmModal
-        isOpen={showConfirm}
-        onClose={() => setShowConfirm(false)}
-        onConfirm={handleConfirm}
-        title="Tem certeza?"
-        message={`Deseja atualizar o APK do dispositivo "${device.name}"? O download e instalação serão iniciados.`}
-        confirmLabel="Sim"
-        cancelLabel="Não"
-        variant="primary"
-      />
     </div>
   )
 }

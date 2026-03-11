@@ -74,9 +74,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
   }
 
   const getBatteryBgColor = (level: number) => {
-    if (level > 50) return 'bg-green-100'
-    if (level > 20) return 'bg-yellow-100'
-    return 'bg-red-100'
+    if (level > 50) return 'bg-green-500/150/150/20'
+    if (level > 20) return 'bg-yellow-500/150/150/20'
+    return 'bg-red-500/150/150/20'
   }
 
   // Função para detectar se os dados são válidos ou ainda estão carregando
@@ -161,8 +161,8 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
               <div className={`w-16 h-2 rounded-full ${getBatteryBgColor(device.batteryLevel)}`}>
                 <div 
                   className={`h-full rounded-full ${
-                    device.batteryLevel > 50 ? 'bg-green-500' :
-                    device.batteryLevel > 20 ? 'bg-yellow-500' : 'bg-red-500'
+                    device.batteryLevel > 50 ? 'bg-green-500/150/150' :
+                    device.batteryLevel > 20 ? 'bg-yellow-500/150/150' : 'bg-red-500/150/150'
                   }`}
                   style={{ width: `${device.batteryLevel}%` }}
                 />
@@ -264,7 +264,7 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
           📥 Atualizar
         </button>
         <button
-          className="btn btn-sm flex-1 !bg-red-500/30 !border-red-400/30 !text-white hover:!bg-red-500/50"
+          className="btn btn-sm flex-1 !bg-red-500/150/150/30 !border-red-400/30 !text-white hover:!bg-red-500/150/150/50"
           onClick={(e) => {
             e.stopPropagation()
             setShowDeleteConfirm(true)

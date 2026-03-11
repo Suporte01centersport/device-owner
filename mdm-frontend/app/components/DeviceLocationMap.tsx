@@ -185,8 +185,8 @@ export default function DeviceLocationMap({ device, className = '', sendMessage 
 
   if (mapError) {
     return (
-      <div className={`bg-gray-100 rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '300px' }}>
-        <div className="text-center text-gray-500">
+      <div className={`bg-[var(--surface-elevated)] rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '300px' }}>
+        <div className="text-center text-[var(--text-secondary)]">
           <div className="text-4xl mb-2">🗺️</div>
           <p className="text-lg font-medium">Erro ao carregar mapa</p>
           <p className="text-sm">{mapError}</p>
@@ -197,8 +197,8 @@ export default function DeviceLocationMap({ device, className = '', sendMessage 
 
   if (!isMapLoaded) {
     return (
-      <div className={`bg-gray-100 rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '300px' }}>
-        <div className="text-center text-gray-500">
+      <div className={`bg-[var(--surface-elevated)] rounded-lg flex items-center justify-center ${className}`} style={{ minHeight: '300px' }}>
+        <div className="text-center text-[var(--text-secondary)]">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
           <p className="text-lg font-medium">Carregando mapa...</p>
         </div>
@@ -208,13 +208,13 @@ export default function DeviceLocationMap({ device, className = '', sendMessage 
 
   return (
     <div className={`rounded-lg overflow-hidden shadow-lg ${className}`}>
-      <div className="bg-white p-4 border-b flex items-center justify-between">
+      <div className="bg-[var(--surface)] p-4 border-b flex items-center justify-between" style={{ color: '#000' }}>
         <div>
-          <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+          <h3 className="text-lg font-semibold flex items-center" style={{ color: '#1f2937' }}>
             <span className="mr-2">🗺️</span>
             Localização em Tempo Real
           </h3>
-          <p className="text-sm text-gray-600 mt-1">
+          <p className="text-sm mt-1" style={{ color: '#4b5563' }}>
             {device.status === 'online' ? 'Atualizando automaticamente' : 'Última localização conhecida'}
           </p>
         </div>
@@ -224,10 +224,10 @@ export default function DeviceLocationMap({ device, className = '', sendMessage 
           className={`
             flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm transition-all
             ${isSirenActive
-              ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/30'
+              ? 'bg-red-500/150/150 hover:bg-red-600 text-white animate-pulse shadow-lg shadow-red-500/30'
               : device.status !== 'online'
-                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                : 'bg-orange-500 hover:bg-orange-600 text-white shadow-md hover:shadow-lg'
+                ? 'bg-[var(--border)] !text-[var(--text-secondary)] cursor-not-allowed'
+                : 'bg-orange-500/150/150 hover:bg-orange-600 text-white shadow-md hover:shadow-lg'
             }
             ${sirenLoading ? 'opacity-70 cursor-wait' : ''}
           `}

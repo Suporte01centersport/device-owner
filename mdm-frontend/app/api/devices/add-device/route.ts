@@ -105,6 +105,17 @@ export async function POST(request: NextRequest) {
 
     steps.push('Dispositivo detectado')
 
+    // 1a. Obter Android ID e desbloquear caso tenha sido deletado anteriormente
+    try {
+      const androidId = execSync('adb shell settings get secure android_id', { encoding: 'utf-8', timeout: 5000 }).trim()
+      if (androidId && androidId !== 'null') {
+        const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+        const wsPort = process.env.WEBSOCKET_PORT || '3001'
+        await fetch(`http://${wsHost}:${wsPort}/api/devices/${androidId}/unblock`, { method: 'POST' }).catch(() => {})
+        steps.push(`Android ID: ${androidId} — desbloqueado se necessário`)
+      }
+    } catch { /* ignora se falhar */ }
+
     // 1b. Desinstalar MDM anterior (reinstalação limpa para aplicar correções)
     try {
       execSync('adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver', { encoding: 'utf-8', timeout: 5000 })

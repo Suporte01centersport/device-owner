@@ -18,7 +18,6 @@ interface ScheduledCommand {
 const COMMAND_TYPES = [
   { id: 'restart', label: 'Reiniciar', icon: '🔄' },
   { id: 'lock', label: 'Bloquear', icon: '🔒' },
-  { id: 'update-app', label: 'Atualizar App', icon: '📦' },
   { id: 'update-mdm', label: 'Atualização MDM', icon: '📥' },
   { id: 'clear-cache', label: 'Limpar Cache', icon: '🧹' },
   { id: 'send-message', label: 'Enviar Mensagem', icon: '💬' },
@@ -375,8 +374,8 @@ export default function ScheduledCommandsPage() {
                   <span
                     className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                       cmd.status === 'active'
-                        ? 'bg-green-500/20 text-green-400'
-                        : 'bg-gray-500/20 text-gray-400'
+                        ? 'bg-green-500/150/150/20 text-green-400'
+                        : 'bg-[var(--surface-elevated)]0/20 text-[var(--text-muted)]'
                     }`}
                   >
                     {cmd.status === 'active' ? 'Ativo' : 'Inativo'}
@@ -408,7 +407,7 @@ export default function ScheduledCommandsPage() {
                 <div className="flex justify-end pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
                   <button
                     onClick={() => handleDelete(cmd.id)}
-                    className="px-3 py-1 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/10 transition-colors"
+                    className="px-3 py-1 rounded-lg text-xs font-medium text-red-400 hover:bg-red-500/150/150/10 transition-colors"
                   >
                     Excluir
                   </button>

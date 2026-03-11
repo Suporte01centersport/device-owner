@@ -246,6 +246,16 @@
             android:excludeFromRecents="true"
             android:taskAffinity="" />
 
+        <!-- Tela de desbloqueio USB - pede senha 7410 quando USB é conectado com bloqueio ativo -->
+        <activity
+            android:name=".UsbUnlockActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MDMLauncher.LockScreen"
+            android:excludeFromRecents="true"
+            android:taskAffinity="" />
+
+        <!-- UsbConnectionReceiver registrado dinamicamente no WebSocketService -->
+
         <!-- Tela de bloqueio com cadeado - Lock Task Mode impede sair até desbloqueio remoto -->
         <activity
             android:name=".LockScreenActivity"

@@ -111,7 +111,7 @@ export default function UEMCard({ computer, onClick, onDelete, onRemoteAction }:
             <span className="text-sm text-secondary">N/D</span>
           ) : (
             <div className="flex items-center gap-2">
-              <div className="w-16 h-2 rounded-full bg-gray-200">
+              <div className="w-16 h-2 rounded-full bg-[var(--border)]">
                 <div 
                   className={`h-full rounded-full ${
                     memoryPercentage > 80 ? 'bg-error' :

@@ -481,7 +481,7 @@ export default function PoliciesPage() {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {groups.map((group) => (
-                <div key={group.id} className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 transition-colors">
+                <div key={group.id} className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5 transition-colors">
                   <div className="flex items-center gap-3 min-w-0 cursor-pointer" onClick={() => { setSelectedGroup(group); setIsGroupModalOpen(true) }}>
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ backgroundColor: (group.color || '#3B82F6') + '33' }}>
                       {getGroupIcon(group.name)}
@@ -571,7 +571,7 @@ export default function PoliciesPage() {
                             </div>
                           </div>
                           <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
-                            policy.policyType === 'block' ? 'bg-red-500/20 text-red-400' : policy.policyType === 'require' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
+                            policy.policyType === 'block' ? 'bg-red-500/150/150/20 text-red-400' : policy.policyType === 'require' ? 'bg-green-500/150/150/20 text-green-400' : 'bg-blue-500/150/150/20 text-blue-400'
                           }`}>
                             {policy.policyType === 'block' ? 'Bloqueado' : policy.policyType === 'require' ? 'Obrigatório' : 'Permitido'}
                           </span>
@@ -632,7 +632,7 @@ export default function PoliciesPage() {
                         loadData()
                       }
                     }}
-                    className="px-4 py-1.5 bg-[var(--primary)] text-black font-semibold rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80 transition-colors"
+                    className="px-4 py-1.5 bg-[var(--primary)] text-[var(--text-primary)] font-semibold rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80 transition-colors"
                   >
                     Atribuir
                   </button>
@@ -667,7 +667,7 @@ export default function PoliciesPage() {
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-start">
                 <div 
-                  className="w-12 h-12 rounded-xl mr-3 flex items-center justify-center text-2xl bg-white/20 border-2 border-white/50"
+                  className="w-12 h-12 rounded-xl mr-3 flex items-center justify-center text-2xl bg-[var(--surface)]/20 border-2 border-white/50"
                 >
                   {getGroupIcon(group.name)}
                 </div>
@@ -689,19 +689,19 @@ export default function PoliciesPage() {
 
             {/* Info do grupo */}
             <div className="mt-2 grid grid-cols-2 gap-3 text-sm">
-              <div className="p-3 rounded bg-white/20">
+              <div className="p-3 rounded bg-[var(--surface)]/20">
                 <div className="text-white/90">Dispositivos</div>
                 <div className="text-lg font-semibold text-white">{group.deviceCount}</div>
               </div>
-              <div className="p-3 rounded bg-white/20">
+              <div className="p-3 rounded bg-[var(--surface)]/20">
                 <div className="text-white/90">Políticas</div>
                 <div className="text-lg font-semibold text-white">{group.appPolicies.length}</div>
               </div>
-              <div className="p-3 rounded bg-white/20">
+              <div className="p-3 rounded bg-[var(--surface)]/20">
                 <div className="text-white/90">Média Bateria</div>
                 <div className="text-lg font-semibold text-white">{Math.round(Number(groupStats[group.id]?.avg_battery_level || 0))}%</div>
               </div>
-              <div className="p-3 rounded bg-white/20">
+              <div className="p-3 rounded bg-[var(--surface)]/20">
                 <div className="text-white/90">Total / Online</div>
                 <div className="text-lg font-semibold text-white">
                   {Number(groupStats[group.id]?.total_devices || group.deviceCount)} / {Number(groupStats[group.id]?.online_devices || 0)}
@@ -787,7 +787,7 @@ export default function PoliciesPage() {
                       </button>
                       <button
                         onClick={() => setSelectedDeviceIds([])}
-                        className="text-xs px-3 py-1 rounded bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-colors"
+                        className="text-xs px-3 py-1 rounded bg-[var(--surface)]/10 text-[var(--text-secondary)] hover:bg-[var(--surface)]/20 transition-colors"
                       >
                         Limpar
                       </button>
@@ -803,7 +803,7 @@ export default function PoliciesPage() {
                           className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${
                             isSelected
                               ? 'border-[var(--primary)] bg-[var(--primary)]/10'
-                              : 'border-transparent bg-white/5 hover:bg-white/10'
+                              : 'border-transparent bg-[var(--surface)]/5 hover:bg-[var(--surface)]/10'
                           }`}
                         >
                           <input
@@ -855,7 +855,7 @@ export default function PoliciesPage() {
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <span className="text-xl flex-shrink-0">{item.icon}</span>
@@ -871,8 +871,8 @@ export default function PoliciesPage() {
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -887,16 +887,15 @@ export default function PoliciesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
                     { key: 'wifiDisabled', label: 'Bloquear Config. WiFi', desc: 'Impedir alteração de redes WiFi', icon: '📶' },
-                    { key: 'bluetoothDisabled', label: 'Bloquear Config. Bluetooth', desc: 'Impedir alterar configurações Bluetooth', icon: '🔵' },
-                    { key: 'bluetoothPairingDisabled', label: 'Bloquear Pareamento BT', desc: 'Impedir parear dispositivos (barcode, fones, etc)', icon: '🚫' },
+                    { key: 'bluetoothPairingDisabled', label: 'Bloquear Pareamento BT', desc: 'Impedir parear com dispositivos não autorizados (exceto barcode scanners)', icon: '🔵' },
                     { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
                     { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
-                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir transferência de dados via USB', icon: '🔌' },
+                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir USB completo (dados + depuração). Senha 7410 para liberar no dispositivo', icon: '🔌' },
                     { key: 'airplaneModeDisabled', label: 'Bloquear Modo Avião', desc: 'Impedir ligar/desligar modo avião', icon: '✈️' },
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <span className="text-xl flex-shrink-0">{item.icon}</span>
@@ -912,8 +911,8 @@ export default function PoliciesPage() {
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -941,7 +940,7 @@ export default function PoliciesPage() {
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0 flex-1">
                         <span className="text-xl flex-shrink-0">{item.icon}</span>
@@ -957,8 +956,8 @@ export default function PoliciesPage() {
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -1018,7 +1017,7 @@ export default function PoliciesPage() {
                     }
                   }}
                   disabled={isSavingRestrictions}
-                  className="px-6 py-2.5 bg-[var(--primary)] text-black font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="px-6 py-2.5 bg-[var(--primary)] text-[var(--text-primary)] font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {isSavingRestrictions ? (
                     <>
@@ -1070,7 +1069,7 @@ export default function PoliciesPage() {
                     return (
                       <label
                         key={policy.id || policy.packageName}
-                        className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                        className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0 flex-1">
                           <span className="text-xl flex-shrink-0">
@@ -1100,8 +1099,8 @@ export default function PoliciesPage() {
                             }}
                             className="sr-only peer"
                           />
-                          <div className={`w-11 h-6 rounded-full transition-colors ${isAllowed ? 'bg-[var(--primary)]' : 'bg-red-500/60'}`}></div>
-                          <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isAllowed ? 'left-[1.375rem]' : 'left-0.5'}`}></div>
+                          <div className={`w-11 h-6 rounded-full transition-colors ${isAllowed ? 'bg-[var(--primary)]' : 'bg-red-500/150/150/60'}`}></div>
+                          <div className={`absolute top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform ${isAllowed ? 'left-[1.375rem]' : 'left-0.5'}`}></div>
                         </div>
                       </label>
                     )
@@ -1136,7 +1135,7 @@ export default function PoliciesPage() {
               </button>
             </div>
             {createGroupError && (
-              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex justify-between items-start gap-2">
+              <div className="mb-4 p-3 bg-red-500/150/150/10 border border-red-500/30 rounded-lg flex justify-between items-start gap-2">
                 <p className="text-sm text-red-400 flex-1">{createGroupError}</p>
                 <button
                   onClick={() => setCreateGroupError(null)}

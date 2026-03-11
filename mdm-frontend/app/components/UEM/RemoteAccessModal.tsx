@@ -166,14 +166,14 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
       }}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--surface)] rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex justify-between items-center">
+        <div className="sticky top-0 bg-[var(--surface)] border-b border-[var(--border)] p-6 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-primary">Acesso Remoto - {computer.name}</h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl"
+            className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-2xl"
           >
             ×
           </button>
@@ -186,15 +186,15 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
               <p className="mt-4 text-secondary">Carregando informações de acesso remoto...</p>
             </div>
           ) : error ? (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-              <p className="text-red-800">{error}</p>
+            <div className="bg-red-500/150/150/15 border border-red-500/30 rounded-lg p-4">
+              <p className="text-red-300">{error}</p>
             </div>
           ) : (
             <div className="space-y-6">
               {/* AnyDesk Section */}
               <div className="card p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-blue-500 rounded-lg flex items-center justify-center">
+                  <div className="w-12 h-12 bg-blue-500/150/150 rounded-lg flex items-center justify-center">
                     <span className="text-white text-xl">🖥️</span>
                   </div>
                   <div>
@@ -206,7 +206,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                 {remoteInfo?.anydeskInstalled ? (
                   <div className="space-y-4">
                     {remoteInfo.anydeskId ? (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <div className="bg-green-500/150/150/15 border border-green-500/30 rounded-lg p-4">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm text-secondary mb-1">ID do AnyDesk:</p>
@@ -226,8 +226,8 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                         </p>
                       </div>
                     ) : (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <p className="text-yellow-800 mb-3">
+                      <div className="bg-yellow-500/150/150/15 border border-yellow-500/30 rounded-lg p-4">
+                        <p className="text-yellow-300 mb-3">
                           AnyDesk está instalado, mas não está rodando ou não foi possível obter o ID.
                         </p>
                         <button
@@ -240,8 +240,8 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                     )}
                   </div>
                 ) : (
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                    <p className="text-yellow-800 mb-3">
+                  <div className="bg-yellow-500/150/150/15 border border-yellow-500/30 rounded-lg p-4">
+                    <p className="text-yellow-300 mb-3">
                       AnyDesk não está instalado neste computador.
                     </p>
                     <p className="text-sm text-secondary mb-3">
@@ -327,7 +327,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                   )}
 
                   {remoteInfo?.rdpEnabled && computer.ipAddress && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div className="bg-blue-500/150/150/15 border border-blue-500/30 rounded-lg p-4">
                       <p className="text-sm text-secondary mb-2">Conectar usando:</p>
                       <p className="text-lg font-mono text-primary">
                         mstsc /v:{computer.ipAddress}
@@ -343,7 +343,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
               {/* Acesso Remoto Integrado */}
               <div className="card p-6">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-green-500 rounded-lg flex items-center justify-center">
+                  <div className="w-12 h-12 bg-green-500/150/150 rounded-lg flex items-center justify-center">
                     <span className="text-white text-xl">🖥️</span>
                   </div>
                   <div>
@@ -388,7 +388,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
               </div>
 
               {/* Instructions */}
-              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-4">
                 <h4 className="font-bold text-red-600 mb-2">📋 Instruções</h4>
                 <ul className="text-sm text-secondary space-y-1 list-disc list-inside">
                   <li><strong>Acesso Remoto Integrado:</strong> Clique no botão acima para conectar e controlar o computador diretamente no navegador</li>
@@ -401,7 +401,7 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-gray-50 border-t border-gray-200 p-6 flex justify-end gap-3">
+        <div className="sticky bottom-0 bg-[var(--surface-elevated)] border-t border-[var(--border)] p-6 flex justify-end gap-3">
           <button
             onClick={onClose}
             className="btn btn-secondary"

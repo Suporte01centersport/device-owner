@@ -39,13 +39,13 @@ const SEVERITY_FILTERS = [
 function getSeverityClasses(severity: string): string {
   switch (severity) {
     case 'critical':
-      return 'bg-red-500/20 text-red-400 border-red-500/30'
+      return 'bg-red-500/150/150/20 text-red-400 border-red-500/30'
     case 'warning':
-      return 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30'
+      return 'bg-yellow-500/150/150/20 text-yellow-400 border-yellow-500/30'
     case 'info':
-      return 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+      return 'bg-blue-500/150/150/20 text-blue-400 border-blue-500/30'
     default:
-      return 'bg-white/10 text-white/80 border-white/20'
+      return 'bg-[var(--surface)]/10 text-white/80 border-white/20'
   }
 }
 
@@ -226,7 +226,7 @@ export default function AlertsPage() {
             <h1 className="text-2xl font-bold text-white flex items-center gap-2">
               🔔 Alertas
               {unreadCount > 0 && (
-                <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500 text-white">
+                <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-xs font-bold bg-red-500/150/150 text-white">
                   {unreadCount}
                 </span>
               )}
@@ -265,7 +265,7 @@ export default function AlertsPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   typeFilter === filter.id
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20 border border-white/20'
+                    : 'bg-[var(--surface)]/10 text-white/80 hover:bg-[var(--surface)]/20 border border-white/20'
                 }`}
               >
                 {filter.label}
@@ -284,7 +284,7 @@ export default function AlertsPage() {
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   severityFilter === filter.id
                     ? 'bg-blue-600 text-white shadow-md'
-                    : 'bg-white/10 text-white/80 hover:bg-white/20 border border-white/20'
+                    : 'bg-[var(--surface)]/10 text-white/80 hover:bg-[var(--surface)]/20 border border-white/20'
                 }`}
               >
                 {filter.label}
@@ -301,7 +301,7 @@ export default function AlertsPage() {
           <span className="ml-3 text-white/80">Carregando alertas...</span>
         </div>
       ) : alerts.length === 0 ? (
-        <div className="card bg-white/10 border border-white/20 rounded-xl p-12 flex flex-col items-center justify-center text-white/60">
+        <div className="card bg-[var(--surface)]/10 border border-white/20 rounded-xl p-12 flex flex-col items-center justify-center text-white/60">
           <span className="text-4xl mb-3">🔔</span>
           <p className="text-lg">Nenhum alerta encontrado</p>
           <p className="text-sm mt-1">Quando houver alertas, eles aparecerão aqui.</p>
@@ -311,9 +311,9 @@ export default function AlertsPage() {
           {alerts.map((alert) => (
             <div
               key={alert.id}
-              className={`card bg-white/10 border border-white/20 rounded-xl p-4 border-l-4 ${getSeverityCardBorder(alert.severity)} ${
+              className={`card bg-[var(--surface)]/10 border border-white/20 rounded-xl p-4 border-l-4 ${getSeverityCardBorder(alert.severity)} ${
                 alert.resolved ? 'opacity-60' : ''
-              } ${!alert.read ? 'ring-1 ring-white/20' : ''} transition-all hover:bg-white/[0.12]`}
+              } ${!alert.read ? 'ring-1 ring-white/20' : ''} transition-all hover:bg-[var(--surface)]/[0.12]`}
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
@@ -325,10 +325,10 @@ export default function AlertsPage() {
                         {getSeverityIcon(alert.severity)} {getSeverityLabel(alert.severity)}
                       </span>
                       {!alert.read && (
-                        <span className="inline-block w-2 h-2 rounded-full bg-blue-500 flex-shrink-0"></span>
+                        <span className="inline-block w-2 h-2 rounded-full bg-blue-500/150/150 flex-shrink-0"></span>
                       )}
                       {alert.resolved && (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/150/150/20 text-green-400 border border-green-500/30">
                           ✅ Resolvido
                         </span>
                       )}
@@ -341,7 +341,7 @@ export default function AlertsPage() {
                   {!alert.read && (
                     <button
                       onClick={() => handleMarkAsRead(alert.id)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-white/10 text-white/80 hover:bg-white/20 border border-white/20 transition-all"
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium bg-[var(--surface)]/10 text-white/80 hover:bg-[var(--surface)]/20 border border-white/20 transition-all"
                     >
                       Marcar como lido
                     </button>

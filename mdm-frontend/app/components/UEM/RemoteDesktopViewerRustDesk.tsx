@@ -563,13 +563,13 @@ export default function RemoteDesktopViewerRustDesk({
       
       {/* Overlay de informações */}
       {error && (
-        <div className="absolute top-4 left-4 bg-red-500 text-white px-4 py-2 rounded">
+        <div className="absolute top-4 left-4 bg-red-500/150/150 text-white px-4 py-2 rounded">
           {error}
         </div>
       )}
       
       {!sessionActive && (
-        <div className="absolute top-4 right-4 bg-yellow-500 text-white px-4 py-2 rounded">
+        <div className="absolute top-4 right-4 bg-yellow-500/150/150 text-white px-4 py-2 rounded">
           Conectando...
         </div>
       )}

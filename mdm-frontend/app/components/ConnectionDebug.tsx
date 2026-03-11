@@ -58,7 +58,7 @@ export default function ConnectionDebug({
       case 'reconnecting': return 'text-orange-400'
       case 'fallback': return 'text-blue-400'
       case 'disconnected': return 'text-red-400'
-      default: return 'text-gray-400'
+      default: return 'text-[var(--text-muted)]'
     }
   }
 
@@ -78,7 +78,7 @@ export default function ConnectionDebug({
       <div className="bg-glass rounded-lg border border-white/10 shadow-lg">
         {/* Header */}
         <div 
-          className="flex items-center justify-between p-3 cursor-pointer hover:bg-white/5 transition-colors"
+          className="flex items-center justify-between p-3 cursor-pointer hover:bg-[var(--surface)]/5 transition-colors"
           onClick={() => setIsExpanded(!isExpanded)}
         >
           <div className="flex items-center space-x-2">
@@ -98,12 +98,12 @@ export default function ConnectionDebug({
                   e.stopPropagation()
                   onForceReconnect()
                 }}
-                className="text-xs px-2 py-1 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors border border-blue-500/20"
+                className="text-xs px-2 py-1 bg-blue-500/150/150/10 text-blue-400 rounded-lg hover:bg-blue-500/150/150/20 transition-colors border border-blue-500/20"
               >
                 🔄
               </button>
             )}
-            <span className="text-gray-400 text-xs">
+            <span className="text-[var(--text-muted)] text-xs">
               {isExpanded ? '▼' : '▶'}
             </span>
           </div>
@@ -117,34 +117,34 @@ export default function ConnectionDebug({
               <h4 className="text-sm font-semibold text-white">Status da Conexão</h4>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">WebSocket:</span>
+                  <span className="text-[var(--text-muted)]">WebSocket:</span>
                   <span className={isConnected ? 'text-green-700' : 'text-red-400'}>
                     {isConnected ? 'Ativo' : 'Inativo'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">HTTP Fallback:</span>
-                  <span className={isPolling ? 'text-blue-400' : 'text-gray-400'}>
+                  <span className="text-[var(--text-muted)]">HTTP Fallback:</span>
+                  <span className={isPolling ? 'text-blue-400' : 'text-[var(--text-muted)]'}>
                     {isPolling ? 'Ativo' : 'Inativo'}
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">Tentativas WS:</span>
+                  <span className="text-[var(--text-muted)]">Tentativas WS:</span>
                   <span className="text-orange-400">{reconnectAttempts}</span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">Tentativas HTTP:</span>
+                  <span className="text-[var(--text-muted)]">Tentativas HTTP:</span>
                   <span className="text-blue-400">{pollingAttempts}</span>
                 </div>
                 {queueStatus && (
                   <>
                     <div className="flex justify-between py-1">
-                      <span className="text-gray-400">Fila de Msgs:</span>
+                      <span className="text-[var(--text-muted)]">Fila de Msgs:</span>
                       <span className="text-purple-400">{queueStatus.size}/{queueStatus.maxSize}</span>
                     </div>
                     <div className="flex justify-between py-1">
-                      <span className="text-gray-400">Processando:</span>
-                      <span className={queueStatus.processing ? 'text-yellow-400' : 'text-gray-400'}>
+                      <span className="text-[var(--text-muted)]">Processando:</span>
+                      <span className={queueStatus.processing ? 'text-yellow-400' : 'text-[var(--text-muted)]'}>
                         {queueStatus.processing ? 'Sim' : 'Não'}
                       </span>
                     </div>
@@ -163,7 +163,7 @@ export default function ConnectionDebug({
                       <span>{getStatusIcon(entry.status)}</span>
                       <span className="text-gray-300">{entry.details}</span>
                     </div>
-                    <span className="text-gray-500">
+                    <span className="text-[var(--text-secondary)]">
                       {entry.timestamp.toLocaleTimeString()}
                     </span>
                   </div>
@@ -176,7 +176,7 @@ export default function ConnectionDebug({
               <h4 className="text-sm font-semibold text-white">Informações de Rede</h4>
               <div className="text-xs space-y-1">
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">WebSocket URL:</span>
+                  <span className="text-[var(--text-muted)]">WebSocket URL:</span>
                   <span className="text-gray-300 font-mono">
                     {typeof window !== 'undefined' 
                       ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -187,7 +187,7 @@ export default function ConnectionDebug({
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">API URL:</span>
+                  <span className="text-[var(--text-muted)]">API URL:</span>
                   <span className="text-gray-300 font-mono">
                     {typeof window !== 'undefined'
                       ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
@@ -198,7 +198,7 @@ export default function ConnectionDebug({
                   </span>
                 </div>
                 <div className="flex justify-between py-1">
-                  <span className="text-gray-400">User Agent:</span>
+                  <span className="text-[var(--text-muted)]">User Agent:</span>
                   <span className="text-gray-300 text-xs truncate max-w-32">
                     {typeof window !== 'undefined' ? window.navigator.userAgent.substring(0, 30) + '...' : 'N/A'}
                   </span>
@@ -215,9 +215,9 @@ export default function ConnectionDebug({
                     <div key={msg.id} className="flex items-center justify-between text-xs py-1">
                       <div className="flex items-center space-x-2">
                         <span className={`px-2 py-1 rounded-lg text-xs ${
-                          msg.priority === 'high' ? 'bg-red-500/10 text-red-400 border border-red-500/20' :
-                          msg.priority === 'normal' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20' :
-                          'bg-gray-500/10 text-gray-400 border border-gray-500/20'
+                          msg.priority === 'high' ? 'bg-red-500/150/150/10 text-red-400 border border-red-500/20' :
+                          msg.priority === 'normal' ? 'bg-yellow-500/150/150/10 text-yellow-400 border border-yellow-500/20' :
+                          'bg-[var(--surface-elevated)]0/10 text-[var(--text-muted)] border border-gray-500/20'
                         }`}>
                           {msg.priority}
                         </span>
@@ -226,17 +226,17 @@ export default function ConnectionDebug({
                         </span>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <span className="text-gray-500">
+                        <span className="text-[var(--text-secondary)]">
                           {msg.attempts}/{msg.maxAttempts}
                         </span>
-                        <span className="text-gray-500">
+                        <span className="text-[var(--text-secondary)]">
                           {Math.round(msg.age / 1000)}s
                         </span>
                       </div>
                     </div>
                   ))}
                   {queueStatus.messages.length > 5 && (
-                    <div className="text-xs text-gray-500 text-center">
+                    <div className="text-xs text-[var(--text-secondary)] text-center">
                       +{queueStatus.messages.length - 5} mais...
                     </div>
                   )}
@@ -248,7 +248,7 @@ export default function ConnectionDebug({
             <div className="flex space-x-2">
               <button
                 onClick={onForceReconnect}
-                className="flex-1 text-xs px-3 py-2 bg-blue-500/10 text-blue-400 rounded-lg hover:bg-blue-500/20 transition-colors border border-blue-500/20"
+                className="flex-1 text-xs px-3 py-2 bg-blue-500/150/150/10 text-blue-400 rounded-lg hover:bg-blue-500/150/150/20 transition-colors border border-blue-500/20"
               >
                 🔄 Reconectar
               </button>
@@ -256,7 +256,7 @@ export default function ConnectionDebug({
                 onClick={() => {
                   setConnectionHistory([])
                 }}
-                className="flex-1 text-xs px-3 py-2 bg-gray-500/10 text-gray-400 rounded-lg hover:bg-gray-500/20 transition-colors border border-gray-500/20"
+                className="flex-1 text-xs px-3 py-2 bg-[var(--surface-elevated)]0/10 text-[var(--text-muted)] rounded-lg hover:bg-[var(--surface-elevated)]0/20 transition-colors border border-gray-500/20"
               >
                 🗑️ Limpar
               </button>

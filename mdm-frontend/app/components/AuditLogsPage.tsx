@@ -57,15 +57,15 @@ function getActionColor(action: string): string {
 
 function getActionBadgeClasses(action: string): string {
   if (action.includes('added') || action.includes('connected') || action.includes('configured')) {
-    return 'bg-green-500/20 text-green-400 border border-green-500/30'
+    return 'bg-green-500/150/150/20 text-green-400 border border-green-500/30'
   }
   if (action.includes('updated') || action.includes('changed') || action.includes('assigned') || action.includes('backup') || action.includes('sent')) {
-    return 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+    return 'bg-yellow-500/150/150/20 text-yellow-400 border border-yellow-500/30'
   }
   if (action.includes('deleted') || action.includes('locked') || action.includes('disconnected')) {
-    return 'bg-red-500/20 text-red-400 border border-red-500/30'
+    return 'bg-red-500/150/150/20 text-red-400 border border-red-500/30'
   }
-  return 'bg-white/10 text-[var(--text-primary)] border border-white/20'
+  return 'bg-[var(--surface)]/10 text-[var(--text-primary)] border border-white/20'
 }
 
 function formatDateTime(timestamp: string): string {
@@ -154,7 +154,7 @@ export default function AuditLogsPage() {
             className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
               activeFilter === filter.id
                 ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-white/10 text-white/80 hover:bg-white/20 border border-white/20'
+                : 'bg-[var(--surface)]/10 text-white/80 hover:bg-[var(--surface)]/20 border border-white/20'
             }`}
           >
             {filter.label}
@@ -163,7 +163,7 @@ export default function AuditLogsPage() {
       </div>
 
       {/* Tabela */}
-      <div className="card bg-white/10 border border-white/20 rounded-xl overflow-hidden">
+      <div className="card bg-[var(--surface)]/10 border border-white/20 rounded-xl overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -179,7 +179,7 @@ export default function AuditLogsPage() {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-white/20 bg-white/5">
+                <tr className="border-b border-white/20 bg-[var(--surface)]/5">
                   <th className="text-left px-4 py-3 text-sm font-semibold text-white/80">Data/Hora</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-white/80">Ação</th>
                   <th className="text-left px-4 py-3 text-sm font-semibold text-white/80">Tipo</th>
@@ -191,7 +191,7 @@ export default function AuditLogsPage() {
                 {logs.map((log) => (
                   <tr
                     key={log.id}
-                    className="border-b border-white/10 hover:bg-white/5 transition-colors"
+                    className="border-b border-white/10 hover:bg-[var(--surface)]/5 transition-colors"
                   >
                     <td className="px-4 py-3 text-sm text-white/70 whitespace-nowrap">
                       {formatDateTime(log.timestamp)}
@@ -230,8 +230,8 @@ export default function AuditLogsPage() {
               disabled={currentPage === 1}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 currentPage === 1
-                  ? 'bg-white/5 text-white/30 cursor-not-allowed'
-                  : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
+                  ? 'bg-[var(--surface)]/5 text-white/30 cursor-not-allowed'
+                  : 'bg-[var(--surface)]/10 text-white hover:bg-[var(--surface)]/20 border border-white/20'
               }`}
             >
               ← Anterior
@@ -254,7 +254,7 @@ export default function AuditLogsPage() {
                   className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                     currentPage === pageNum
                       ? 'bg-blue-600 text-white shadow-md'
-                      : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
+                      : 'bg-[var(--surface)]/10 text-white hover:bg-[var(--surface)]/20 border border-white/20'
                   }`}
                 >
                   {pageNum}
@@ -266,8 +266,8 @@ export default function AuditLogsPage() {
               disabled={currentPage === totalPages}
               className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                 currentPage === totalPages
-                  ? 'bg-white/5 text-white/30 cursor-not-allowed'
-                  : 'bg-white/10 text-white hover:bg-white/20 border border-white/20'
+                  ? 'bg-[var(--surface)]/5 text-white/30 cursor-not-allowed'
+                  : 'bg-[var(--surface)]/10 text-white hover:bg-[var(--surface)]/20 border border-white/20'
               }`}
             >
               Próxima →

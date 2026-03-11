@@ -760,8 +760,8 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl ${
-                  stat.changeType === 'positive' ? 'bg-green-50' :
-                  stat.changeType === 'negative' ? 'bg-red-50' : 'bg-[var(--surface-elevated)]'
+                  stat.changeType === 'positive' ? 'bg-green-500/150/150/15' :
+                  stat.changeType === 'negative' ? 'bg-red-500/150/150/15' : 'bg-[var(--surface-elevated)]'
                 }`}>
                   {stat.icon}
                 </div>
@@ -908,7 +908,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
           {/* Chart legend */}
           <div className="flex justify-center mt-4 gap-6">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-blue-500 rounded"></div>
+              <div className="w-3 h-3 bg-blue-500/150/150 rounded"></div>
               <span className="text-xs text-secondary">Celulares Online</span>
             </div>
             <div className="flex items-center gap-2">
@@ -980,8 +980,8 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               recentActivities.map((activity) => (
                 <div key={activity.id} className="flex items-start gap-3 hover:bg-[var(--surface-elevated)] p-2 rounded-lg transition-colors duration-200">
                   <div className={`w-2 h-2 rounded-full mt-2 ${
-                    activity.type === 'success' ? 'bg-green-500' :
-                    activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                    activity.type === 'success' ? 'bg-green-500/150/150' :
+                    activity.type === 'warning' ? 'bg-yellow-500/150/150' : 'bg-blue-500/150/150'
                   }`} />
                   <div className="text-lg">{activity.icon}</div>
                   <div className="flex-1 min-w-0">
@@ -1066,9 +1066,9 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                   <div key={deviceId} className="flex items-center justify-between p-3 bg-[var(--surface-elevated)] rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${
-                        status.status === 'received' ? 'bg-green-500' :
-                        status.status === 'sent' ? 'bg-blue-500' :
-                        status.status === 'error' ? 'bg-red-500' : 'bg-yellow-500'
+                        status.status === 'received' ? 'bg-green-500/150/150' :
+                        status.status === 'sent' ? 'bg-blue-500/150/150' :
+                        status.status === 'error' ? 'bg-red-500/150/150' : 'bg-yellow-500/150/150'
                       }`} />
                       <div>
                         <div className="text-sm font-medium text-primary">{deviceName}</div>
@@ -1094,7 +1094,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              isConnected ? 'bg-green-500' : 'bg-red-500'
+              isConnected ? 'bg-green-500/150/150' : 'bg-red-500/150/150'
             }`}>
               <span className="text-white text-xl">{isConnected ? '✓' : '✗'}</span>
             </div>
@@ -1114,7 +1114,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-              avgBattery > 50 ? 'bg-green-500' : avgBattery > 20 ? 'bg-yellow-500' : 'bg-red-500'
+              avgBattery > 50 ? 'bg-green-500/150/150' : avgBattery > 20 ? 'bg-yellow-500/150/150' : 'bg-red-500/150/150'
             }`}>
               <span className="text-white text-xl">🔋</span>
             </div>
@@ -1135,7 +1135,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
 
         <div className="card p-6">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+            <div className="w-10 h-10 bg-blue-500/150/150 rounded-lg flex items-center justify-center">
               <span className="text-white text-xl">📊</span>
             </div>
             <div>
@@ -1224,11 +1224,11 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
             </div>
             <div className="flex gap-6">
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <div className="w-3 h-3 rounded-full bg-green-500/150/150" />
                 <span className="text-sm text-[var(--text-secondary)]">Online ({onlineDevices})</span>
               </div>
               <div className="flex items-center gap-2">
-                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <div className="w-3 h-3 rounded-full bg-red-500/150/150" />
                 <span className="text-sm text-[var(--text-secondary)]">Offline ({offlineDevices})</span>
               </div>
             </div>
@@ -1246,7 +1246,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               </div>
               <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-red-500 rounded-full transition-all duration-500"
+                  className="h-full bg-red-500/150/150 rounded-full transition-all duration-500"
                   style={{ width: `${batteryMax > 0 ? (batteryLow / batteryMax) * 100 : 0}%` }}
                 />
               </div>
@@ -1258,7 +1258,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               </div>
               <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-yellow-500 rounded-full transition-all duration-500"
+                  className="h-full bg-yellow-500/150/150 rounded-full transition-all duration-500"
                   style={{ width: `${batteryMax > 0 ? (batteryMid / batteryMax) * 100 : 0}%` }}
                 />
               </div>
@@ -1270,7 +1270,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               </div>
               <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  className="h-full bg-green-500/150/150 rounded-full transition-all duration-500"
                   style={{ width: `${batteryMax > 0 ? (batteryHigh / batteryMax) * 100 : 0}%` }}
                 />
               </div>
@@ -1286,8 +1286,8 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               recentAlerts.map((alert) => (
                 <div key={alert.id} className="flex items-start gap-3 p-3 bg-[var(--surface-elevated)] rounded-lg">
                   <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                    alert.severity === 'critical' ? 'bg-red-500' :
-                    alert.severity === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                    alert.severity === 'critical' ? 'bg-red-500/150/150' :
+                    alert.severity === 'warning' ? 'bg-yellow-500/150/150' : 'bg-blue-500/150/150'
                   }`} />
                   <div className="flex-1 min-w-0">
                     <div className={`text-sm font-medium truncate ${
@@ -1429,7 +1429,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               </div>
               <div className="w-full h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  className="h-full bg-green-500/150/150 rounded-full transition-all duration-500"
                   style={{ width: `${onlinePercent}%` }}
                 />
               </div>
@@ -1443,7 +1443,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               </div>
               <div className="w-full h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
                 <div
-                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  className="h-full bg-blue-500/150/150 rounded-full transition-all duration-500"
                   style={{
                     width: `${combinedDevices.length > 0 ? (combinedDevices.filter(d => !!d.assignedUserName).length / combinedDevices.length) * 100 : 0}%`
                   }}

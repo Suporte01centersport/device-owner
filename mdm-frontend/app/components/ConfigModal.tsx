@@ -369,19 +369,19 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
             </h2>
             <div className="flex items-center gap-1">
               {editingUser && (
-                <button onClick={handleCancelEdit} className="text-xs text-[var(--primary)] hover:opacity-80 px-2 py-1 rounded hover:bg-white/10 transition-colors">Cancelar</button>
+                <button onClick={handleCancelEdit} className="text-xs text-[var(--primary)] hover:opacity-80 px-2 py-1 rounded hover:bg-[var(--surface)]/10 transition-colors">Cancelar</button>
               )}
-              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 rounded-lg w-7 h-7 flex items-center justify-center transition-colors">✕</button>
+              <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--surface)]/10 rounded-lg w-7 h-7 flex items-center justify-center transition-colors">✕</button>
             </div>
           </div>
 
           {loadError && (
-            <div className="mx-4 mt-3 p-2 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs">{loadError}</div>
+            <div className="mx-4 mt-3 p-2 bg-red-500/150/150/10 border border-red-500/30 rounded-lg text-red-400 text-xs">{loadError}</div>
           )}
 
           {/* Balão com ID do usuário quando editando */}
           {editingUser && (
-            <div className="mx-4 mt-3 px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
+            <div className="mx-4 mt-3 px-3 py-2 bg-blue-500/150/150/10 border border-blue-500/30 rounded-lg flex items-center gap-2">
               <span className="text-xs text-blue-400">ID do usuário:</span>
               <span className="text-xs text-blue-300 font-mono select-all">{editingUser.id}</span>
             </div>
@@ -427,10 +427,10 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                       className="flex-1 px-3 py-1.5 border border-[var(--primary)]/30 rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                       autoFocus
                     />
-                    <button onClick={handleUnlockBirthDate} className="px-3 py-1.5 bg-[var(--primary)] hover:opacity-80 text-black text-xs font-semibold rounded-lg transition-colors">
+                    <button onClick={handleUnlockBirthDate} className="px-3 py-1.5 bg-[var(--primary)] hover:opacity-80 text-[var(--text-primary)] text-xs font-semibold rounded-lg transition-colors">
                       Confirmar
                     </button>
-                    <button onClick={() => { setShowAdminPrompt(false); setAdminInput('') }} className="px-2 py-1.5 bg-white/10 hover:bg-white/20 text-[var(--text-primary)] text-xs rounded-lg transition-colors">
+                    <button onClick={() => { setShowAdminPrompt(false); setAdminInput('') }} className="px-2 py-1.5 bg-[var(--surface)]/10 hover:bg-[var(--surface)]/20 text-[var(--text-primary)] text-xs rounded-lg transition-colors">
                       ✕
                     </button>
                   </div>
@@ -525,10 +525,10 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                             }}
                             className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                               isSelected
-                                ? 'bg-[var(--primary)] text-black border-[var(--primary)]'
+                                ? 'bg-[var(--primary)] text-[var(--text-primary)] border-[var(--primary)]'
                                 : isFull
-                                  ? 'bg-red-500/10 border-red-500/40 text-red-400 cursor-not-allowed'
-                                  : 'bg-[var(--surface-elevated)] border-[var(--border)] text-[var(--text-primary)] hover:bg-white/10 cursor-pointer'
+                                  ? 'bg-red-500/150/150/10 border-red-500/40 text-red-400 cursor-not-allowed'
+                                  : 'bg-[var(--surface-elevated)] border-[var(--border)] text-[var(--text-primary)] hover:bg-[var(--surface)]/10 cursor-pointer'
                             }`}
                           >
                             {lt.label}
@@ -573,14 +573,14 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
             <button
               onClick={handleSaveUser}
               disabled={!form.name.trim() || !form.cpf.trim() || isSaving}
-              className="w-full px-4 py-2.5 bg-[var(--primary)] hover:opacity-80 text-black font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full px-4 py-2.5 bg-[var(--primary)] hover:opacity-80 text-[var(--text-primary)] font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {isSaving ? 'Salvando...' : editingUser ? '💾 Salvar Alterações' : '💾 Cadastrar Usuário'}
             </button>
           </div>
 
           <div className="px-4 py-2.5 border-t border-[var(--border)] flex justify-end">
-            <button onClick={onClose} disabled={isSaving} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[var(--text-primary)] rounded-lg text-sm transition-colors disabled:opacity-50">
+            <button onClick={onClose} disabled={isSaving} className="px-3 py-1.5 bg-[var(--surface)]/10 hover:bg-[var(--surface)]/20 text-[var(--text-primary)] rounded-lg text-sm transition-colors disabled:opacity-50">
               {asPage ? 'Voltar' : 'Fechar'}
             </button>
           </div>
@@ -603,7 +603,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
                 {sortedSaved.map((user) => (
                   <div
                     key={user.id}
-                    className={`flex items-start justify-between px-4 py-3.5 hover:bg-white/5 transition-colors cursor-pointer ${editingUser?.id === user.id ? 'bg-[var(--primary)]/10 border-l-2 border-[var(--primary)]' : ''}`}
+                    className={`flex items-start justify-between px-4 py-3.5 hover:bg-[var(--surface)]/5 transition-colors cursor-pointer ${editingUser?.id === user.id ? 'bg-[var(--primary)]/10 border-l-2 border-[var(--primary)]' : ''}`}
                     onClick={() => handleEditUser(user)}
                   >
                     <div className="flex items-start gap-3 min-w-0 flex-1">

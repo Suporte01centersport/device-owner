@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Device, AppInfo } from '../types/device'
 import LocationView from './LocationView'
 import ReportsTab from './ReportsTab'
@@ -158,11 +158,15 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     loadDeviceGroups()
   }, [device.deviceId])
 
+  // Timestamp da última mudança local - ignora syncs do servidor por 3s após toggle
+  const lastLocalChangeRef = useRef(0)
+  const sendTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
   // Sincronizar selectedApps com allowedApps do dispositivo
   useEffect(() => {
+    // Ignorar sync do servidor se houve mudança local recente (evita loop)
+    if (Date.now() - lastLocalChangeRef.current < 3000) return
     if (device.allowedApps) {
-      // selectedApps representa apenas apps individuais (sem os da política de grupo)
-      // Excluir MDM do launcher (não é app para liberar)
       const individualApps = device.allowedApps.filter(app => app !== MDM_PACKAGE && !groupPolicyApps.includes(app))
       setSelectedApps(individualApps)
     }
@@ -198,12 +202,28 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
   }
 
   const handleAppToggle = (packageName: string) => {
+    lastLocalChangeRef.current = Date.now()
+
     setSelectedApps(prev => {
-      if (prev.includes(packageName)) {
-        return prev.filter(pkg => pkg !== packageName)
-      } else {
-        return [...prev, packageName]
-      }
+      const newSelected = prev.includes(packageName)
+        ? prev.filter(pkg => pkg !== packageName)
+        : [...prev, packageName]
+
+      // Debounce: esperar 500ms antes de enviar, cancela envios anteriores
+      if (sendTimeoutRef.current) clearTimeout(sendTimeoutRef.current)
+      sendTimeoutRef.current = setTimeout(() => {
+        const finalApps = Array.from(new Set([...newSelected, ...groupPolicyApps])).filter(p => p !== MDM_PACKAGE)
+        sendMessage({
+          type: 'update_app_permissions',
+          deviceId: device.deviceId,
+          allowedApps: finalApps,
+          individualApps: newSelected,
+          isIndividual: true,
+          timestamp: Date.now()
+        })
+      }, 500)
+
+      return newSelected
     })
   }
 
@@ -538,8 +558,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-primary text-primary bg-blue-50'
-                    : 'border-transparent text-[var(--text-primary)] hover:text-primary hover:bg-border-light'
+                    ? 'border-[var(--primary)] text-[var(--primary)] bg-[var(--surface-elevated)]'
+                    : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--primary)] hover:bg-[var(--surface-elevated)]'
                 }`}
               >
                 <span>{tab.icon}</span>
@@ -650,10 +670,10 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-[var(--text-primary)] font-semibold">👤 Usuário</span>
                         </div>
-                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                        <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-3">
                           <div className="flex flex-col gap-1">
-                            <span className="text-primary font-semibold">{assignedUser.name}</span>
-                            <span className="text-sm text-black">CPF: {assignedUser.cpf}</span>
+                            <span className="text-[var(--text-primary)] font-semibold">{assignedUser.name}</span>
+                            <span className="text-sm text-[var(--text-secondary)]">CPF: {assignedUser.cpf}</span>
                           </div>
                         </div>
                       </div>
@@ -717,8 +737,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     onClick={() => handleLostMode(!device.lostMode)}
                     className={`px-4 py-2 rounded-lg text-sm font-medium ${
                       device.lostMode
-                        ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30'
-                        : 'bg-[var(--primary)] text-black hover:opacity-90'
+                        ? 'bg-red-500/150/150/20 text-red-400 border border-red-500/40 hover:bg-red-500/150/150/30'
+                        : 'bg-[var(--primary)] text-[var(--text-primary)] hover:opacity-90'
                     }`}
                   >
                     {device.lostMode ? 'Desativar' : 'Ativar'}
@@ -726,45 +746,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                 </div>
               </div>
 
-              {/* Configuração de WiFi */}
-              <div className="p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border)]">
-                <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
-                  <span>📶</span> Configurar WiFi Remoto
-                </h4>
-                <div className="space-y-2">
-                  <input
-                    type="text"
-                    placeholder="Nome da rede (SSID)"
-                    value={wifiSSID}
-                    onChange={(e) => setWifiSSID(e.target.value)}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)]"
-                  />
-                  {wifiSecurity !== 'OPEN' && (
-                    <input
-                      type="password"
-                      placeholder="Senha"
-                      value={wifiPassword}
-                      onChange={(e) => setWifiPassword(e.target.value)}
-                      className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)]"
-                    />
-                  )}
-                  <select
-                    value={wifiSecurity}
-                    onChange={(e) => setWifiSecurity(e.target.value)}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)]"
-                  >
-                    <option value="WPA">WPA/WPA2</option>
-                    <option value="WEP">WEP</option>
-                    <option value="OPEN">Aberta (sem senha)</option>
-                  </select>
-                  <button
-                    onClick={handleConfigureWifi}
-                    className="w-full px-4 py-2 bg-[var(--primary)] text-black rounded-lg text-sm font-medium hover:opacity-90"
-                  >
-                    Enviar Configuração
-                  </button>
-                </div>
-              </div>
             </div>
           )}
 
@@ -1010,8 +991,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                   <div className="flex flex-wrap gap-2">
                     {[
                       { id: 'all', label: 'Todas' },
-                      { id: 'user', label: 'Usuário' },
-                      { id: 'system', label: 'Sistema' },
                       { id: 'allowed', label: 'Permitidas' },
                     ].map((filter) => (
                       <button
@@ -1046,7 +1025,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         const isIndividuallySelected = isAppAllowed(app.packageName)
                         return (
                         <div key={app.packageName} className={`card p-4 hover:shadow-lg transition-all duration-200 ${
-                          isIndividuallySelected ? 'ring-2 ring-primary bg-blue-50' : 
+                          isIndividuallySelected ? 'ring-2 ring-[var(--primary)] bg-[var(--primary)]/10' :
                           'hover:bg-[var(--surface-elevated)]'
                         }`}>
                           <div className="flex items-center justify-between">
@@ -1085,13 +1064,13 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                   <span className="text-xs bg-[var(--surface-elevated)] text-[var(--text-secondary)] px-2 py-1 rounded">v{app.versionName || 'N/A'}</span>
                                   {app.isSystemApp && (
-                                    <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">Sistema</span>
+                                    <span className="text-xs bg-orange-500/150/20 text-orange-600 px-2 py-1 rounded">Sistema</span>
                                   )}
                                   {app.isEnabled === false && (
-                                    <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded">Desabilitado</span>
+                                    <span className="text-xs bg-red-500/150/20 text-red-600 px-2 py-1 rounded">Desabilitado</span>
                                   )}
                                   {isAppAllowed(app.packageName) && (
-                                    <span className="text-xs bg-green-100 text-green-600 px-2 py-1 rounded">Permitido</span>
+                                    <span className="text-xs bg-green-500/150/20 text-green-600 px-2 py-1 rounded">Permitido</span>
                                   )}
                                 </div>
                               </div>
@@ -1390,11 +1369,11 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
             </div>
 
             <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <p className="text-sm text-red-700">
+              <div className="bg-red-500/150/150/10 border border-red-500/30 rounded-lg p-4">
+                <p className="text-sm text-red-400">
                   <strong>Atenção:</strong> Esta ação irá remover todos os dados de aplicações do dispositivo <strong>{device.name}</strong>.
                 </p>
-                <p className="text-sm text-red-600 mt-2">
+                <p className="text-sm text-red-400/80 mt-2">
                   Diferente do Factory Reset, o Wipe Seletivo remove apenas os dados de apps sem restaurar o dispositivo para configurações de fábrica.
                 </p>
               </div>

@@ -253,7 +253,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   filterType === 'device'
                     ? 'bg-[var(--primary)] text-white'
-                    : 'bg-white/10 text-[var(--text-primary)] hover:bg-white/20'
+                    : 'bg-[var(--surface)]/10 text-[var(--text-primary)] hover:bg-[var(--surface)]/20'
                 }`}
               >
                 Celular
@@ -269,7 +269,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   filterType === 'group'
                     ? 'bg-[var(--primary)] text-white'
-                    : 'bg-white/10 text-[var(--text-primary)] hover:bg-white/20'
+                    : 'bg-[var(--surface)]/10 text-[var(--text-primary)] hover:bg-[var(--surface)]/20'
                 }`}
               >
                 Grupo
@@ -334,7 +334,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
               type="button"
               onClick={handleAddCustomApp}
               disabled={!customAppInput.trim()}
-              className="px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+              className="px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl hover:bg-[var(--surface)]/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               + Adicionar app
             </button>
@@ -353,7 +353,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                   className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-colors ${
                     mandatory
                       ? 'border-amber-500/40 bg-[var(--surface)]'
-                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-white/5'
+                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface)]/5'
                   }`}
                 >
                   <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -373,7 +373,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                           </span>
                         )}
                         {notInstalled && (
-                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/80 text-white leading-none flex-shrink-0">
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/150/150/80 text-white leading-none flex-shrink-0">
                             Instalar
                           </span>
                         )}
@@ -394,9 +394,9 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
                     <div className={`w-11 h-6 rounded-full transition-colors ${
                       mandatory
                         ? 'bg-amber-500'
-                        : 'bg-white/20 peer-checked:bg-[var(--primary)]'
+                        : 'bg-[var(--surface)]/20 peer-checked:bg-[var(--primary)]'
                     }`}></div>
-                    <div className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    <div className={`absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform ${
                       checked ? 'translate-x-5' : ''
                     }`}></div>
                   </div>
@@ -411,7 +411,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="px-6 py-2.5 bg-[var(--primary)] text-black font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-6 py-2.5 bg-[var(--primary)] text-[var(--text-primary)] font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSaving ? (
                 <>
@@ -426,7 +426,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
         </div>
       ) : (
         <div className="text-center py-12 bg-[var(--surface)] rounded-xl border border-[var(--border)]">
-          <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-20 h-20 bg-[var(--surface)]/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">📱</span>
           </div>
           <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">

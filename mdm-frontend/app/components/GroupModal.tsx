@@ -1262,11 +1262,11 @@ function HistoryTab({ groupId }: HistoryTabProps) {
   const getAlertDisplay = (alertType: string) => {
     switch (alertType) {
       case 'error':
-        return { icon: '🔴', color: 'border-red-200 bg-red-50', textColor: 'text-red-700' }
+        return { icon: '🔴', color: 'border-red-500/30 bg-red-500/150/150/15', textColor: 'text-red-400' }
       case 'warning':
-        return { icon: '⚠️', color: 'border-yellow-200 bg-yellow-50', textColor: 'text-yellow-700' }
+        return { icon: '⚠️', color: 'border-yellow-500/30 bg-yellow-500/150/150/15', textColor: 'text-yellow-400' }
       case 'info':
-        return { icon: 'ℹ️', color: 'border-blue-200 bg-blue-50', textColor: 'text-blue-700' }
+        return { icon: 'ℹ️', color: 'border-blue-500/30 bg-blue-500/150/150/15', textColor: 'text-blue-400' }
       default:
         return { icon: '📌', color: 'border-[var(--border)] bg-[var(--surface-elevated)]', textColor: 'text-[var(--text-primary)]' }
     }
@@ -2365,7 +2365,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                 onClick={() => setActiveTab(tab.id as TabKey)}
                 className={`flex items-center gap-2 px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${
                   activeTab === tab.id
-                    ? 'border-primary text-primary bg-blue-50'
+                    ? 'border-primary text-primary bg-blue-500/150/15'
                     : 'border-transparent text-secondary hover:text-primary hover:bg-border-light'
                 }`}
               >
@@ -2449,7 +2449,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             <div className="text-xs text-secondary">Redes configuradas:</div>
                             <div className="flex flex-wrap gap-1">
                               {allowedNetworks.slice(0, 3).map((network, idx) => (
-                                <span key={idx} className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                <span key={idx} className="px-2 py-1 bg-blue-500/150/20 text-blue-400 rounded text-xs font-medium">
                                   {network}
                                 </span>
                               ))}
@@ -2510,7 +2510,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-primary">Avisos e Alertas</h3>
                   {detectAlerts.length > 0 && (
-                    <span className="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm font-medium">
+                    <span className="px-3 py-1 bg-red-500/150/20 text-red-400 rounded-full text-sm font-medium">
                       {detectAlerts.length} aviso{detectAlerts.length > 1 ? 's' : ''}
                     </span>
                   )}
@@ -2532,15 +2532,15 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                       }
 
                       const getAlertColor = () => {
-                        if (alert.type === 'error') return 'border-red-200 bg-red-50'
-                        if (alert.type === 'warning') return 'border-yellow-200 bg-yellow-50'
-                        return 'border-blue-200 bg-blue-50'
+                        if (alert.type === 'error') return 'border-red-500/30 bg-red-500/150/15'
+                        if (alert.type === 'warning') return 'border-yellow-500/30 bg-yellow-500/150/15'
+                        return 'border-blue-500/30 bg-blue-500/150/15'
                       }
 
                       const getAlertTextColor = () => {
-                        if (alert.type === 'error') return 'text-red-700'
-                        if (alert.type === 'warning') return 'text-yellow-700'
-                        return 'text-blue-700'
+                        if (alert.type === 'error') return 'text-red-400'
+                        if (alert.type === 'warning') return 'text-yellow-400'
+                        return 'text-blue-400'
                       }
 
                       const formatTime = (timestamp?: number) => {
@@ -2932,7 +2932,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         {groupPolicies.map((p) => (
                           <span
                             key={p.id}
-                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                            className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-500/150/20 text-blue-300"
                           >
                             {p.app_name}
                             <button
@@ -2987,7 +2987,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xl">{item.icon}</span>
@@ -3003,8 +3003,8 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -3020,11 +3020,11 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                     { key: 'bluetoothDisabled', label: 'Bloquear Bluetooth', desc: 'Impedir pareamento Bluetooth', icon: '🔵' },
                     { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
                     { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
-                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir transferência de dados via USB', icon: '🔌' },
+                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir USB completo (dados + depuração). Senha 7410 para liberar no dispositivo', icon: '🔌' },
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xl">{item.icon}</span>
@@ -3040,8 +3040,8 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -3063,7 +3063,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   ].map((item) => (
                     <label
                       key={item.key}
-                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-[var(--surface)]/5 cursor-pointer transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <span className="text-xl">{item.icon}</span>
@@ -3079,8 +3079,8 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
-                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
                   ))}
@@ -3115,7 +3115,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                     }
                   }}
                   disabled={isSavingRestrictions}
-                  className="px-6 py-2 bg-primary text-black font-semibold rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-6 py-2 bg-primary text-[var(--text-primary)] font-semibold rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isSavingRestrictions ? 'Aplicando...' : `Aplicar a ${devices.length} dispositivo(s)`}
                 </button>
@@ -3131,7 +3131,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-green-500/150/20 rounded-lg flex items-center justify-center">
                         <span className="text-green-600 text-xl">✓</span>
                       </div>
                       <div>
@@ -3153,7 +3153,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   </div>
                   <div className="card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-blue-500/150/20 rounded-lg flex items-center justify-center">
                         <span className="text-blue-600 text-xl">📱</span>
                       </div>
                       <div>
@@ -3164,7 +3164,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   </div>
                   <div className="card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-yellow-100 rounded-lg flex items-center justify-center">
+                      <div className="w-10 h-10 bg-yellow-500/150/20 rounded-lg flex items-center justify-center">
                         <span className="text-yellow-600 text-xl">⚠️</span>
                       </div>
                       <div>
@@ -3193,15 +3193,15 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                       }
 
                       const getBatteryBgColor = (level: number) => {
-                        if (level < 20) return 'bg-red-100'
-                        if (level < 50) return 'bg-yellow-100'
-                        return 'bg-green-100'
+                        if (level < 20) return 'bg-red-500/150/20'
+                        if (level < 50) return 'bg-yellow-500/150/20'
+                        return 'bg-green-500/150/20'
                       }
 
                       const getBatteryProgressColor = (level: number) => {
-                        if (level < 20) return 'bg-red-500'
-                        if (level < 50) return 'bg-yellow-500'
-                        return 'bg-green-500'
+                        if (level < 20) return 'bg-red-500/150/150'
+                        if (level < 50) return 'bg-yellow-500/150/150'
+                        return 'bg-green-500/150/150'
                       }
 
                       const formatLastSeen = (lastSeen: number) => {
@@ -3245,7 +3245,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`w-3 h-3 rounded-full ${
-                                device.status === 'online' ? 'bg-green-500' : 'bg-[var(--text-muted)]'
+                                device.status === 'online' ? 'bg-green-500/150/150' : 'bg-[var(--text-muted)]'
                               }`} />
                               <div>
                                 <h4 className="font-semibold text-primary text-lg">
@@ -3256,7 +3256,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             </div>
                             <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                               device.status === 'online' 
-                                ? 'bg-green-100 text-green-700' 
+                                ? 'bg-green-500/150/20 text-green-700' 
                                 : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
                             }`}>
                               {device.status === 'online' ? 'Online' : 'Offline'}
@@ -3546,7 +3546,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         onClick={() => {
                           setAllowedNetworks(allowedNetworks.filter((_, i) => i !== idx))
                         }}
-                        className="text-red-600 hover:text-red-700 text-sm"
+                        className="text-red-600 hover:text-red-400 text-sm"
                       >
                         Remover
                       </button>
@@ -3576,7 +3576,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           allowedNetworks.includes(ssid || '')
                             ? 'bg-[var(--surface-elevated)] text-[var(--text-muted)] cursor-not-allowed'
-                            : 'bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
+                            : 'bg-blue-500/150/15 text-blue-400 hover:bg-blue-500/150/20 cursor-pointer'
                         }`}
                       >
                         + {ssid}
@@ -3642,7 +3642,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
 
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {/* Busca por Endereço */}
-              <div className="bg-blue-50 p-4 rounded-lg">
+              <div className="bg-blue-500/150/15 p-4 rounded-lg">
                 <label className="block text-sm font-medium text-primary mb-2">
                   🔍 Buscar por Nome da Rua ou Endereço
                 </label>
@@ -3771,7 +3771,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
 
               {/* Sugestão: usar localização de um dispositivo */}
               {devices.length > 0 && devices.some(d => d.latitude && d.longitude) && (
-                <div className="mt-4 p-4 bg-blue-50 rounded-lg">
+                <div className="mt-4 p-4 bg-blue-500/150/15 rounded-lg">
                   <div className="text-sm font-semibold text-primary mb-2">
                     💡 Sugestão: Usar localização de um dispositivo
                   </div>
@@ -3792,7 +3792,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                               setLocationLon(device.longitude.toString())
                             }
                           }}
-                          className="w-full text-left px-3 py-2 rounded-lg text-sm bg-[var(--surface)] hover:bg-blue-100 transition-colors"
+                          className="w-full text-left px-3 py-2 rounded-lg text-sm bg-[var(--surface)] hover:bg-blue-500/150/20 transition-colors"
                         >
                           📍 {device.name} - {typeof device.latitude === 'number' ? device.latitude.toFixed(4) : 'N/D'}, {typeof device.longitude === 'number' ? device.longitude.toFixed(4) : 'N/D'}
                         </button>
@@ -3802,7 +3802,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
               )}
 
               {allowedLocation && (
-                <div className="mt-4 p-4 bg-green-50 rounded-lg">
+                <div className="mt-4 p-4 bg-green-500/150/15 rounded-lg">
                   <div className="text-sm font-semibold text-green-700 mb-1">✅ Área configurada:</div>
                   <div className="text-sm text-green-600">
                     Centro: {allowedLocation.latitude.toFixed(4)}, {allowedLocation.longitude.toFixed(4)}
@@ -3831,7 +3831,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                     }
                   })
                 }}
-                className="px-4 py-2 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                className="px-4 py-2 border border-red-500/30 text-red-600 rounded-lg hover:bg-red-500/150/15 transition-colors"
               >
                 Remover Área
               </button>

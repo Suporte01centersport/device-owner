@@ -58,10 +58,10 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       if (response.ok) {
         const allMessages = await response.json()
         // Filtrar mensagens do dispositivo atual
-        const deviceMessages = allMessages.filter((msg: SupportMessage) => 
+        const deviceMessages = allMessages.filter((msg: SupportMessage) =>
           msg.deviceId === device.deviceId
         ).sort((a: SupportMessage, b: SupportMessage) => b.timestamp - a.timestamp)
-        
+
         setMessages(deviceMessages)
       }
     } catch (error) {
@@ -115,27 +115,27 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
       if (response.ok) {
         // Atualizar o estado local
-        setMessages(prevMessages => 
-          prevMessages.map(msg => 
-            msg.id === messageId 
+        setMessages(prevMessages =>
+          prevMessages.map(msg =>
+            msg.id === messageId
               ? { ...msg, status: newStatus }
               : msg
           )
         )
-        
+
         // Atualizar mensagem selecionada se for a mesma
         if (selectedMessage && selectedMessage.id === messageId) {
           setSelectedMessage({ ...selectedMessage, status: newStatus })
         }
-        
+
         const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
         console.log(`Mensagem marcada como ${statusText} com sucesso`)
-        
+
         // Notificar o componente pai sobre a mudança
         if (onMessageStatusUpdate) {
           onMessageStatusUpdate()
         }
-        
+
         // Fechar modal de detalhes após marcar como resolvida
         if (newStatus === 'resolved') {
           setSelectedMessage(null)
@@ -313,16 +313,16 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
       if (response.ok) {
         const result = await response.json()
-        
+
         // Limpar mensagens do estado local
         setMessages([])
         setSelectedMessage(null)
-        
+
         // Notificar o componente pai sobre a mudança
         if (onMessageStatusUpdate) {
           onMessageStatusUpdate()
         }
-        
+
         console.log('Todas as mensagens foram limpas com sucesso')
         showAlert(result.message || 'Mensagens limpas com sucesso!')
       } else {
@@ -353,11 +353,11 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
   return (
     <>
       {/* Modal principal - azul meio escuro fora dos balões */}
-      <div 
+      <div
         className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
         onClick={onClose}
       >
-        <div 
+        <div
           className="rounded-xl shadow-xl max-w-4xl w-full h-[80vh] flex flex-col bg-background"
           onClick={(e) => e.stopPropagation()}
         >
@@ -373,7 +373,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
               ✕
             </button>
           </div>
-          
+
           <div className="flex-1 overflow-y-auto p-6">
             {/* Dashboard de Controle - balão com fundo claro */}
             {device.status === 'online' && sendMessage && (
@@ -410,7 +410,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   <button
                     onClick={() => handleControlAction('reboot')}
                     disabled={isRebooting}
-                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface hover:border-red-200 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
+                    className="flex flex-col items-center gap-2 p-3 rounded-lg border border-border bg-background hover:bg-surface hover:border-red-500/30 transition-colors disabled:opacity-70 disabled:cursor-not-allowed"
                     title="Reiniciar dispositivo"
                   >
                     <span className="text-2xl">{isRebooting ? '⏳' : '🔄'}</span>
@@ -437,10 +437,10 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <span className={`badge badge-sm ${
-                            message.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                            message.status === 'read' ? 'bg-blue-100 text-blue-800' :
-                            message.status === 'resolved' ? 'bg-green-100 text-green-800' :
-                            'bg-gray-100 text-gray-800'
+                            message.status === 'pending' ? 'bg-yellow-500/150/150/20 text-yellow-300' :
+                            message.status === 'read' ? 'bg-blue-500/150/150/20 text-blue-300' :
+                            message.status === 'resolved' ? 'bg-green-500/150/150/20 text-green-300' :
+                            'bg-[var(--surface-elevated)] text-[var(--text-primary)]'
                           }`}>
                             {message.status === 'pending' && '⏳ '}
                             {message.status === 'read' && '👁️ '}
@@ -463,8 +463,8 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                       </div>
                       <div className="text-right flex flex-col items-center">
                         <span className="text-lg mb-1">
-                          {message.status === 'pending' ? '🔔' : 
-                           message.status === 'read' ? '📖' : 
+                          {message.status === 'pending' ? '🔔' :
+                           message.status === 'read' ? '📖' :
                            message.status === 'resolved' ? '✅' : '📨'}
                         </span>
                         {message.status === 'pending' && (
@@ -487,8 +487,8 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
               </div>
             )}
           </div>
-          
-          {/* Área para enviar mensagem - balão branco onde digita */}
+
+          {/* Área para enviar mensagem - balão onde digita */}
           {device.status === 'online' && sendMessage && (
             <div className="p-6 border-t border-border bg-background text-primary">
               <h4 className="text-sm font-medium text-primary mb-3">📤 Enviar mensagem para o celular</h4>
@@ -497,7 +497,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   value={outgoingMessage}
                   onChange={(e) => setOutgoingMessage(e.target.value)}
                   placeholder="Digite sua mensagem..."
-                  className="flex-1 px-4 py-3 border border-border rounded-lg bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-gray-900 resize-none min-h-[80px] placeholder:text-gray-500"
+                  className="flex-1 px-4 py-3 border border-[var(--border)] rounded-lg bg-[var(--surface)] focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm text-[var(--text-primary)] resize-none min-h-[80px] placeholder:text-[var(--text-secondary)]"
                   disabled={isSending}
                   rows={3}
                 />
@@ -580,7 +580,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                         <span className="text-sm font-medium text-primary">{msg.deviceName}</span>
                         <span className="text-xs text-secondary">{formatTimestamp(msg.timestamp)}</span>
                       </div>
-                      <p className="text-sm text-gray-900 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">{msg.message}</p>
+                      <p className="text-sm text-[var(--text-primary)] whitespace-pre-wrap bg-[var(--surface-elevated)] rounded-lg p-3">{msg.message}</p>
                     </div>
                   ))}
                 </div>
@@ -619,7 +619,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                 ✕
               </button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div className="flex items-center gap-2">
                 <span className={`badge ${getStatusColor(selectedMessage.status)}`}>
@@ -629,7 +629,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   {formatTimestamp(selectedMessage.timestamp)}
                 </span>
               </div>
-              
+
               <div>
                 <label className="text-sm font-medium text-secondary">Mensagem</label>
                 <div className="mt-1 p-3 bg-surface rounded-lg">
@@ -638,7 +638,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                   </p>
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-secondary">Dispositivo</label>
@@ -658,7 +658,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                 </div>
               </div>
             </div>
-            
+
             <div className="p-6 border-t border-border flex justify-between items-center">
               <button
                 onClick={() => setSelectedMessage(null)}
@@ -666,7 +666,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
               >
                 Fechar
               </button>
-              
+
               <div className="flex gap-3">
                 {selectedMessage.status === 'pending' && (
                   <>
@@ -684,7 +684,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                     </button>
                   </>
                 )}
-                
+
                 {selectedMessage.status === 'read' && (
                   <>
                     <button
@@ -701,7 +701,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
                     </button>
                   </>
                 )}
-                
+
                 {selectedMessage.status === 'resolved' && (
                   <button
                     className="btn btn-success opacity-50 cursor-not-allowed"

@@ -37,8 +37,8 @@ export default function PersistenceStatus() {
   const hasSaved = deviceCount > 0 || (adminPassword?.length || 0) > 0
 
   const getStatusColor = () => {
-    if (!isLoaded) return 'text-black/50'
-    if (hasSaved) return 'text-black'
+    if (!isLoaded) return 'text-[var(--text-secondary)]'
+    if (hasSaved) return 'text-[var(--text-primary)]'
     return 'text-yellow-600'
   }
 
@@ -58,14 +58,14 @@ export default function PersistenceStatus() {
     <div className="relative">
       <button
         onClick={() => setShowDetails(!showDetails)}
-        className="flex items-center gap-2 px-3 py-2 bg-white hover:bg-white/90 border border-white/20 rounded-lg transition-colors text-sm"
+        className="flex items-center gap-2 px-3 py-2 bg-[var(--surface)] hover:bg-[var(--surface)]/90 border border-white/20 rounded-lg transition-colors text-sm"
         title="Status de persistência de dados"
       >
         <span className="text-lg">{getStatusIcon()}</span>
         <span className={`font-medium ${getStatusColor()}`}>
           {getStatusText()}
         </span>
-        <span className="text-black/40">
+        <span className="text-[var(--text-muted)]">
           {showDetails ? '▲' : '▼'}
         </span>
       </button>

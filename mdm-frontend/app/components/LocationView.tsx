@@ -331,47 +331,47 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
   return (
     <div className="space-y-4">
       {/* Informações atuais de localização */}
-      <div className="bg-gray-50 rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-6 flex items-center">
+      <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-6">
+        <h3 className="text-xl font-semibold mb-6 flex items-center text-[var(--text-primary)]">
           📍 Localização Atual
         </h3>
-        
+
         {device.latitude && device.longitude ? (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <span className="text-base text-gray-600 font-medium">Coordenadas:</span>
-              <span className="font-mono text-base text-gray-800">
+              <span className="text-base text-[var(--text-secondary)] font-medium">Coordenadas:</span>
+              <span className="font-mono text-base text-[var(--text-primary)]">
                 {device.latitude.toFixed(6)}, {device.longitude.toFixed(6)}
               </span>
             </div>
-            
+
             {device.locationAccuracy && (
               <div className="flex items-center justify-between">
-                <span className="text-base text-gray-600 font-medium">Precisão:</span>
+                <span className="text-base text-[var(--text-secondary)] font-medium">Precisão:</span>
                 <span className={`text-base font-semibold ${getAccuracyColor(device.locationAccuracy)}`}>
                   {device.locationAccuracy.toFixed(0)}m - {formatAccuracy(device.locationAccuracy)}
                 </span>
               </div>
             )}
-            
+
             {device.locationProvider && (
               <div className="flex items-center justify-between">
-                <span className="text-base text-gray-600 font-medium">Provedor:</span>
-                <span className="text-base flex items-center font-medium">
+                <span className="text-base text-[var(--text-secondary)] font-medium">Provedor:</span>
+                <span className="text-base text-[var(--text-primary)] flex items-center font-medium">
                   {getProviderIcon(device.locationProvider)} {device.locationProvider.toUpperCase()}
                 </span>
               </div>
             )}
-            
+
             {device.lastLocationUpdate && (
               <div className="flex items-center justify-between">
-                <span className="text-base text-gray-600 font-medium">Última atualização:</span>
-                <span className="text-base text-gray-800">
+                <span className="text-base text-[var(--text-secondary)] font-medium">Última atualização:</span>
+                <span className="text-base text-[var(--text-primary)]">
                   {formatTimestamp(device.lastLocationUpdate)}
                 </span>
               </div>
             )}
-            
+
             <div className="pt-6">
               <button
                 onClick={() => openInMaps(device.latitude!, device.longitude!)}
@@ -383,9 +383,9 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
           </div>
         ) : (
           <div className="text-center py-36">
-            <div className="text-gray-400 text-6xl mb-6">📍</div>
-            <p className="text-gray-500 text-lg mb-3">Localização não disponível</p>
-            <p className="text-base text-gray-400">
+            <div className="text-[var(--text-muted)] text-6xl mb-6">📍</div>
+            <p className="text-[var(--text-secondary)] text-lg mb-3">Localização não disponível</p>
+            <p className="text-base text-[var(--text-muted)]">
               {device.isLocationEnabled ? 'Aguardando dados de GPS...' : 'GPS desabilitado'}
             </p>
           </div>
@@ -415,12 +415,12 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
       {/* Modal de detalhes da localização */}
       {selectedLocation && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Detalhes da Localização</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Detalhes da Localização</h3>
               <button
                 onClick={() => setSelectedLocation(null)}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
               >
                 ✕
               </button>
@@ -428,35 +428,35 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
             
             <div className="space-y-3">
               <div>
-                <label className="text-sm font-medium text-gray-600">Coordenadas</label>
-                <p className="font-mono text-sm">
+                <label className="text-sm font-medium text-[var(--text-secondary)]">Coordenadas</label>
+                <p className="font-mono text-sm text-[var(--text-primary)]">
                   {selectedLocation.latitude}, {selectedLocation.longitude}
                 </p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600">Precisão</label>
+                <label className="text-sm font-medium text-[var(--text-secondary)]">Precisão</label>
                 <p className={`text-sm ${getAccuracyColor(selectedLocation.accuracy)}`}>
                   {selectedLocation.accuracy.toFixed(0)}m - {formatAccuracy(selectedLocation.accuracy)}
                 </p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600">Provedor</label>
-                <p className="text-sm flex items-center">
+                <label className="text-sm font-medium text-[var(--text-secondary)]">Provedor</label>
+                <p className="text-sm text-[var(--text-primary)] flex items-center">
                   {getProviderIcon(selectedLocation.provider)} {selectedLocation.provider.toUpperCase()}
                 </p>
               </div>
               
               <div>
-                <label className="text-sm font-medium text-gray-600">Data/Hora</label>
-                <p className="text-sm">{formatTimestamp(selectedLocation.timestamp)}</p>
+                <label className="text-sm font-medium text-[var(--text-secondary)]">Data/Hora</label>
+                <p className="text-sm text-[var(--text-primary)]">{formatTimestamp(selectedLocation.timestamp)}</p>
               </div>
               
               {selectedLocation.address && (
                 <div>
-                  <label className="text-sm font-medium text-gray-600">Endereço</label>
-                  <p className="text-sm">{selectedLocation.address}</p>
+                  <label className="text-sm font-medium text-[var(--text-secondary)]">Endereço</label>
+                  <p className="text-sm text-[var(--text-primary)]">{selectedLocation.address}</p>
                 </div>
               )}
             </div>
@@ -470,7 +470,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
               </button>
               <button
                 onClick={() => setSelectedLocation(null)}
-                className="flex-1 bg-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-400 transition-colors"
+                className="flex-1 bg-[var(--surface-elevated)] text-[var(--text-primary)] border border-[var(--border)] px-4 py-2 rounded-lg hover:bg-[var(--border)] transition-colors"
               >
                 Fechar
               </button>
@@ -513,7 +513,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
                 <div className="flex items-center justify-center h-full">
                   <div className="text-center">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="text-gray-500 mt-2">Carregando histórico...</p>
+                    <p className="text-[var(--text-secondary)] mt-2">Carregando histórico...</p>
                   </div>
                 </div>
               ) : showHistoryMap ? (
@@ -526,30 +526,30 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
                     />
                   </div>
                   {locationHistory.length > 0 && (
-                    <div className="flex-shrink-0 bg-gray-50 rounded-lg p-4 max-h-40 overflow-y-auto">
-                      <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                    <div className="flex-shrink-0 bg-[var(--surface-elevated)] rounded-lg p-4 max-h-40 overflow-y-auto">
+                      <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3 flex items-center">
                         <span className="mr-2">📋</span>
                         Entradas de Localização ({locationHistory.length})
                       </h4>
                       <div className="space-y-2">
                         {locationHistory.slice(0, 3).map((entry, index) => (
-                          <div key={entry.id} className="text-xs bg-white rounded p-2 border border-gray-200">
+                          <div key={entry.id} className="text-xs bg-[var(--surface)] rounded p-2 border border-[var(--border)]">
                             <div className="flex items-center justify-between mb-1">
                               <div className="flex items-center space-x-2">
                                 <span className="text-sm">{index === 0 ? '📍' : getProviderIcon(entry.provider)}</span>
-                                <span className="font-mono text-gray-800">{entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}</span>
+                                <span className="font-mono text-[var(--text-primary)]">{entry.latitude.toFixed(4)}, {entry.longitude.toFixed(4)}</span>
                               </div>
-                              <span className="text-gray-500">{formatTimestamp(entry.timestamp)}</span>
+                              <span className="text-[var(--text-secondary)]">{formatTimestamp(entry.timestamp)}</span>
                             </div>
                             {entry.address && (
-                              <div className="text-gray-600 truncate" title={entry.address}>
+                              <div className="text-[var(--text-secondary)] truncate" title={entry.address}>
                                 {entry.address}
                               </div>
                             )}
                           </div>
                         ))}
                         {locationHistory.length > 3 && (
-                          <div className="text-xs text-gray-500 text-center py-1">
+                          <div className="text-xs text-[var(--text-secondary)] text-center py-1">
                             +{locationHistory.length - 3} entradas adicionais
                           </div>
                         )}
@@ -565,8 +565,8 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
                         key={entry.id}
                         className={`card p-4 cursor-pointer transition-all duration-200 hover:shadow-lg ${
                           entry.id === 'current' 
-                            ? 'ring-2 ring-primary bg-blue-50' 
-                            : 'hover:bg-gray-50'
+                            ? 'ring-2 ring-primary bg-blue-500/150/150/15'
+                            : 'hover:bg-[var(--surface-elevated)]'
                         }`}
                         onClick={() => setSelectedLocation(entry)}
                       >
@@ -621,7 +621,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
                   {locationHistory.length > 0 && (
                     <button
                       onClick={handleClearLocationHistory}
-                      className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
+                      className="px-4 py-2 bg-red-500/150/150 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-2"
                     >
                       <span>🗑️</span>
                       Limpar Histórico

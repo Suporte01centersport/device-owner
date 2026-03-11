@@ -282,7 +282,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                 {unreadAlertCount > 0 ? '🔔' : '🔕'}
               </span>
               {unreadAlertCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500/150/150 text-white text-xs font-bold rounded-full shadow-lg">
                   {unreadAlertCount > 99 ? '99+' : unreadAlertCount}
                 </span>
               )}
@@ -297,7 +297,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                       <span>🔔</span>
                       Alertas
                       {unreadAlertCount > 0 && (
-                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full font-medium">
+                        <span className="px-2 py-0.5 bg-red-500/150/150/20 text-red-400 text-xs rounded-full font-medium">
                           {unreadAlertCount} novo{unreadAlertCount !== 1 ? 's' : ''}
                         </span>
                       )}
@@ -338,9 +338,9 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
-                                alert.severity === 'warning' ? 'bg-yellow-500/20 text-yellow-400' :
-                                'bg-blue-500/20 text-blue-400'
+                                alert.severity === 'critical' ? 'bg-red-500/150/150/20 text-red-400' :
+                                alert.severity === 'warning' ? 'bg-yellow-500/150/150/20 text-yellow-400' :
+                                'bg-blue-500/150/150/20 text-blue-400'
                               }`}>
                                 {getSeverityLabel(alert.severity)}
                               </span>
@@ -348,7 +348,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                                 {getAlertTypeLabel(alert.type)}
                               </span>
                               {!alert.is_read && (
-                                <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0"></span>
+                                <span className="w-2 h-2 bg-blue-500/150/150 rounded-full flex-shrink-0"></span>
                               )}
                             </div>
                             <p className="text-sm text-[var(--text-primary)] line-clamp-1">
@@ -403,7 +403,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
             >
               <span className="text-xl group-hover:scale-110 transition-transform">💬</span>
               {unreadSupportCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500/150/150 text-white text-xs font-bold rounded-full shadow-lg">
                   {unreadSupportCount > 99 ? '99+' : unreadSupportCount}
                 </span>
               )}
@@ -449,7 +449,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                               <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
                                 {message.deviceName}
                               </p>
-                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full font-medium">
+                              <span className="px-2 py-0.5 bg-red-500/150/150/20 text-red-400 text-xs rounded-full font-medium">
                                 Nova
                               </span>
                             </div>
@@ -522,7 +522,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                     <div>
                       <h3 className="font-semibold text-[var(--text-primary)] text-lg">Administrador</h3>
                       <p className="text-sm text-[var(--text-secondary)]">admin@mdm.com</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-medium rounded-full">
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/150/150/20 text-blue-400 text-xs font-medium rounded-full">
                         Administrador do sistema
                       </span>
                     </div>
@@ -532,7 +532,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                   <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
                     <span className="text-sm text-[var(--text-secondary)]">Status</span>
                     <span className={`flex items-center gap-1.5 text-sm font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
+                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500/150/150' : 'bg-red-500/150/150'}`} />
                       {isConnected ? 'Conectado' : 'Desconectado'}
                     </span>
                   </div>
