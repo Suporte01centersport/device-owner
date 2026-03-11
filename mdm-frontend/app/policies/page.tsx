@@ -44,9 +44,11 @@ export default function PoliciesPage() {
   const [restrictionsGroupId, setRestrictionsGroupId] = useState<string>('')
   const [deviceRestrictions, setDeviceRestrictions] = useState({
     lockScreen: true,
+    kioskMode: false,
     statusBarDisabled: false,
     wifiDisabled: false,
     bluetoothDisabled: false,
+    bluetoothPairingDisabled: true,
     cameraDisabled: false,
     screenshotDisabled: false,
     installAppsDisabled: true,
@@ -59,6 +61,12 @@ export default function PoliciesPage() {
     locationDisabled: false,
     developerOptionsDisabled: true,
     autoTimeRequired: true,
+    addAccountDisabled: true,
+    shareDisabled: false,
+    externalStorageDisabled: false,
+    airplaneModeDisabled: true,
+    outgoingCallsDisabled: false,
+    smsDisabled: false,
   })
   const [isSavingRestrictions, setIsSavingRestrictions] = useState(false)
 
@@ -575,10 +583,12 @@ export default function PoliciesPage() {
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
-                    { key: 'lockScreen', label: 'Tela de Bloqueio', desc: 'Habilitar bloqueio remoto do dispositivo', icon: '🔒' },
+                    { key: 'lockScreen', label: 'Tela de Bloqueio Remoto', desc: 'Habilitar bloqueio remoto do dispositivo', icon: '🔒' },
+                    { key: 'kioskMode', label: 'Modo Quiosque (Fixar App)', desc: 'Impedir sair do app MDM / voltar para outras telas', icon: '📌' },
                     { key: 'screenshotDisabled', label: 'Bloquear Screenshots', desc: 'Impedir capturas e gravações de tela', icon: '📸' },
                     { key: 'factoryResetDisabled', label: 'Bloquear Reset de Fábrica', desc: 'Impedir restauração de fábrica', icon: '🏭' },
                     { key: 'developerOptionsDisabled', label: 'Bloquear Opções de Dev', desc: 'Impedir acesso às opções de desenvolvedor', icon: '🛠️' },
+                    { key: 'addAccountDisabled', label: 'Bloquear Adicionar Contas', desc: 'Impedir adicionar contas Google ou outras', icon: '👤' },
                   ].map((item) => (
                     <label
                       key={item.key}
@@ -614,10 +624,12 @@ export default function PoliciesPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
                     { key: 'wifiDisabled', label: 'Bloquear Config. WiFi', desc: 'Impedir alteração de redes WiFi', icon: '📶' },
-                    { key: 'bluetoothDisabled', label: 'Bloquear Bluetooth', desc: 'Impedir pareamento Bluetooth', icon: '🔵' },
+                    { key: 'bluetoothDisabled', label: 'Bloquear Config. Bluetooth', desc: 'Impedir alterar configurações Bluetooth', icon: '🔵' },
+                    { key: 'bluetoothPairingDisabled', label: 'Bloquear Pareamento BT', desc: 'Impedir parear dispositivos (barcode, fones, etc)', icon: '🚫' },
                     { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
                     { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
                     { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir transferência de dados via USB', icon: '🔌' },
+                    { key: 'airplaneModeDisabled', label: 'Bloquear Modo Avião', desc: 'Impedir ligar/desligar modo avião', icon: '✈️' },
                   ].map((item) => (
                     <label
                       key={item.key}
@@ -659,6 +671,10 @@ export default function PoliciesPage() {
                     { key: 'cameraDisabled', label: 'Bloquear Câmera', desc: 'Desativar câmera do dispositivo', icon: '📷' },
                     { key: 'locationDisabled', label: 'Bloquear Config. Localização', desc: 'Impedir alteração de configuração GPS', icon: '📍' },
                     { key: 'autoTimeRequired', label: 'Forçar Hora Automática', desc: 'Impedir alteração manual de data/hora', icon: '🕐' },
+                    { key: 'externalStorageDisabled', label: 'Bloquear Mídia Externa', desc: 'Impedir montar cartão SD e mídia USB', icon: '💾' },
+                    { key: 'shareDisabled', label: 'Bloquear Compartilhamento', desc: 'Impedir copiar/colar entre apps', icon: '📋' },
+                    { key: 'outgoingCallsDisabled', label: 'Bloquear Ligações', desc: 'Impedir fazer ligações telefônicas', icon: '📵' },
+                    { key: 'smsDisabled', label: 'Bloquear SMS', desc: 'Impedir enviar mensagens SMS', icon: '💬' },
                   ].map((item) => (
                     <label
                       key={item.key}

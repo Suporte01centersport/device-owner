@@ -821,9 +821,59 @@ class WebSocketService : Service() {
                                 } else {
                                     dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
                                 }
+                                // Bluetooth pairing (impedir parear novos dispositivos)
+                                if (data["bluetoothPairingDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_BLUETOOTH)
+                                } else if (data["bluetoothDisabled"] != true) {
+                                    // Só libera se bluetooth não estiver totalmente bloqueado
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_BLUETOOTH)
+                                }
+                                // Bloquear adicionar contas (Google, etc)
+                                if (data["addAccountDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
+                                }
+                                // Bloquear compartilhamento de dados (share/send)
+                                if (data["shareDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE)
+                                }
+                                // Bloquear montagem de mídia externa (SD card etc)
+                                if (data["externalStorageDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
+                                }
+                                // Bloquear ligar/desligar modo avião
+                                if (data["airplaneModeDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_AIRPLANE_MODE)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_AIRPLANE_MODE)
+                                }
+                                // Bloquear ligações de saída
+                                if (data["outgoingCallsDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_CALLS)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_CALLS)
+                                }
+                                // Bloquear SMS
+                                if (data["smsDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SMS)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SMS)
+                                }
                                 // Lock Screen (trava remota)
                                 if (data["lockScreen"] == true) {
                                     com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                                }
+                                // Fixar app (impedir sair do app atual - kiosk)
+                                if (data["kioskMode"] == true) {
+                                    val mainIntent = Intent(this, com.mdm.launcher.MainActivity::class.java)
+                                    mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(mainIntent)
+                                    // O startLockTask será chamado pelo MainActivity
                                 }
 
                                 Log.d(TAG, "Restrições aplicadas com sucesso")
