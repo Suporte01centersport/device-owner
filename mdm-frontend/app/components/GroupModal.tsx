@@ -3003,7 +3003,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="w-11 h-6 bg-[var(--border)] rounded-full peer peer-checked:bg-primary transition-colors"></div>
                         <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
@@ -3040,7 +3040,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="w-11 h-6 bg-[var(--border)] rounded-full peer peer-checked:bg-primary transition-colors"></div>
                         <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>
@@ -3079,7 +3079,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
                           className="sr-only peer"
                         />
-                        <div className="w-11 h-6 bg-[var(--surface)]/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="w-11 h-6 bg-[var(--border)] rounded-full peer peer-checked:bg-primary transition-colors"></div>
                         <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-[var(--surface)] rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
                       </div>
                     </label>

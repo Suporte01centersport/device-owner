@@ -24,7 +24,7 @@ export default function CompliancePage() {
         const res = await fetch('/api/devices')
         if (!res.ok) throw new Error('Erro ao buscar dispositivos')
         const data = await res.json()
-        setDevices(data.devices || data || [])
+        setDevices(data.data || data.devices || [])
       } catch (err: any) {
         setError(err.message)
       } finally {

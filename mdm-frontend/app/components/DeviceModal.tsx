@@ -1175,13 +1175,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
               <span>📋</span>
               Histórico
             </button>
-            <button 
-              className="btn btn-success flex-1"
-              onClick={() => setShowTermsModal(true)}
-            >
-              <span>📄</span>
-              Termos
-            </button>
             <button
               className="btn btn-danger flex-1"
               onClick={() => setShowSelectiveWipeConfirm(true)}
