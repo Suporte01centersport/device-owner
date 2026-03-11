@@ -114,7 +114,8 @@ class AlarmService : Service() {
                     android.view.WindowManager.LayoutParams.TYPE_PHONE
                 }
                 flags = android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                    android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    android.view.WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 format = android.graphics.PixelFormat.TRANSPARENT
             }
             wm.addView(overlay, params)
@@ -176,6 +177,8 @@ class AlarmService : Service() {
             } catch (e: Exception) {
                 Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
             }
+            // Bloquear tudo na tela de bloqueio com alarme (sem status bar, sem notificações)
+            com.mdm.launcher.utils.DevicePolicyHelper.disableLockTaskFeatures(this)
             val lockIntent = Intent(this, com.mdm.launcher.LockScreenActivity::class.java).apply {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {

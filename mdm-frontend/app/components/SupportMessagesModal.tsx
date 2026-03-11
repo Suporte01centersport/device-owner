@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import LocationMapModal from './LocationMapModal'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 interface SupportMessage {
   id: string
@@ -142,40 +143,40 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       } else {
         const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
         console.error(`Erro ao marcar mensagem como ${statusText}`)
-        alert(`Erro ao marcar mensagem como ${statusText}`)
+        showAlert(`Erro ao marcar mensagem como ${statusText}`)
       }
     } catch (error) {
       const statusText = newStatus === 'read' ? 'lida' : 'resolvida'
       console.error(`Erro ao marcar mensagem como ${statusText}:`, error)
-      alert(`Erro ao marcar mensagem como ${statusText}`)
+      showAlert(`Erro ao marcar mensagem como ${statusText}`)
     }
   }
 
   const handleControlAction = async (action: 'lock' | 'unlock' | 'locate' | 'alarm' | 'reboot') => {
     if (!sendMessage) {
-      alert('Conexão não disponível')
+      showAlert('Conexão não disponível')
       return
     }
     if (device.status !== 'online') {
-      alert('O dispositivo está offline. Apenas dispositivos online podem receber comandos.')
+      showAlert('O dispositivo está offline. Apenas dispositivos online podem receber comandos.')
       return
     }
     switch (action) {
       case 'lock': {
         const lockOk = await sendMessage({ type: 'lock_device', deviceId: device.deviceId, timestamp: Date.now() })
         if (!lockOk) {
-          alert('Não foi possível travar. Verifique se o servidor está rodando e o dispositivo conectado.')
+          showAlert('Não foi possível travar. Verifique se o servidor está rodando e o dispositivo conectado.')
         } else {
-          alert('Comando de travar enviado!')
+          showAlert('Comando de travar enviado!')
         }
         break
       }
       case 'unlock': {
         const unlockOk = await sendMessage({ type: 'unlock_device', deviceId: device.deviceId, timestamp: Date.now() })
         if (!unlockOk) {
-          alert('Não foi possível desbloquear. Verifique se o servidor está rodando e o dispositivo conectado.')
+          showAlert('Não foi possível desbloquear. Verifique se o servidor está rodando e o dispositivo conectado.')
         } else {
-          alert('Comando de desbloquear enviado!')
+          showAlert('Comando de desbloquear enviado!')
         }
         break
       }
@@ -185,14 +186,14 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         break
       case 'reboot':
         if (isRebooting) return
-        if (!confirm('Reiniciar o dispositivo agora?')) return
+        if (!await showConfirm('Reiniciar o dispositivo agora?')) return
         setIsRebooting(true)
         try {
           const rebootOk = await sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })
           if (!rebootOk) {
-            alert('Não foi possível reiniciar. Verifique se o servidor está rodando e o dispositivo conectado.')
+            showAlert('Não foi possível reiniciar. Verifique se o servidor está rodando e o dispositivo conectado.')
           } else {
-            alert('Comando de reiniciar enviado. O dispositivo reiniciará em alguns segundos.')
+            showAlert('Comando de reiniciar enviado. O dispositivo reiniciará em alguns segundos.')
           }
         } finally {
           setIsRebooting(false)
@@ -238,11 +239,11 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
   const handleSendMessage = async () => {
     if (!outgoingMessage.trim()) {
-      alert('Digite uma mensagem para enviar')
+      showAlert('Digite uma mensagem para enviar')
       return
     }
     if (device.status !== 'online') {
-      alert('O dispositivo está offline. Apenas dispositivos online podem receber mensagens.')
+      showAlert('O dispositivo está offline. Apenas dispositivos online podem receber mensagens.')
       return
     }
 
@@ -258,7 +259,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
       if (data.success) {
         saveMessageToHistory(messageText)
         setOutgoingMessage('')
-        alert('Mensagem enviada com sucesso!')
+        showAlert('Mensagem enviada com sucesso!')
         return
       }
       if (sendMessage) {
@@ -270,9 +271,9 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         })
         saveMessageToHistory(messageText)
         setOutgoingMessage('')
-        alert('Mensagem enviada via WebSocket!')
+        showAlert('Mensagem enviada via WebSocket!')
       } else {
-        alert(`Erro: ${data.error || 'Dispositivo não conectado. Verifique se o celular está online e o servidor na porta 3001.'}`)
+        showAlert(`Erro: ${data.error || 'Dispositivo não conectado. Verifique se o celular está online e o servidor na porta 3001.'}`)
       }
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error)
@@ -285,9 +286,9 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         })
         saveMessageToHistory(messageText)
         setOutgoingMessage('')
-        alert('Mensagem enviada via WebSocket (API indisponível)')
+        showAlert('Mensagem enviada via WebSocket (API indisponível)')
       } else {
-        alert('Erro ao enviar. Verifique se o servidor está rodando na porta 3001.')
+        showAlert('Erro ao enviar. Verifique se o servidor está rodando na porta 3001.')
       }
     } finally {
       setIsSending(false)
@@ -295,7 +296,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
   }
 
   const clearAllMessages = async () => {
-    if (!confirm(`Tem certeza que deseja limpar todas as mensagens de suporte do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita.`)) {
+    if (!await showConfirm(`Tem certeza que deseja limpar todas as mensagens de suporte do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita.`)) {
       return
     }
 
@@ -323,14 +324,14 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         }
         
         console.log('Todas as mensagens foram limpas com sucesso')
-        alert(`✅ ${result.message || 'Mensagens limpas com sucesso!'}`)
+        showAlert(result.message || 'Mensagens limpas com sucesso!')
       } else {
         console.error('Erro ao limpar mensagens')
-        alert('❌ Erro ao limpar mensagens de suporte')
+        showAlert('Erro ao limpar mensagens de suporte')
       }
     } catch (error) {
       console.error('Erro ao limpar mensagens:', error)
-      alert('Erro ao limpar mensagens de suporte')
+      showAlert('Erro ao limpar mensagens de suporte')
     }
   }
 

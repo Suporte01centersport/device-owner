@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppUsageData, AccessedApp } from '../types/device';
+import { showAlert, showConfirm } from '../lib/dialog';
 
 interface ReportsTabProps {
   device: any;
@@ -290,11 +291,11 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
 
   const clearReportData = async () => {
     if (!device?.deviceId) {
-      alert('Dispositivo não identificado');
+      showAlert('Dispositivo não identificado');
       return;
     }
 
-    if (!confirm('Tem certeza que deseja limpar TODOS os dados de relatório deste dispositivo? Esta ação não pode ser desfeita.')) {
+    if (!await showConfirm('Tem certeza que deseja limpar TODOS os dados de relatório deste dispositivo? Esta ação não pode ser desfeita.')) {
       return;
     }
 
@@ -308,16 +309,16 @@ export default function ReportsTab({ device, isActive }: ReportsTabProps) {
       const result = await response.json();
       
       if (result.success) {
-        alert(`✅ Histórico limpo com sucesso! ${result.deletedCount} registros removidos.`);
+        showAlert(`Histórico limpo com sucesso! ${result.deletedCount} registros removidos.`);
         // Recarregar dados
         loadUsageData();
         loadDashboardData();
       } else {
-        alert('❌ Erro ao limpar histórico: ' + (result.error || 'Erro desconhecido'));
+        showAlert('Erro ao limpar histórico: ' + (result.error || 'Erro desconhecido'));
       }
     } catch (error) {
       console.error('❌ Erro ao limpar histórico:', error);
-      alert('❌ Erro ao limpar histórico. Verifique o console.');
+      showAlert('Erro ao limpar histórico. Verifique o console.');
     } finally {
       setIsLoadingDashboard(false);
     }

@@ -1,5 +1,7 @@
 'use client'
 
+import { showAlert } from '../../lib/dialog'
+
 interface AddComputerModalProps {
   isOpen: boolean
   onClose: () => void
@@ -14,7 +16,7 @@ export default function AddComputerModal({ isOpen, onClose }: AddComputerModalPr
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(serverUrl)
-    alert('URL copiada para a área de transferência!')
+    showAlert('URL copiada para a área de transferência!')
   }
 
   return (

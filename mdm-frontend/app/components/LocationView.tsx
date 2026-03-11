@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import DeviceLocationMap from './DeviceLocationMap'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 interface LocationViewProps {
   device: Device
@@ -262,14 +263,14 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
     
     if (!sendMessage) {
       console.error('❌ Função sendMessage não disponível')
-      alert('Erro: Função de comunicação não disponível. Tente recarregar a página.')
+      showAlert('Erro: Função de comunicação não disponível. Tente recarregar a página.')
       return
     }
     
-    const confirmed = window.confirm(
+    const confirmed = await showConfirm(
       `Tem certeza que deseja limpar todo o histórico de localização do dispositivo "${device.name}"?\n\nEsta ação não pode ser desfeita e removerá ${locationHistory.length} entradas.`
     )
-    
+
     if (!confirmed) return
     
     try {
@@ -323,7 +324,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
       
     } catch (error) {
       console.error('❌ Erro ao limpar histórico de localização:', error)
-      alert('Erro ao limpar histórico de localização. Tente novamente.')
+      showAlert('Erro ao limpar histórico de localização. Tente novamente.')
     }
   }
 

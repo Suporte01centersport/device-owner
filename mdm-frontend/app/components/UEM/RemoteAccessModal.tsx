@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Computer } from '../../types/uem'
 import RemoteDesktopViewer from './RemoteDesktopViewer'
 import RemoteDesktopViewerWebRTC from './RemoteDesktopViewerWebRTC'
+import { showAlert } from '../../lib/dialog'
 
 interface RemoteAccessModalProps {
   computer: Computer
@@ -93,17 +94,17 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
         // Recarregar informações após iniciar
         await loadRemoteAccessInfo()
       } else {
-        alert(`Erro: ${result.error}`)
+        showAlert(`Erro: ${result.error}`)
       }
     } catch (err) {
-      alert('Erro ao iniciar AnyDesk')
+      showAlert('Erro ao iniciar AnyDesk')
     }
   }
 
   const handleCopyAnyDeskId = () => {
     if (remoteInfo?.anydeskId) {
       navigator.clipboard.writeText(remoteInfo.anydeskId)
-      alert('ID do AnyDesk copiado!')
+      showAlert('ID do AnyDesk copiado!')
     }
   }
 
@@ -259,13 +260,13 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                           })
                           const result = await response.json()
                           if (result.success) {
-                            alert('Comando para instalar AnyDesk enviado!')
+                            showAlert('Comando para instalar AnyDesk enviado!')
                             await loadRemoteAccessInfo()
                           } else {
-                            alert(`Erro: ${result.error}`)
+                            showAlert(`Erro: ${result.error}`)
                           }
                         } catch (err) {
-                          alert('Erro ao enviar comando')
+                          showAlert('Erro ao enviar comando')
                         }
                       }}
                       className="btn btn-primary"
@@ -310,13 +311,13 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                           })
                           const result = await response.json()
                           if (result.success) {
-                            alert('RDP habilitado com sucesso!')
+                            showAlert('RDP habilitado com sucesso!')
                             await loadRemoteAccessInfo()
                           } else {
-                            alert(`Erro: ${result.error}`)
+                            showAlert(`Erro: ${result.error}`)
                           }
                         } catch (err) {
-                          alert('Erro ao habilitar RDP')
+                          showAlert('Erro ao habilitar RDP')
                         }
                       }}
                       className="btn btn-primary w-full"
@@ -371,10 +372,10 @@ export default function RemoteAccessModal({ computer, onClose, websocket }: Remo
                           setSessionId(result.sessionId)
                           setShowRemoteDesktop(true)
                         } else {
-                          alert(`Erro: ${result.error}`)
+                          showAlert(`Erro: ${result.error}`)
                         }
                       } catch (err) {
-                        alert('Erro ao iniciar acesso remoto')
+                        showAlert('Erro ao iniciar acesso remoto')
                         // Silenciosamente ignorar erros
                       }
                     }}

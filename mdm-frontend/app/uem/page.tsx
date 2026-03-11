@@ -5,6 +5,7 @@ import UEMCard from '../components/UEM/UEMCard'
 import UEMModal from '../components/UEM/UEMModal'
 import AddComputerModal from '../components/UEM/AddComputerModal'
 import { Computer } from '../types/uem'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 type ComputerPayload = Partial<Computer> & { computerId: string }
 
@@ -408,22 +409,22 @@ export default function UEMPage() {
   }
 
   const handleDeleteComputer = async (computerId: string) => {
-    if (window.confirm('Tem certeza que deseja deletar este computador? Esta ação não pode ser desfeita.')) {
+    if (await showConfirm('Tem certeza que deseja deletar este computador? Esta ação não pode ser desfeita.')) {
       try {
         const response = await fetch(`/api/uem/computers?computerId=${computerId}`, {
           method: 'DELETE'
         })
-        
+
         if (response.ok) {
           setComputers(prev => prev.filter(c => c.computerId !== computerId))
           handleCloseModal()
         } else {
           const error = await response.json()
-          alert(`Erro ao deletar: ${error.error}`)
+          showAlert(`Erro ao deletar: ${error.error}`)
         }
       } catch (error) {
         console.error('Erro ao deletar computador:', error)
-        alert('Erro ao deletar computador')
+        showAlert('Erro ao deletar computador')
       }
     }
   }

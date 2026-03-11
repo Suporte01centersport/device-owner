@@ -20,9 +20,10 @@
 }
 
 .modal-content {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 0.75rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2);
   max-width: 600px;
   width: 100%;
   max-height: 90vh;
@@ -36,10 +37,10 @@
   justify-content: space-between;
   align-items: center;
   padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  background: white;
+  background: var(--surface);
   z-index: 10;
   border-radius: 0.75rem 0.75rem 0 0;
 }
@@ -47,7 +48,7 @@
 .modal-title {
   font-size: 1.25rem;
   font-weight: 600;
-  color: #1f2937;
+  color: var(--text-primary);
   margin: 0;
 }
 
@@ -55,7 +56,7 @@
   background: none;
   border: none;
   font-size: 1.5rem;
-  color: #6b7280;
+  color: var(--text-muted);
   cursor: pointer;
   width: 2rem;
   height: 2rem;
@@ -67,8 +68,8 @@
 }
 
 .modal-close:hover {
-  background-color: #f3f4f6;
-  color: #374151;
+  background-color: var(--surface-elevated);
+  color: var(--text-primary);
 }
 
 .modal-close:disabled {
@@ -85,10 +86,10 @@
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
   position: sticky;
   bottom: 0;
-  background: white;
+  background: var(--surface);
   border-radius: 0 0 0.75rem 0.75rem;
 }
 
@@ -112,12 +113,14 @@
   }
 }
 
-/* Inputs - texto e placeholder escuros para legibilidade */
+/* Inputs - texto claro para tema escuro */
 .input {
-  color: #111827 !important;
+  color: var(--text-primary) !important;
+  background: var(--surface-elevated) !important;
+  border-color: var(--border) !important;
 }
 .input::placeholder {
-  color: #4b5563 !important;
+  color: var(--text-muted) !important;
 }
 
 /* Reset e base */
@@ -136,59 +139,41 @@ html {
 }
 
 body {
-  background: #f8fafc;
-  color: #1e293b;
+  background: var(--background);
+  color: var(--text-primary);
   min-height: 100vh;
   overflow-x: hidden;
 }
 
-/* Variáveis CSS - Verde neon #35E815 */
+/* Variáveis CSS - Tema escuro com verde neon #35E815 */
 :root {
   --primary: #35E815;
   --primary-dark: #2bc711;
-  --secondary: #64748b;
+  --secondary: #94a3b8;
   --success: #35E815;
   --warning: #f59e0b;
   --error: #ef4444;
-  --background: #f8fafc;
-  --surface: #ffffff;
-  --surface-elevated: #ffffff;
-  --text-primary: #1e293b;
-  --text-secondary: #64748b;
+  --background: #0f172a;
+  --surface: #1e293b;
+  --surface-elevated: #334155;
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
   --text-muted: #94a3b8;
-  --border: #e2e8f0;
-  --border-light: #f1f5f9;
-  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --border: #334155;
+  --border-light: #1e293b;
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
   --radius: 0.5rem;
   --radius-sm: 0.375rem;
   --radius-lg: 0.75rem;
 }
 
-/* Force text visibility */
-* {
-  color: inherit;
-}
-
 body {
   color: var(--text-primary) !important;
-}
-
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --surface: #1e293b;
-    --surface-elevated: #334155;
-    --text-primary: #f1f5f9;
-    --text-secondary: #cbd5e1;
-    --text-muted: #94a3b8;
-    --border: #334155;
-    --border-light: #475569;
-  }
+  background: var(--background) !important;
 }
 
 /* Componentes base */
@@ -343,28 +328,28 @@ body {
 }
 
 .badge-primary {
-  background: #dbeafe;
-  color: #1e40af;
+  background: rgba(59, 130, 246, 0.2);
+  color: #93bbfd;
 }
 
 .badge-success {
-  background: #d4f5ce;
-  color: #1a8a0d;
+  background: rgba(53, 232, 21, 0.15);
+  color: #6ee066;
 }
 
 .badge-warning {
-  background: #fef3c7;
-  color: #92400e;
+  background: rgba(245, 158, 11, 0.2);
+  color: #fbbf24;
 }
 
 .badge-error {
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }
 
 .badge-gray {
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--surface-elevated);
+  color: var(--text-secondary);
 }
 
 /* Status indicators */
@@ -376,8 +361,8 @@ body {
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
-  background: #d4f5ce;
-  color: #1a8a0d;
+  background: rgba(53, 232, 21, 0.15);
+  color: #6ee066;
 }
 
 .status-offline {
@@ -388,8 +373,8 @@ body {
   border-radius: var(--radius-sm);
   font-size: 0.75rem;
   font-weight: 500;
-  background: #fee2e2;
-  color: #991b1b;
+  background: rgba(239, 68, 68, 0.2);
+  color: #fca5a5;
 }
 
 .status-dot {
@@ -423,7 +408,7 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(239, 68, 68, 0.4);
-  border: 2px solid white;
+  border: 2px solid var(--surface);
   animation: pulse 2s infinite;
 }
 
@@ -449,7 +434,7 @@ body {
   align-items: center;
   justify-content: center;
   box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border);
 }
 
 .read-messages-badge.large-count {
@@ -644,10 +629,7 @@ body {
 .text-warning { color: var(--warning) !important; }
 .text-error { color: var(--error) !important; }
 
-/* Ensure text is visible */
-h1, h2, h3, h4, h5, h6, p, span, div {
-  color: var(--text-primary);
-}
+/* Texto visível por padrão */
 
 .text-3xl { font-size: 1.875rem; line-height: 2.25rem; }
 .text-2xl { font-size: 1.5rem; line-height: 2rem; }

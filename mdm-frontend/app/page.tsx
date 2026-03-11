@@ -18,6 +18,7 @@ import UEMPage from './uem/page'
 import AllowedAppsPage from './components/AllowedAppsPage'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
+import { showAlert, showConfirm } from './lib/dialog'
 import { playNotificationSound } from './lib/notification-sound'
 
 // Interfaces Device e AppInfo importadas de './types/device'
@@ -59,6 +60,7 @@ export default function Home() {
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
   const [updateProgress, setUpdateProgress] = useState<{ deviceId: string; deviceName: string; progress: number; status: string; startTime: number; startProgress: number } | null>(null)
+  const updateAlertShownRef = useRef(false)
   const [settingsWsUrl, setSettingsWsUrl] = useState('ws://localhost:3001')
   const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
   const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
@@ -473,7 +475,7 @@ export default function Home() {
           )
         } else {
           console.error(`❌ Erro ao deletar dispositivo:`, message.error)
-          alert(`Erro ao deletar dispositivo: ${message.error}`)
+          showAlert(`❌ Erro ao deletar dispositivo: ${message.error}`)
         }
         break
       case 'device_disconnected':
@@ -667,23 +669,23 @@ export default function Home() {
         break
       case 'lock_device_result':
         if (message.success) {
-          alert('✅ ' + (message.message || 'Comando de travar enviado ao dispositivo'))
+          showAlert('✅ ' + (message.message || 'Comando de travar enviado ao dispositivo'))
         } else {
-          alert('❌ ' + (message.message || 'Falha ao enviar comando. Verifique se o dispositivo está online.'))
+          showAlert('❌ ' + (message.message || 'Falha ao enviar comando. Verifique se o dispositivo está online.'))
         }
         break
       case 'reboot_device_result':
         if (message.success) {
-          alert('✅ ' + (message.message || 'Dispositivo reiniciando...'))
+          showAlert('✅ ' + (message.message || 'Dispositivo reiniciando...'))
         } else {
-          alert('❌ ' + (message.message || 'Falha ao reiniciar. Verifique se o dispositivo está online e é Device Owner.'))
+          showAlert('❌ ' + (message.message || 'Falha ao reiniciar. Verifique se o dispositivo está online e é Device Owner.'))
         }
         break
       case 'wake_device_result':
         if (message.success) {
           // Confirmação silenciosa - tela acordada
         } else {
-          alert('❌ ' + (message.message || 'Falha ao acordar. Verifique se o dispositivo está online.'))
+          showAlert('❌ ' + (message.message || 'Falha ao acordar. Verifique se o dispositivo está online.'))
         }
         break
       case 'alarm_device_result':
@@ -694,7 +696,7 @@ export default function Home() {
             // Alarme parou no dispositivo
           }
         } else {
-          alert('❌ ' + (message.message || 'Falha no alarme. Verifique se o dispositivo está online e na mesma rede.'))
+          showAlert('❌ ' + (message.message || 'Falha no alarme. Verifique se o dispositivo está online e na mesma rede.'))
           setAlarmError({ deviceId: message.deviceId })
         }
         break
@@ -715,10 +717,13 @@ export default function Home() {
         break
       case 'update_app_complete':
         setUpdateProgress(prev => {
-          if (prev?.deviceId === message.deviceId) {
+          if (prev?.deviceId === message.deviceId && !updateAlertShownRef.current) {
+            updateAlertShownRef.current = true
+            const name = prev.deviceName
             setTimeout(() => {
-              alert(`✅ Atualização concluída com sucesso! O dispositivo ${prev.deviceName} foi atualizado.`)
+              showAlert(`✅ Atualização concluída com sucesso! O dispositivo ${name} foi atualizado.`)
               syncWithServer()
+              updateAlertShownRef.current = false
             }, 300)
             return null
           }
@@ -727,9 +732,13 @@ export default function Home() {
         break
       case 'update_app_error':
         setUpdateProgress(prev => {
-          if (prev?.deviceId === message.deviceId) {
+          if (prev?.deviceId === message.deviceId && !updateAlertShownRef.current) {
+            updateAlertShownRef.current = true
+            const name = prev.deviceName
+            const err = message.error || 'Erro desconhecido'
             setTimeout(() => {
-              alert(`❌ Erro na atualização do dispositivo ${prev.deviceName}:\n${message.error || 'Erro desconhecido'}`)
+              showAlert(`❌ Erro na atualização do dispositivo ${name}:\n${err}`)
+              updateAlertShownRef.current = false
             }, 300)
             return null
           }
@@ -855,11 +864,11 @@ export default function Home() {
         }
       } else {
         // Outros erros (não relacionados a conflito)
-        alert('❌ Erro ao vincular usuário: ' + (result.message || result.error))
+        showAlert('❌ Erro ao vincular usuário: ' + (result.message || result.error))
       }
     } catch (error) {
       console.error('❌ Erro ao vincular usuário:', error)
-      alert('❌ Erro ao conectar com o servidor')
+      showAlert('❌ Erro ao conectar com o servidor')
     } finally {
       setIsUserSelectionModalOpen(false)
       setDeviceForUserAssignment(null)
@@ -877,7 +886,7 @@ export default function Home() {
       assignedUserName: selectedDevice.assignedUserName
     })
     
-    if (confirm(`Desvincular usuário de ${selectedDevice.name}?`)) {
+    if (await showConfirm(`Desvincular usuário de ${selectedDevice.name}?`)) {
       try {
         // Desvincular via API
         const response = await fetch('/api/devices/assign-user', {
@@ -911,11 +920,11 @@ export default function Home() {
             setSelectedDevice(updatedDevice)
           }
         } else {
-          alert('❌ Erro ao desvincular usuário: ' + result.error)
+          showAlert('❌ Erro ao desvincular usuário: ' + result.error)
         }
       } catch (error) {
         console.error('❌ Erro ao desvincular usuário:', error)
-        alert('❌ Erro ao conectar com o servidor')
+        showAlert('❌ Erro ao conectar com o servidor')
       }
     }
   }
@@ -938,10 +947,10 @@ export default function Home() {
       a.download = `mdm-backup-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      alert('✅ Backup baixado com sucesso!')
+      showAlert('✅ Backup baixado com sucesso!')
     } catch (e) {
       console.error('Erro no backup:', e)
-      alert('❌ Erro ao gerar backup. Verifique se o servidor está conectado ao banco.')
+      showAlert('❌ Erro ao gerar backup. Verifique se o servidor está conectado ao banco.')
     }
   }
 
@@ -953,13 +962,13 @@ export default function Home() {
       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
       const res = await fetch(`http://${wsHost}:3001/api/server/restart`, { method: 'POST' })
       if (res.ok) {
-        alert('✅ Reinício solicitado. O servidor irá reconectar em alguns segundos.')
+        showAlert('✅ Reinício solicitado. O servidor irá reconectar em alguns segundos.')
       } else {
         throw new Error('Falha ao reiniciar')
       }
     } catch (e) {
       console.error('Erro ao reiniciar:', e)
-      alert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3001.')
+      showAlert('❌ Erro ao reiniciar o servidor. Verifique se o servidor WebSocket está rodando na porta 3001.')
     } finally {
       setIsRestarting(false)
     }
@@ -972,12 +981,12 @@ export default function Home() {
       const res = await fetch('/api/devices/format-device', { method: 'POST' })
       const data = await res.json()
       if (data.success) {
-        alert('✅ ' + (data.message || 'Celular reiniciando no modo recovery. Use as teclas de volume para navegar e Power para confirmar. Selecione "Wipe data/factory reset".'))
+        showAlert('✅ ' + (data.message || 'Celular reiniciando no modo recovery. Use as teclas de volume para navegar e Power para confirmar. Selecione "Wipe data/factory reset".'))
       } else {
-        alert('❌ ' + (data.error || 'Falha ao formatar'))
+        showAlert('❌ ' + (data.error || 'Falha ao formatar'))
       }
     } catch (e) {
-      alert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+      showAlert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
     } finally {
       setIsFormattingDevice(false)
     }
@@ -990,13 +999,13 @@ export default function Home() {
       const res = await fetch(`http://${wsHost}:3001/api/server/clear-cache`, { method: 'POST' })
       const data = await res.json()
       if (res.ok && data.success) {
-        alert('✅ Cache limpo com sucesso!')
+        showAlert('✅ Cache limpo com sucesso!')
       } else {
         throw new Error(data.error || 'Falha ao limpar cache')
       }
     } catch (e) {
       console.error('Erro ao limpar cache:', e)
-      alert('❌ Erro ao limpar o cache. Verifique se o servidor WebSocket está rodando na porta 3001.')
+      showAlert('❌ Erro ao limpar o cache. Verifique se o servidor WebSocket está rodando na porta 3001.')
     }
   }
 
@@ -1059,13 +1068,13 @@ export default function Home() {
       if (data.success) {
         setJustAddedDevice(true)
         setTimeout(() => setJustAddedDevice(false), 45000)
-        alert('Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
+        showAlert('✅ Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
         pollForDevicesAfterAdd()
       } else {
-        alert('Erro: ' + (data.error || 'Falha ao configurar'))
+        showAlert('❌ Erro: ' + (data.error || 'Falha ao configurar'))
       }
     } catch (e) {
-      alert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+      showAlert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
     } finally {
       setIsAddingDevice(false)
     }
@@ -1095,7 +1104,7 @@ export default function Home() {
     // Validar se deviceId é válido
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
       console.error('❌ DeviceId inválido para deleção:', deviceId)
-      alert('Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
+      showAlert('❌ Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
       return
     }
     console.log('🗑️ Enviando requisição de deleção:', deviceId)
@@ -1116,11 +1125,11 @@ export default function Home() {
           updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
           console.log('✅ Dispositivo deletado via API')
         } else {
-          alert(`Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
+          showAlert(`❌ Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
         }
       } catch (e) {
         console.error('Erro ao deletar via API:', e)
-        alert('Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
+        showAlert('❌ Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
       }
     }
   }, [sendMessage, updateDevices])
@@ -1148,7 +1157,7 @@ export default function Home() {
       .then(result => {
         if (!result.success) {
           setUpdateProgress(null)
-          alert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
+          showAlert(`❌ Erro ao enviar atualização para ${deviceName}:\n${result.error || 'Erro desconhecido'}`)
         } else {
           // Dispositivo enviará progresso via WebSocket
           setUpdateProgress(prev => prev ? { ...prev, status: 'Aguardando resposta do dispositivo...' } : null)
@@ -1157,7 +1166,7 @@ export default function Home() {
       .catch(err => {
         console.error('Erro ao atualizar app:', err)
         setUpdateProgress(null)
-        alert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.`)
+        showAlert(`❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.`)
       })
   }, [updateDevice, syncWithServer])
 
@@ -1245,18 +1254,18 @@ export default function Home() {
         await new Promise(resolve => setTimeout(resolve, 1000))
 
         if (!cancelRef?.current) {
-          alert(`✅ Build concluído e atualização enviada via WiFi para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos baixarão e instalarão o MDM automaticamente.`)
+          showAlert(`✅ Build concluído e atualização enviada via WiFi para ${deviceIds.length} dispositivo(s)!\n\nOs dispositivos baixarão e instalarão o MDM automaticamente.`)
           syncWithServer()
         }
       } else if (cancelRef?.current) {
-        alert('⚠️ Atualização cancelada pelo usuário.')
+        showAlert('⚠️ Atualização cancelada pelo usuário.')
       } else {
-        alert(`❌ Erro: ${result.error || 'Falha ao enviar atualização'}`)
+        showAlert(`❌ Erro: ${result.error || 'Falha ao enviar atualização'}`)
       }
     } catch (error) {
       if (!cancelRef?.current) {
         console.error('Erro ao atualizar MDM em massa:', error)
-        alert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.')
+        showAlert('❌ Erro ao enviar atualização. Verifique se o servidor está rodando na porta 3001.')
       }
     }
   }, [syncWithServer])
@@ -1349,7 +1358,7 @@ export default function Home() {
     const confirmInput = document.getElementById('adminPasswordConfirm') as HTMLInputElement
     
     if (!passwordInput || !confirmInput) {
-      alert('Erro: Campos de senha não encontrados')
+      showAlert('❌ Erro: Campos de senha não encontrados')
       return
     }
 
@@ -1357,19 +1366,19 @@ export default function Home() {
     const confirmPassword = confirmInput.value.trim()
 
     if (!password) {
-      alert('Por favor, digite uma senha')
+      showAlert('Por favor, digite uma senha')
       passwordInput.focus()
       return
     }
 
     if (password.length !== 4) {
-      alert('A senha deve ter exatamente 4 dígitos (para desbloqueio na tela de cadeado)')
+      showAlert('A senha deve ter exatamente 4 dígitos (para desbloqueio na tela de cadeado)')
       passwordInput.focus()
       return
     }
 
     if (password !== confirmPassword) {
-      alert('As senhas não coincidem')
+      showAlert('As senhas não coincidem')
       confirmInput.focus()
       return
     }
@@ -1398,9 +1407,9 @@ export default function Home() {
     updateAdminPassword(password)
     
     if (onlineDevices.length > 0) {
-      alert(`Senha de administrador definida e enviada para ${onlineDevices.length} dispositivos online!`)
+      showAlert(`✅ Senha de administrador definida e enviada para ${onlineDevices.length} dispositivos online!`)
     } else {
-      alert('Senha de administrador definida! Dispositivos receberão a senha quando se conectarem.')
+      showAlert('✅ Senha de administrador definida! Dispositivos receberão a senha quando se conectarem.')
     }
     
     passwordInput.value = ''
@@ -1516,14 +1525,6 @@ export default function Home() {
                       setUpdateDevice(device)
                       setIsUpdateModalOpen(true)
                     }}
-                    onFormat={() => {
-                      setUpdateDevice(device)
-                      sendMessage({
-                        type: 'format_device',
-                        deviceId: device.deviceId,
-                        timestamp: Date.now()
-                      })
-                    }}
                     onLigar={() => sendMessage({ type: 'wake_device', deviceId: device.deviceId, timestamp: Date.now() })}
                     onDesligar={() => sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })}
                     onSupportCountUpdate={supportCountUpdateTrigger}
@@ -1578,7 +1579,7 @@ export default function Home() {
                         type="text"
                         value={settingsWsUrl}
                         onChange={(e) => setSettingsWsUrl(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
+                        className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
                     <div>
@@ -1589,7 +1590,7 @@ export default function Home() {
                         type="number"
                         value={settingsHeartbeat}
                         onChange={(e) => setSettingsHeartbeat(e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
+                        className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
                   </div>
@@ -1667,7 +1668,7 @@ export default function Home() {
                         type="password"
                         id="adminPassword"
                         placeholder="Digite a nova senha (4 dígitos para desbloqueio local)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
+                        className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
                     <div>
@@ -1678,7 +1679,7 @@ export default function Home() {
                         type="password"
                         id="adminPasswordConfirm"
                         placeholder="Confirme a nova senha"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white text-black placeholder:text-gray-500"
+                        className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                       />
                     </div>
                     <div className="flex gap-3">
@@ -1703,7 +1704,7 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-white border border-red-200 rounded-lg p-3">
+                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                       <div className="text-xs font-bold text-red-600">
                         <span className="font-bold text-red-600">📋 Instruções:</span>
                         <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
@@ -1860,8 +1861,8 @@ export default function Home() {
           {!isDataLoaded ? (
             <div className="flex items-center justify-center min-h-screen">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                <p className="text-gray-600">Carregando dados salvos...</p>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto mb-4"></div>
+                <p className="text-[var(--text-secondary)]">Carregando dados salvos...</p>
               </div>
             </div>
           ) : (
@@ -1919,11 +1920,11 @@ export default function Home() {
         }
         return (
           <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl p-6 max-w-md w-full mx-4 relative">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl p-6 max-w-md w-full mx-4 relative">
               <button
                 type="button"
                 onClick={() => setUpdateProgress(null)}
-                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] transition-colors"
                 title="Fechar (a atualização continua no dispositivo)"
               >
                 ✕
@@ -1932,7 +1933,7 @@ export default function Home() {
                 📥 Atualizando {updateProgress.deviceName}
               </h3>
               <p className="text-sm text-secondary mb-3">{updateProgress.status}</p>
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4 overflow-hidden mb-3">
+              <div className="w-full bg-[var(--surface-elevated)] rounded-full h-4 overflow-hidden mb-3">
                 <div
                   className="h-full bg-primary transition-all duration-300 ease-out"
                   style={{ width: `${updateProgress.progress}%` }}
@@ -1941,7 +1942,7 @@ export default function Home() {
               <div className="flex items-center justify-between">
                 <span className="text-2xl font-bold text-primary">{updateProgress.progress}%</span>
                 {etaText && (
-                  <span className="text-sm font-medium text-secondary bg-gray-100 dark:bg-gray-700 px-3 py-1 rounded-full">
+                  <span className="text-sm font-medium text-secondary bg-[var(--surface-elevated)] px-3 py-1 rounded-full">
                     ⏱ {etaText}
                   </span>
                 )}

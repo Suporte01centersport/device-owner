@@ -7,6 +7,7 @@ import DeviceAssignmentModal from '../components/DeviceAssignmentModal'
 import GroupModal from '../components/GroupModal'
 import FreeDevicesModal from '../components/FreeDevicesModal'
 import PoliciesOverviewModal from '../components/PoliciesOverviewModal'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 export default function PoliciesPage() {
   const [groups, setGroups] = useState<DeviceGroup[]>([])
@@ -38,6 +39,28 @@ export default function PoliciesPage() {
     isAllowed: true,
     policyType: 'allow' as 'allow' | 'block' | 'require'
   })
+
+  // Estado de restrições por grupo
+  const [restrictionsGroupId, setRestrictionsGroupId] = useState<string>('')
+  const [deviceRestrictions, setDeviceRestrictions] = useState({
+    lockScreen: true,
+    statusBarDisabled: false,
+    wifiDisabled: false,
+    bluetoothDisabled: false,
+    cameraDisabled: false,
+    screenshotDisabled: false,
+    installAppsDisabled: true,
+    uninstallAppsDisabled: true,
+    settingsDisabled: true,
+    factoryResetDisabled: true,
+    usbDisabled: false,
+    nfcDisabled: false,
+    hotspotDisabled: false,
+    locationDisabled: false,
+    developerOptionsDisabled: true,
+    autoTimeRequired: true,
+  })
+  const [isSavingRestrictions, setIsSavingRestrictions] = useState(false)
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -71,10 +94,7 @@ export default function PoliciesPage() {
   const loadData = async () => {
     try {
       setLoading(true)
-      
-      // Criar grupos padrão se não existirem
-      await fetch('/api/groups/seed', { method: 'POST' })
-      
+
       // Carregar grupos da API
       const groupsResponse = await fetch('/api/groups')
       if (groupsResponse.ok) {
@@ -177,18 +197,18 @@ export default function PoliciesPage() {
   }
 
   const handleDeleteGroup = async (groupId: string) => {
-    if (!window.confirm('Tem certeza que deseja deletar este grupo? Todos os dispositivos serão removidos do grupo.')) return
+    if (!await showConfirm('Tem certeza que deseja deletar este grupo? Todos os dispositivos serão removidos do grupo.')) return
     try {
       const res = await fetch(`/api/groups/${groupId}`, { method: 'DELETE' })
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
-        alert(`Erro ao deletar grupo${data?.detail ? `: ${data.detail}` : ''}`)
+        showAlert(`Erro ao deletar grupo${data?.detail ? `: ${data.detail}` : ''}`)
         return
       }
       setGroups(groups.filter(g => g.id !== groupId))
     } catch (e) {
       console.error('Erro ao deletar grupo:', e)
-      alert('Erro ao deletar grupo')
+      showAlert('Erro ao deletar grupo')
     }
   }
 
@@ -217,7 +237,7 @@ export default function PoliciesPage() {
       })
       const result = await res.json()
       if (!res.ok) {
-        alert(result.detail || result.error || 'Erro ao salvar política')
+        showAlert(result.detail || result.error || 'Erro ao salvar política')
         return
       }
       const saved = result.data
@@ -234,7 +254,7 @@ export default function PoliciesPage() {
       setIsAppPolicyModalOpen(false)
     } catch (e) {
       console.error('Erro ao salvar política:', e)
-      alert('Erro ao salvar política. Verifique a conexão.')
+      showAlert('Erro ao salvar política. Verifique a conexão.')
     }
   }
 
@@ -250,7 +270,7 @@ export default function PoliciesPage() {
       })
       if (!res.ok) {
         const result = await res.json().catch(() => ({}))
-        alert(result.detail || result.error || 'Erro ao remover política')
+        showAlert(result.detail || result.error || 'Erro ao remover política')
         return
       }
       setGroups(groups.map(group => {
@@ -265,7 +285,7 @@ export default function PoliciesPage() {
       }))
     } catch (e) {
       console.error('Erro ao remover política:', e)
-      alert('Erro ao remover política. Verifique a conexão.')
+      showAlert('Erro ao remover política. Verifique a conexão.')
     }
   }
 
@@ -273,7 +293,7 @@ export default function PoliciesPage() {
     try {
       const device = devices.find(d => d.id === deviceId || d.deviceId === deviceId)
       if (!device) {
-        alert('Dispositivo não encontrado')
+        showAlert('Dispositivo não encontrado')
         return
       }
       const response = await fetch(`/api/groups/${groupId}/devices`, {
@@ -283,7 +303,7 @@ export default function PoliciesPage() {
       })
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
-        alert(`Erro ao adicionar dispositivo: ${errData?.error || errData?.detail || 'Verifique se o PostgreSQL está configurado em .env.development'}`)
+        showAlert(`Erro ao adicionar dispositivo: ${errData?.error || errData?.detail || 'Verifique se o PostgreSQL está configurado em .env.development'}`)
         return
       }
       // sucesso: atualizar estado local
@@ -317,7 +337,7 @@ export default function PoliciesPage() {
       })
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}))
-        alert(`Erro ao remover dispositivo: ${errData?.error || errData?.detail || 'Verifique o PostgreSQL'}`)
+        showAlert(`Erro ao remover dispositivo: ${errData?.error || errData?.detail || 'Verifique o PostgreSQL'}`)
         return
       }
       // sucesso: atualizar estado local
@@ -344,8 +364,8 @@ export default function PoliciesPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando políticas...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[var(--primary)] mx-auto mb-4"></div>
+          <p className="text-secondary">Carregando políticas...</p>
         </div>
       </div>
     )
@@ -387,8 +407,8 @@ export default function PoliciesPage() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="card p-6">
           <div className="flex items-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl text-blue-600">📱</span>
+            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mr-4">
+              <span className="text-2xl">📱</span>
             </div>
             <div>
               <p className="text-sm text-secondary">Total de Grupos</p>
@@ -399,8 +419,8 @@ export default function PoliciesPage() {
 
         <div className="card p-6">
           <div className="flex items-center">
-            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl text-green-600">🔗</span>
+            <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mr-4">
+              <span className="text-2xl">🔗</span>
             </div>
             <div>
               <p className="text-sm text-secondary">Dispositivos em Grupos</p>
@@ -419,8 +439,8 @@ export default function PoliciesPage() {
           onKeyDown={(e) => e.key === 'Enter' && setIsPoliciesOverviewModalOpen(true)}
         >
           <div className="flex items-center">
-            <div className="w-12 h-12 bg-yellow-100 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl text-yellow-600">📋</span>
+            <div className="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mr-4">
+              <span className="text-2xl">📋</span>
             </div>
             <div>
               <p className="text-sm text-secondary">Políticas de Apps</p>
@@ -440,8 +460,8 @@ export default function PoliciesPage() {
           onKeyDown={(e) => e.key === 'Enter' && setIsFreeDevicesModalOpen(true)}
         >
           <div className="flex items-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl text-purple-600">🎯</span>
+            <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mr-4">
+              <span className="text-2xl">🎯</span>
             </div>
             <div>
               <p className="text-sm text-secondary">Dispositivos Livres</p>
@@ -524,6 +544,200 @@ export default function PoliciesPage() {
         )}
       </div>
 
+      {/* Seção de Restrições de Dispositivo */}
+      {groups.length > 0 && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-primary">Restrições de Dispositivo</h2>
+              <p className="text-sm text-secondary mt-1">Controle as funcionalidades bloqueadas nos dispositivos. Selecione um grupo e configure as restrições.</p>
+            </div>
+          </div>
+
+          {/* Seletor de grupo */}
+          <div className="mb-4">
+            <select
+              value={restrictionsGroupId}
+              onChange={(e) => setRestrictionsGroupId(e.target.value)}
+              className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[280px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+            >
+              <option value="">Selecione um grupo para configurar</option>
+              {groups.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name} ({g.deviceCount} dispositivos)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {restrictionsGroupId && (
+            <div className="card p-6 space-y-6">
+              {/* Segurança */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span>🛡️</span> Segurança
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { key: 'lockScreen', label: 'Tela de Bloqueio', desc: 'Habilitar bloqueio remoto do dispositivo', icon: '🔒' },
+                    { key: 'screenshotDisabled', label: 'Bloquear Screenshots', desc: 'Impedir capturas e gravações de tela', icon: '📸' },
+                    { key: 'factoryResetDisabled', label: 'Bloquear Reset de Fábrica', desc: 'Impedir restauração de fábrica', icon: '🏭' },
+                    { key: 'developerOptionsDisabled', label: 'Bloquear Opções de Dev', desc: 'Impedir acesso às opções de desenvolvedor', icon: '🛠️' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-xl flex-shrink-0">{item.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>
+                          <div className="text-xs text-[var(--text-muted)] truncate">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative flex-shrink-0 ml-3">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conectividade */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span>📡</span> Conectividade
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { key: 'wifiDisabled', label: 'Bloquear Config. WiFi', desc: 'Impedir alteração de redes WiFi', icon: '📶' },
+                    { key: 'bluetoothDisabled', label: 'Bloquear Bluetooth', desc: 'Impedir pareamento Bluetooth', icon: '🔵' },
+                    { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
+                    { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
+                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir transferência de dados via USB', icon: '🔌' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-xl flex-shrink-0">{item.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>
+                          <div className="text-xs text-[var(--text-muted)] truncate">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative flex-shrink-0 ml-3">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sistema */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span>⚙️</span> Sistema
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { key: 'statusBarDisabled', label: 'Bloquear Barra de Status', desc: 'Impedir acesso ao painel de notificações', icon: '📊' },
+                    { key: 'settingsDisabled', label: 'Bloquear Configurações', desc: 'Impedir acesso ao app de Configurações', icon: '⚙️' },
+                    { key: 'installAppsDisabled', label: 'Bloquear Instalação de Apps', desc: 'Impedir instalar novos aplicativos', icon: '📦' },
+                    { key: 'uninstallAppsDisabled', label: 'Bloquear Desinstalação', desc: 'Impedir remover aplicativos', icon: '🗑️' },
+                    { key: 'cameraDisabled', label: 'Bloquear Câmera', desc: 'Desativar câmera do dispositivo', icon: '📷' },
+                    { key: 'locationDisabled', label: 'Bloquear Config. Localização', desc: 'Impedir alteração de configuração GPS', icon: '📍' },
+                    { key: 'autoTimeRequired', label: 'Forçar Hora Automática', desc: 'Impedir alteração manual de data/hora', icon: '🕐' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        <span className="text-xl flex-shrink-0">{item.icon}</span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)]">{item.label}</div>
+                          <div className="text-xs text-[var(--text-muted)] truncate">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative flex-shrink-0 ml-3">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-[var(--primary)] transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botão Aplicar */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
+                <button
+                  onClick={async () => {
+                    const group = groups.find(g => g.id === restrictionsGroupId)
+                    if (!group) return
+                    setIsSavingRestrictions(true)
+                    try {
+                      const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+                      const res = await fetch(`http://${wsHost}:3001/api/groups/${group.id}/send-restrictions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ restrictions: deviceRestrictions })
+                      })
+                      if (res.ok) {
+                        const result = await res.json()
+                        showAlert(`Restrições aplicadas a ${result.sent || 0} dispositivo(s) do grupo "${group.name}"`)
+                      } else {
+                        showAlert('Erro ao aplicar restrições. Verifique se o servidor WebSocket está rodando.')
+                      }
+                    } catch (error) {
+                      console.error('Erro ao salvar restrições:', error)
+                      showAlert('Erro ao conectar com o servidor.')
+                    } finally {
+                      setIsSavingRestrictions(false)
+                    }
+                  }}
+                  disabled={isSavingRestrictions}
+                  className="px-6 py-2.5 bg-[var(--primary)] text-black font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {isSavingRestrictions ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                      Aplicando...
+                    </>
+                  ) : (
+                    <>
+                      <span>🚀</span>
+                      Aplicar ao grupo "{groups.find(g => g.id === restrictionsGroupId)?.name}"
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Modal do Grupo */}
       <GroupModal
         group={selectedGroup}
@@ -536,22 +750,22 @@ export default function PoliciesPage() {
       {/* Modal de Criação de Grupo */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+          <div className="bg-[var(--surface)] border border-[var(--border)] rounded-lg p-6 w-full max-w-md">
             <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-semibold text-black">Criar Novo Grupo</h3>
+              <h3 className="text-lg font-semibold text-[var(--text-primary)]">Criar Novo Grupo</h3>
               <button
                 onClick={() => { setIsCreateModalOpen(false); setCreateGroupError(null) }}
-                className="text-gray-500 hover:text-black text-xl leading-none"
+                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-xl leading-none"
               >
                 ✕
               </button>
             </div>
             {createGroupError && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex justify-between items-start gap-2">
-                <p className="text-sm text-red-800 flex-1">{createGroupError}</p>
+              <div className="mb-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg flex justify-between items-start gap-2">
+                <p className="text-sm text-red-400 flex-1">{createGroupError}</p>
                 <button
                   onClick={() => setCreateGroupError(null)}
-                  className="text-red-600 hover:text-red-800 shrink-0"
+                  className="text-red-400 hover:text-red-300 shrink-0"
                 >
                   ✕
                 </button>
@@ -559,44 +773,44 @@ export default function PoliciesPage() {
             )}
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                   Nome do Grupo
                 </label>
                 <input
                   type="text"
                   value={newGroup.name}
                   onChange={(e) => setNewGroup({ ...newGroup, name: e.target.value })}
-                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-black placeholder:text-gray-500"
+                  className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                   placeholder="Ex: Dispositivos Corporativos"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                   Descrição
                 </label>
                 <textarea
                   value={newGroup.description}
                   onChange={(e) => setNewGroup({ ...newGroup, description: e.target.value })}
-                  className="w-full px-4 py-2 border border-border rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-black placeholder:text-gray-500"
+                  className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
                   rows={3}
                   placeholder="Descrição do grupo..."
                   spellCheck="false"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-black mb-2">
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
                   Cor do Grupo
                 </label>
                 <input
                   type="color"
                   value={newGroup.color}
                   onChange={(e) => setNewGroup({ ...newGroup, color: e.target.value })}
-                  className="w-full h-10 border border-border rounded-lg"
+                  className="w-full h-10 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)]"
                 />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
-              <button 
+              <button
                 onClick={handleCreateGroup}
                 className="btn btn-primary flex-1"
                 disabled={!newGroup.name.trim()}
@@ -604,9 +818,9 @@ export default function PoliciesPage() {
                 <span>➕</span>
                 Criar Grupo
               </button>
-              <button 
+              <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="btn btn-secondary text-black"
+                className="btn btn-secondary"
               >
                 Cancelar
               </button>

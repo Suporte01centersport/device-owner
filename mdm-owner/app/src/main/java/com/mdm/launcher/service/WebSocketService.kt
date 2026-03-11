@@ -262,7 +262,8 @@ class WebSocketService : Service() {
                     WindowManager.LayoutParams.TYPE_PHONE
                 }
                 flags = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
                 format = android.graphics.PixelFormat.TRANSPARENT
             }
             wm.addView(overlay, params)
@@ -678,6 +679,8 @@ class WebSocketService : Service() {
                             } catch (e: Exception) {
                                 Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
                             }
+                            // Bloquear tudo na tela de bloqueio (sem status bar, sem notificações)
+                            com.mdm.launcher.utils.DevicePolicyHelper.disableLockTaskFeatures(this)
                             val lockIntent = Intent(this, com.mdm.launcher.LockScreenActivity::class.java).apply {
                                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
                             }
@@ -724,6 +727,117 @@ class WebSocketService : Service() {
                         "timestamp" to System.currentTimeMillis()
                     )))
                     Log.d(TAG, "Comando de desbloqueio enviado para LockScreenActivity")
+                }
+                "set_device_restrictions" -> {
+                    Log.d(TAG, "Comando set_device_restrictions recebido")
+                    try {
+                        val data = jsonObject["data"] as? Map<*, *>
+                        if (data != null) {
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                            val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            if (dpm.isDeviceOwnerApp(packageName)) {
+                                // WiFi
+                                if (data["wifiDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_WIFI)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_WIFI)
+                                }
+                                // Bluetooth
+                                if (data["bluetoothDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
+                                }
+                                // Câmera
+                                dpm.setCameraDisabled(adminComponent, data["cameraDisabled"] == true)
+                                // Screenshots
+                                if (data["screenshotDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT)
+                                }
+                                dpm.setScreenCaptureDisabled(adminComponent, data["screenshotDisabled"] == true)
+                                // Status bar
+                                dpm.setStatusBarDisabled(adminComponent, data["statusBarDisabled"] == true)
+                                // Instalar apps
+                                if (data["installAppsDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
+                                }
+                                // Desinstalar apps
+                                if (data["uninstallAppsDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
+                                }
+                                // Factory reset
+                                if (data["factoryResetDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_FACTORY_RESET)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_FACTORY_RESET)
+                                }
+                                // USB
+                                if (data["usbDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                                }
+                                // Hotspot/tethering
+                                if (data["hotspotDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_TETHERING)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_TETHERING)
+                                }
+                                // NFC
+                                if (data["nfcDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_BEAM)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_BEAM)
+                                }
+                                // Localização
+                                if (data["locationDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_LOCATION)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_LOCATION)
+                                }
+                                // Hora automática
+                                if (data["autoTimeRequired"] == true) {
+                                    dpm.setAutoTimeRequired(adminComponent, true)
+                                } else {
+                                    dpm.setAutoTimeRequired(adminComponent, false)
+                                }
+                                // Configurações (Settings)
+                                if (data["settingsDisabled"] == true) {
+                                    for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
+                                        try { dpm.setApplicationHidden(adminComponent, pkg, true) } catch (_: Exception) {}
+                                    }
+                                } else {
+                                    for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
+                                        try { dpm.setApplicationHidden(adminComponent, pkg, false) } catch (_: Exception) {}
+                                    }
+                                }
+                                // Opções de desenvolvedor
+                                if (data["developerOptionsDisabled"] == true) {
+                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
+                                } else {
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
+                                }
+                                // Lock Screen (trava remota)
+                                if (data["lockScreen"] == true) {
+                                    com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                                }
+
+                                Log.d(TAG, "Restrições aplicadas com sucesso")
+                                webSocketClient?.sendMessage(gson.toJson(mapOf(
+                                    "type" to "restrictions_applied",
+                                    "deviceId" to DeviceIdManager.getDeviceId(this),
+                                    "success" to true,
+                                    "timestamp" to System.currentTimeMillis()
+                                )))
+                            }
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao aplicar restrições: ${e.message}", e)
+                    }
                 }
                 else -> {
                     // Encaminhar comandos não tratados para MainActivity (lock_device, reboot_device, etc)

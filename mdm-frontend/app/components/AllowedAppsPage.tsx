@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import { PRESET_APPS } from '../lib/allowed-apps-preset'
 import AppIcon from './AppIcon'
+import { showAlert } from '../lib/dialog'
 
 const MDM_PACKAGE = 'com.mdm.launcher'
 const WMS_PACKAGE = 'com.centersporti.wmsmobile'
@@ -132,11 +133,11 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     const pkg = customAppInput.trim()
     if (!pkg) return
     if (pkg === MDM_PACKAGE) {
-      alert('MDM Center não pode ser adicionado (é o launcher)')
+      showAlert('MDM Center não pode ser adicionado (é o launcher)')
       return
     }
     if (PRESET_APPS.some(a => a.packageName === pkg) || customApps.some(a => a.packageName === pkg)) {
-      alert('App já está na lista')
+      showAlert('App já está na lista')
       return
     }
     setCustomApps(prev => [...prev, { packageName: pkg, appName: pkg.split('.').pop() || pkg }])
@@ -155,7 +156,7 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     
     if (filterType === 'device') {
       if (!selectedDeviceId) {
-        alert('Selecione um celular')
+        showAlert('Selecione um celular')
         return
       }
       setIsSaving(true)
@@ -176,18 +177,18 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
             sendMessage({ type: 'install_app', deviceId: selectedDeviceId, packageName: pkg, timestamp: Date.now() })
           }
           const installMsg = toInstall.length > 0 ? ` Instalando ${toInstall.length} app(s) ausente(s)...` : ''
-          alert(`Permissões salvas! O celular será atualizado em breve.${installMsg}`)
+          showAlert(`Permissões salvas! O celular será atualizado em breve.${installMsg}`)
         } else {
-          alert('Não foi possível enviar. Verifique se o dispositivo está conectado.')
+          showAlert('Não foi possível enviar. Verifique se o dispositivo está conectado.')
         }
       } catch (e) {
-        alert('Erro ao salvar: ' + (e instanceof Error ? e.message : 'Erro desconhecido'))
+        showAlert('Erro ao salvar: ' + (e instanceof Error ? e.message : 'Erro desconhecido'))
       } finally {
         setIsSaving(false)
       }
     } else {
       if (!selectedGroupId) {
-        alert('Selecione um grupo')
+        showAlert('Selecione um grupo')
         return
       }
       setIsSaving(true)
@@ -214,9 +215,9 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
           const err = await applyRes.json()
           throw new Error(err.detail || 'Erro ao aplicar políticas nos dispositivos')
         }
-        alert('Políticas salvas e aplicadas ao grupo!')
+        showAlert('Políticas salvas e aplicadas ao grupo!')
       } catch (e) {
-        alert('Erro ao salvar: ' + (e instanceof Error ? e.message : 'Erro desconhecido'))
+        showAlert('Erro ao salvar: ' + (e instanceof Error ? e.message : 'Erro desconhecido'))
       } finally {
         setIsSaving(false)
       }

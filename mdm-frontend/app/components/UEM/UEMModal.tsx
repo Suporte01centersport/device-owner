@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { Computer, RemoteAction } from '../../types/uem'
 import RemoteAccessModal from './RemoteAccessModal'
+import { showAlert, showConfirm } from '../../lib/dialog'
 
 interface UEMModalProps {
   computer: Computer
@@ -122,7 +123,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
 
     // Se não temos localização GPS, tentar obter via IP público
     if (!computer.ipAddress || isPrivateIP(computer.ipAddress)) {
-      alert('Localização GPS não disponível e IP é privado.\n\nPara obter localização:\n- O agente precisa estar conectado à internet\n- O computador precisa ter um IP público')
+      showAlert('Localização GPS não disponível e IP é privado.\n\nPara obter localização:\n- O agente precisa estar conectado à internet\n- O computador precisa ter um IP público')
       return
     }
 
@@ -138,7 +139,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
       setIpLocation(location)
       setShowLocationModal(true)
     } else {
-      alert('Não foi possível obter a localização aproximada do IP')
+      showAlert('Não foi possível obter a localização aproximada do IP')
     }
   }
 
@@ -252,7 +253,7 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
 
       const result = await response.json()
       if (result.success) {
-        alert(`Comando ${actionId} enviado com sucesso!`)
+        showAlert(`Comando ${actionId} enviado com sucesso!`)
         setShowRemoteActionModal(false)
         
         // Se houver função sendMessage, enviar também via WebSocket
@@ -265,11 +266,11 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
           })
         }
       } else {
-        alert(`Erro ao executar ação: ${result.error}`)
+        showAlert(`Erro ao executar ação: ${result.error}`)
       }
     } catch (error) {
       console.error('Erro ao executar ação remota:', error)
-      alert('Erro ao executar ação remota')
+      showAlert('Erro ao executar ação remota')
     }
   }
 
@@ -874,14 +875,15 @@ export default function UEMModal({ computer, onClose, onDelete, sendMessage, web
                       className={`card p-4 cursor-pointer hover:shadow-md transition-all ${
                         action.dangerous ? 'border-l-4 border-red-500' : ''
                       }`}
-                      onClick={() => {
+                      onClick={async () => {
                         // Se for ação especial (como remote_access), tratar diferente
                         if ((action as any).special) {
                           handleExecuteRemoteAction(action.id)
                         } else {
                           setSelectedAction(action.id)
                           if (action.requiresConfirmation) {
-                            if (confirm(`Tem certeza que deseja executar: ${action.name}?`)) {
+                            const ok = await showConfirm(`Tem certeza que deseja executar: ${action.name}?`)
+                            if (ok) {
                               handleExecuteRemoteAction(action.id)
                             }
                           } else {

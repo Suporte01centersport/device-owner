@@ -25,7 +25,7 @@ export async function GET() {
       isAllowed: boolean
     }> = []
 
-    for (const g of groups || []) {
+    for (const g of (groups || []) as any[]) {
       const groupId = g.id?.toString?.() || g.id
       const policies = await DeviceGroupModel.getGroupPolicies(groupId).catch(() => [])
       for (const p of policies || []) {

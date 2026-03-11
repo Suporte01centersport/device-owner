@@ -3,6 +3,7 @@ const nextConfig = {
   // Otimizações para dev mais rápido
   reactStrictMode: true,
   poweredByHeader: false,
+  transpilePackages: ['@react-pdf/renderer', '@react-pdf/layout', '@react-pdf/primitives', '@react-pdf/types'],
   env: {
     APPWRITE_ENDPOINT: process.env.APPWRITE_ENDPOINT || 'http://localhost:80',
     APPWRITE_PROJECT_ID: process.env.APPWRITE_PROJECT_ID || 'mdm-project',

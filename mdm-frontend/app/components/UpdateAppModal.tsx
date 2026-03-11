@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Device } from '../types/device'
 import ConfirmModal from './ConfirmModal'
+import { showAlert } from '../lib/dialog'
 
 interface UpdateAppModalProps {
   device: Device | null
@@ -52,7 +53,7 @@ export default function UpdateAppModal({ device, isOpen, onClose, onConfirm }: U
 
   const handleConfirmClick = () => {
     if (!apkUrl.trim()) {
-      alert('Por favor, insira a URL do APK')
+      showAlert('Por favor, insira a URL do APK')
       return
     }
     setShowConfirm(true)

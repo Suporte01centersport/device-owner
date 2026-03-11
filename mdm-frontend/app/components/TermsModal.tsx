@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { Document, Page, Text, View, StyleSheet, pdf, Font } from '@react-pdf/renderer'
 import { Device } from '../types/device'
+import { showAlert } from '../lib/dialog'
 
 interface TermsModalProps {
   isOpen: boolean
@@ -576,7 +577,7 @@ export default function TermsModal({ isOpen, onClose, device, assignedUser }: Te
       }, 1000)
     } catch (error) {
       console.error('Erro ao gerar PDF:', error)
-      alert('Erro ao gerar PDF. Tente novamente.')
+      showAlert('Erro ao gerar PDF. Tente novamente.')
     }
   }
 

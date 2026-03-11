@@ -166,6 +166,14 @@ class LockScreenActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao parar Lock Task: ${e.message}")
         }
+        // Restaurar status bar e Lock Task Features após sair do lock screen
+        try {
+            com.mdm.launcher.utils.DevicePolicyHelper.showStatusBar(this)
+            com.mdm.launcher.utils.DevicePolicyHelper.enableLockTaskWithStatusBar(this)
+            Log.d(TAG, "Status bar restaurada após desbloqueio")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao restaurar status bar: ${e.message}")
+        }
         finish()
     }
 

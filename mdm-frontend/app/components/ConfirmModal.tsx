@@ -1,5 +1,8 @@
 'use client'
 
+import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
+
 interface ConfirmModalProps {
   isOpen: boolean
   onClose: () => void
@@ -9,8 +12,7 @@ interface ConfirmModalProps {
   confirmLabel?: string
   cancelLabel?: string
   variant?: 'danger' | 'warning' | 'primary'
-  /** Quando true, o modal aparece dentro do container pai (position: relative) em vez de tela cheia */
-  insideCard?: boolean
+  insideCard?: boolean // mantido para compatibilidade, mas sempre centraliza
 }
 
 export default function ConfirmModal({
@@ -22,9 +24,14 @@ export default function ConfirmModal({
   confirmLabel = 'Sim',
   cancelLabel = 'Não',
   variant = 'danger',
-  insideCard = false
 }: ConfirmModalProps) {
-  if (!isOpen) return null
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!isOpen || !mounted) return null
 
   const confirmButtonClass = {
     danger: 'btn btn-error',
@@ -32,13 +39,9 @@ export default function ConfirmModal({
     primary: 'btn btn-primary'
   }[variant]
 
-  const overlayClass = insideCard
-    ? 'absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center z-10 rounded-xl p-4'
-    : 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4'
-
-  return (
+  const modal = (
     <div
-      className={overlayClass}
+      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9998] p-4"
       onClick={onClose}
     >
       <div
@@ -58,4 +61,6 @@ export default function ConfirmModal({
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }

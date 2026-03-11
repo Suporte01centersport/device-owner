@@ -312,12 +312,12 @@ class MainActivity : AppCompatActivity() {
             com.mdm.launcher.utils.DevicePolicyHelper.performLockdownOnInstall(this)
         }
         
-        // ✅ NOVO: Garantir que Lock Task Mode está desabilitado ao iniciar
+        // Garantir status bar habilitada ao iniciar
         try {
-            stopLockTask()
-            Log.d(TAG, "✅ Lock Task Mode desabilitado no onCreate")
+            com.mdm.launcher.utils.DevicePolicyHelper.showStatusBar(this)
+            Log.d(TAG, "✅ Status bar habilitada no onCreate")
         } catch (e: Exception) {
-            Log.d(TAG, "Lock Task Mode já estava desabilitado no onCreate")
+            Log.d(TAG, "Erro ao habilitar status bar no onCreate: ${e.message}")
         }
         
         // ✅ NOVO: Garantir que Settings não está oculto (pode bloquear apps recentes)
@@ -334,21 +334,24 @@ class MainActivity : AppCompatActivity() {
         // Configurar otimizações de bateria para garantir conexão persistente
         configureBatteryOptimizations()
         
-        // Garantir que a barra de navegação seja visível usando API moderna
+        // Garantir que a barra de status e navegação sejam visíveis
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.insetsController?.let { controller ->
-                controller.show(android.view.WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.show(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_DEFAULT
             }
         } else {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = 0
         }
-        
-        // Forçar exibição da barra de navegação após um delay
+
+        // Forçar exibição da barra de status e navegação após um delay
         window.decorView.post {
             if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-                window.insetsController?.show(android.view.WindowInsets.Type.navigationBars())
+                window.insetsController?.let { controller ->
+                    controller.show(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                    controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_DEFAULT
+                }
             } else {
                 @Suppress("DEPRECATION")
                 window.decorView.systemUiVisibility = 0
@@ -450,10 +453,10 @@ class MainActivity : AppCompatActivity() {
         com.mdm.launcher.utils.AppMonitor.startMonitoring(this)
         Log.d(TAG, "✅ AppMonitor iniciado via config inicial (add-device)")
         
-        // Marcar para ativar kiosk após permissões (evita chamar setKioskMode antes do app estar pronto)
-        if (apps.size == 1) {
-            sharedPreferences.edit().putBoolean("apply_kiosk_on_ready", true).apply()
-        }
+        // NÃO ativar kiosk automaticamente - sempre mostrar launcher para o usuário poder selecionar
+        // if (apps.size == 1) {
+        //     sharedPreferences.edit().putBoolean("apply_kiosk_on_ready", true).apply()
+        // }
         
         // Definir launcher padrão imediatamente (add-device: usuário não deve conseguir sair)
         setAsDefaultLauncher()
@@ -1161,13 +1164,9 @@ class MainActivity : AppCompatActivity() {
         // Carregar dados salvos
         loadSavedData()
         
-        // Aplicar kiosk se veio do add-device (config inicial via intent)
+        // Limpar flag de kiosk se existir (desativado - sempre mostra launcher)
         if (sharedPreferences.getBoolean("apply_kiosk_on_ready", false)) {
             sharedPreferences.edit().putBoolean("apply_kiosk_on_ready", false).apply()
-            if (allowedApps.size == 1) {
-                setKioskMode(allowedApps[0], true)
-                Log.d(TAG, "✅ Modo kiosk aplicado: ${allowedApps[0]}")
-            }
         }
         
         Log.d(TAG, "✅ App inicializado com sucesso")
@@ -1324,12 +1323,12 @@ class MainActivity : AppCompatActivity() {
         // Inicializar todas as funcionalidades após permissões concedidas
         initializeLocationTracking()
         
-        // ✅ NOVO: Garantir que Lock Task Mode está desabilitado
+        // Garantir status bar habilitada ao inicializar
         try {
-            stopLockTask()
-            Log.d(TAG, "✅ Lock Task Mode desabilitado ao iniciar")
+            com.mdm.launcher.utils.DevicePolicyHelper.showStatusBar(this)
+            Log.d(TAG, "✅ Status bar habilitada ao inicializar")
         } catch (e: Exception) {
-            Log.d(TAG, "Lock Task Mode já estava desabilitado")
+            Log.d(TAG, "Erro ao habilitar status bar: ${e.message}")
         }
         
         // ✅ NOVO: Garantir que Settings está habilitado
@@ -2158,10 +2157,10 @@ class MainActivity : AppCompatActivity() {
                     saveData() // Salvar dados recebidos da web
                     Log.d(TAG, "✅ Dados salvos em SharedPreferences")
 
-                    // Se apenas 1 app permitido (modo kiosk), ativar: sem bloqueio, power abre app, desligar→reiniciar
-                    if (allowedApps.size == 1) {
-                        setKioskMode(allowedApps[0], true)
-                    }
+                    // NÃO ativar kiosk automaticamente - sempre mostrar launcher para seleção
+                    // if (allowedApps.size == 1) {
+                    //     setKioskMode(allowedApps[0], true)
+                    // }
 
                     // FORÇAR RECARGA dos apps instalados se lista estiver vazia ou desatualizada
                     if (installedApps.isEmpty()) {
@@ -3203,6 +3202,8 @@ class MainActivity : AppCompatActivity() {
                 } catch (e: Exception) {
                     Log.e(TAG, "setLockTaskPackages falhou: ${e.message}")
                 }
+                // Bloquear tudo na tela de bloqueio (sem status bar, sem notificações)
+                com.mdm.launcher.utils.DevicePolicyHelper.disableLockTaskFeatures(this)
                 // Tela preta com cadeado - Lock Task Mode mantém até desbloqueio pelo painel MDM
                 val intent = Intent(this, LockScreenActivity::class.java).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NO_HISTORY or Intent.FLAG_ACTIVITY_EXCLUDE_FROM_RECENTS)
@@ -3453,6 +3454,9 @@ class MainActivity : AppCompatActivity() {
         com.mdm.launcher.utils.DevicePolicyHelper.applyFiveMinuteScreenTimeout(this)
         com.mdm.launcher.utils.DevicePolicyHelper.liberateWifiBluetooth(this)
         com.mdm.launcher.utils.DevicePolicyHelper.reapplyWifiBluetoothRestrictions(this)
+        // Garantir que status bar + Quick Settings estão habilitados (restaurar após tela de bloqueio)
+        com.mdm.launcher.utils.DevicePolicyHelper.showStatusBar(this)
+        com.mdm.launcher.utils.DevicePolicyHelper.enableLockTaskWithStatusBar(this)
         val currentTime = System.currentTimeMillis()
         val timeSinceLastResume = currentTime - lastResumeTime
         
@@ -3471,7 +3475,8 @@ class MainActivity : AppCompatActivity() {
         }
         
         try {
-            stopLockTask()
+            // NÃO chamar stopLockTask() aqui - desfaz as configurações de Lock Task Features
+            // (status bar, notificações, Quick Settings ficam bloqueados se sair do Lock Task)
             reenableSettingsIfHidden()
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao reabilitar Settings: ${e.message}")
@@ -3513,14 +3518,14 @@ class MainActivity : AppCompatActivity() {
         
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             window.insetsController?.let { controller ->
-                controller.show(android.view.WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                controller.show(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
+                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_DEFAULT
             }
         } else {
             @Suppress("DEPRECATION")
             window.decorView.systemUiVisibility = 0
         }
-        
+
         checkWebSocketHealth()
         loadAppsIfNeeded()
     }
@@ -3903,7 +3908,10 @@ class MainActivity : AppCompatActivity() {
                     } catch (e: Exception) {
                         Log.w(TAG, "setLockTaskPackages falhou (alguns dispositivos): ${e.message}")
                     }
-                    
+
+                    // Habilitar status bar + Quick Settings (WiFi/Bluetooth) no Lock Task Mode
+                    com.mdm.launcher.utils.DevicePolicyHelper.enableLockTaskWithStatusBar(this)
+
                     // Lock Task ANTES de iniciar o app: assim o sistema só permite nosso launcher e o app kiosk
                     try {
                         startLockTask()

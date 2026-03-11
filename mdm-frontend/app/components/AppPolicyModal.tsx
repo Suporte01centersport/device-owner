@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { DeviceGroup, AppPolicy, Device } from '../types/device'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 interface AppPolicyModalProps {
   group: DeviceGroup | null
@@ -66,7 +67,7 @@ export default function AppPolicyModal({
 
   const handleSavePolicy = () => {
     if (!newPolicy.packageName || !newPolicy.appName) {
-      alert('Por favor, preencha todos os campos obrigatórios')
+      showAlert('Por favor, preencha todos os campos obrigatórios')
       return
     }
 
@@ -100,8 +101,8 @@ export default function AppPolicyModal({
     })
   }
 
-  const handleDeletePolicy = (policyId: string) => {
-    if (window.confirm('Tem certeza que deseja deletar esta política?')) {
+  const handleDeletePolicy = async (policyId: string) => {
+    if (await showConfirm('Tem certeza que deseja deletar esta política?')) {
       onDelete(policyId)
     }
   }

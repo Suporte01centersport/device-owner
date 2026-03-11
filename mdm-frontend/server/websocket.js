@@ -360,7 +360,7 @@ const server = http.createServer((req, res) => {
                 
                 console.log('═══════════════════════════════════════════════');
                 console.log('📥 HTTP API: Comando de atualização recebido');
-                console.log('═══════════════════════════════════════════════');
+                console.log('═══════════════��═══════════════════════════════');
                 console.log('Device IDs:', deviceIds);
                 console.log('APK URL:', apkUrl);
                 console.log('Version:', version);
@@ -861,6 +861,14 @@ const server = http.createServer((req, res) => {
                                 timestamp: Date.now()
                             };
                             deviceWs.send(JSON.stringify(message));
+
+                            // Persistir allowedApps no dispositivo para reenvio na reconexão
+                            if (device) {
+                                device.allowedApps = finalAllowedApps;
+                                persistentDevices.set(deviceId, device);
+                                saveDeviceToDatabase(device);
+                            }
+
                             results.push({ success: true, deviceId });
                             log.info(`Política de grupo aplicada (apps individuais preservados)`, { 
                                 deviceId, 
@@ -916,13 +924,67 @@ const server = http.createServer((req, res) => {
             }
         });
         
+    } else if (req.method === 'POST' && path.startsWith('/api/groups/') && path.includes('/send-restrictions')) {
+        // Rota para enviar restrições de dispositivo para todos os dispositivos do grupo
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', async () => {
+            try {
+                const pathMatch = path.match(/\/api\/groups\/([^\/]+)\/send-restrictions/);
+                if (!pathMatch || !pathMatch[1]) {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'Formato de URL inválido' }));
+                    return;
+                }
+                const groupId = pathMatch[1];
+                const { restrictions } = JSON.parse(body);
+
+                if (!restrictions || typeof restrictions !== 'object') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'restrictions é obrigatório' }));
+                    return;
+                }
+
+                log.info('Enviando restrições para grupo', { groupId, restrictions });
+
+                // Buscar dispositivos do grupo
+                const devices = await DeviceGroupModel.getGroupDevices(groupId);
+                const deviceIds = devices.map(d => d.device_id || d.deviceId || d.serial_number).filter(Boolean);
+
+                let sent = 0;
+                for (const deviceId of deviceIds) {
+                    const deviceWs = connectedDevices.get(deviceId);
+                    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+                        try {
+                            deviceWs.send(JSON.stringify({
+                                type: 'set_device_restrictions',
+                                data: restrictions,
+                                timestamp: Date.now()
+                            }));
+                            sent++;
+                            log.info('Restrições enviadas para dispositivo', { deviceId });
+                        } catch (e) {
+                            log.error('Erro ao enviar restrições', { deviceId, error: e.message });
+                        }
+                    }
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, sent, total: deviceIds.length }));
+            } catch (error) {
+                log.error('Erro ao enviar restrições', { error: error.message });
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+
     } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Endpoint não encontrado' }));
     }
 });
 
-const wss = new WebSocket.Server({ 
+const wss = new WebSocket.Server({
     server: server, // Usar o mesmo servidor HTTP
     perMessageDeflate: false, // Desabilitar compressão para melhor performance
     maxPayload: 1024 * 1024, // 1MB max payload
@@ -2072,7 +2134,43 @@ persistentDevices.set(deviceId, deviceData);
         applyAppPermissionsToDevice(deviceId, pendingKioskAppsForAll);
         pendingKioskAppsForAll = null;
     }
-    
+
+    // Reenviar allowedApps salvos para o dispositivo ao reconectar
+    const savedDeviceApps = persistentDevices.get(deviceId);
+    if (savedDeviceApps && Array.isArray(savedDeviceApps.allowedApps) && savedDeviceApps.allowedApps.length > 0) {
+        log.info('Reenviando allowedApps salvos para dispositivo reconectado', {
+            deviceId, allowedAppsCount: savedDeviceApps.allowedApps.length
+        });
+        ws.send(JSON.stringify({
+            type: 'update_app_permissions',
+            data: { allowedApps: savedDeviceApps.allowedApps },
+            timestamp: Date.now()
+        }));
+        console.log(`📲 allowedApps reenviados para ${deviceId}: ${savedDeviceApps.allowedApps.length} apps`);
+    } else {
+        // Verificar se o dispositivo pertence a algum grupo com políticas
+        try {
+            const dbDevForApps = await query(`SELECT id FROM devices WHERE device_id = $1`, [deviceId]);
+            if (dbDevForApps.rows.length > 0) {
+                const policyResult = await query(`
+                    SELECT DISTINCT ap.package_name
+                    FROM app_policies ap
+                    JOIN device_group_memberships dgm ON dgm.group_id = ap.group_id
+                    WHERE dgm.device_id = $1 AND ap.policy_type = 'allow'
+                `, [dbDevForApps.rows[0].id]);
+                if (policyResult.rows.length > 0) {
+                    const groupApps = policyResult.rows.map(r => r.package_name);
+                    log.info('Aplicando políticas de grupo ao dispositivo reconectado', {
+                        deviceId, groupAppsCount: groupApps.length
+                    });
+                    applyAppPermissionsToDevice(deviceId, groupApps);
+                }
+            }
+        } catch (err) {
+            log.warn('Erro ao buscar políticas de grupo na reconexão', { deviceId, error: err.message });
+        }
+    }
+
     log.info(`Dispositivo conectado`, {
         deviceId: deviceId,
         connectionId: ws.connectionId,
@@ -3675,7 +3773,7 @@ setInterval(async () => {
         });
     }
 
-    // ✅ BUSCAR VÍNCULOS DE USUÁRIO DO BANCO ANTES DE ENVIAR STATUS PERIÓDICO
+    // ✅ BUSCAR VÍNCULOS DE USU��RIO DO BANCO ANTES DE ENVIAR STATUS PERIÓDICO
     let userBindingsMap = new Map();
     try {
         const userBindingsResult = await query(`

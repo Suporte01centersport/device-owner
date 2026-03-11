@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { Device } from '../types/device'
+import { showAlert } from '../lib/dialog'
 
 interface BulkUpdateModalProps {
   devices: Device[]
@@ -68,7 +69,7 @@ export default function BulkUpdateModal({ devices, isOpen, onClose, onBulkUpdate
 
   const handleUpdateMdm = async () => {
     if (selectedDevices.size === 0) {
-      alert('⚠️ Selecione pelo menos um dispositivo.')
+      showAlert('Selecione pelo menos um dispositivo.')
       return
     }
     cancelRef.current = false

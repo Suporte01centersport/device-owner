@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { Device, DeviceGroup } from '../types/device'
+import { showAlert } from '../lib/dialog'
 
 // Componente de mapa com Leaflet para área permitida
 interface LocationMapProps {
@@ -1079,7 +1080,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
 
   if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
+      <div className="border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="text-4xl mb-2">🗺️</div>
           <div className="text-sm">Preencha latitude e longitude para ver o mapa</div>
@@ -1090,7 +1091,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
 
   if (mapError) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
+      <div className="border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="text-4xl mb-2">⚠️</div>
           <div className="text-sm font-semibold mb-1">Erro ao carregar mapa</div>
@@ -1102,7 +1103,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
 
   if (!isMapLoaded) {
     return (
-      <div className="border border-gray-200 rounded-lg bg-gray-100 flex items-center justify-center" style={{ height: '500px' }}>
+      <div className="border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] flex items-center justify-center" style={{ height: '500px' }}>
         <div className="text-center text-secondary">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-2"></div>
           <div className="text-sm">Carregando mapa...</div>
@@ -1112,7 +1113,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
   }
 
   return (
-    <div className="border border-gray-200 rounded-lg overflow-hidden" style={{ position: 'relative' }}>
+    <div className="border border-[var(--border)] rounded-lg overflow-hidden" style={{ position: 'relative' }}>
              <div 
                ref={mapRef} 
                className="w-full" 
@@ -1126,7 +1127,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
              />
       {/* Overlay com informações - atualizado dinamicamente */}
       {latitude && longitude && (
-        <div className="absolute top-2 left-2 bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-200 z-[1000]" style={{ pointerEvents: 'none' }}>
+        <div className="absolute top-2 left-2 bg-[var(--surface)] px-3 py-2 rounded-lg shadow-lg border border-[var(--border)] z-[1000]" style={{ pointerEvents: 'none' }}>
           <div className="text-xs font-semibold text-primary">📍 Ponto Escolhido</div>
           <div className="text-xs text-secondary font-mono">
             {latitude.toFixed(4)}, {longitude.toFixed(4)}
@@ -1146,7 +1147,7 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
         href={`https://www.google.com/maps?q=${latitude},${longitude}`}
         target="_blank"
         rel="noopener noreferrer"
-        className="absolute bottom-2 right-2 bg-white px-3 py-2 rounded-lg shadow-lg border border-gray-200 hover:bg-gray-50 transition-colors text-xs font-medium text-primary flex items-center gap-1 z-[1000]"
+        className="absolute bottom-2 right-2 bg-[var(--surface)] px-3 py-2 rounded-lg shadow-lg border border-[var(--border)] hover:bg-[var(--surface-elevated)] transition-colors text-xs font-medium text-primary flex items-center gap-1 z-[1000]"
         style={{ pointerEvents: 'auto' }}
       >
         🔗 Abrir no Google Maps
@@ -1173,7 +1174,7 @@ interface GroupModalProps {
   onAddPolicy?: () => void
 }
 
-type TabKey = 'overview' | 'devices' | 'policies' | 'monitoring' | 'history'
+type TabKey = 'overview' | 'devices' | 'policies' | 'restrictions' | 'monitoring' | 'history'
 
 // Componente da aba de histórico
 interface HistoryTabProps {
@@ -1258,7 +1259,7 @@ function HistoryTab({ groupId }: HistoryTabProps) {
       case 'info':
         return { icon: 'ℹ️', color: 'border-blue-200 bg-blue-50', textColor: 'text-blue-700' }
       default:
-        return { icon: '📌', color: 'border-gray-200 bg-gray-50', textColor: 'text-gray-700' }
+        return { icon: '📌', color: 'border-[var(--border)] bg-[var(--surface-elevated)]', textColor: 'text-[var(--text-primary)]' }
     }
   }
 
@@ -1284,7 +1285,7 @@ function HistoryTab({ groupId }: HistoryTabProps) {
               onChange={(e) => setSelectedDate(e.target.value)}
               min={minDate}
               max={maxDate}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+              className="px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             />
             {availableDates.length > 0 && (
               <div className="text-xs text-secondary">
@@ -1402,6 +1403,25 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
   const [selectedApps, setSelectedApps] = useState<string[]>([])
   const [isSavingPolicies, setIsSavingPolicies] = useState(false)
   const [appSearchQuery, setAppSearchQuery] = useState('')
+  const [deviceRestrictions, setDeviceRestrictions] = useState({
+    lockScreen: true,           // Tela de bloqueio (bloquear/desbloquear remotamente)
+    statusBarDisabled: false,   // Bloquear barra de status
+    wifiDisabled: false,        // Bloquear configuração WiFi
+    bluetoothDisabled: false,   // Bloquear pareamento Bluetooth
+    cameraDisabled: false,      // Bloquear câmera
+    screenshotDisabled: false,  // Bloquear capturas de tela
+    installAppsDisabled: true,  // Bloquear instalação de apps
+    uninstallAppsDisabled: true,// Bloquear desinstalação
+    settingsDisabled: true,     // Bloquear acesso às Configurações
+    factoryResetDisabled: true, // Bloquear reset de fábrica
+    usbDisabled: false,         // Bloquear transferência USB
+    nfcDisabled: false,         // Bloquear NFC
+    hotspotDisabled: false,     // Bloquear hotspot/tethering
+    locationDisabled: false,    // Bloquear alteração de localização
+    developerOptionsDisabled: true, // Bloquear opções de desenvolvedor
+    autoTimeRequired: true,     // Forçar hora automática
+  })
+  const [isSavingRestrictions, setIsSavingRestrictions] = useState(false)
   const [allowedNetworks, setAllowedNetworks] = useState<string[]>([])
   const [allowedLocation, setAllowedLocation] = useState<{ latitude: number; longitude: number; radius_km: number } | null>(null)
   const [configModalOpen, setConfigModalOpen] = useState<'networks' | 'location' | null>(null)
@@ -2124,21 +2144,21 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
         body: JSON.stringify({ allowedNetworks })
       })
       if (res.ok) {
-        alert('Redes permitidas atualizadas com sucesso!')
+        showAlert('Redes permitidas atualizadas com sucesso!')
         setConfigModalOpen(null)
       } else {
-        alert('Erro ao salvar redes permitidas')
+        showAlert('Erro ao salvar redes permitidas')
       }
     } catch (error) {
       console.error('Erro ao salvar redes:', error)
-      alert('Erro ao salvar redes permitidas')
+      showAlert('Erro ao salvar redes permitidas')
     }
   }
 
   // Função para buscar endereço usando Nominatim (OpenStreetMap)
   const handleSearchAddress = async () => {
     if (!addressSearch.trim()) {
-      alert('Por favor, digite um endereço para buscar')
+      showAlert('Por favor, digite um endereço para buscar')
       return
     }
 
@@ -2162,7 +2182,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
       const data = await response.json()
 
       if (!data || data.length === 0) {
-        alert('Endereço não encontrado. Tente ser mais específico (ex: incluir cidade, estado)')
+        showAlert('Endereço não encontrado. Tente ser mais específico (ex: incluir cidade, estado)')
         return
       }
 
@@ -2184,13 +2204,13 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
 
       // Mostrar endereço encontrado
       const displayName = result.display_name || addressSearch
-      alert(`📍 Endereço encontrado:\n${displayName}\n\nCoordenadas: ${lat.toFixed(6)}, ${lon.toFixed(6)}`)
+      showAlert(`Endereço encontrado:\n${displayName}\n\nCoordenadas: ${lat.toFixed(6)}, ${lon.toFixed(6)}`)
       
       // Limpar o campo de busca
       setAddressSearch('')
     } catch (error) {
       console.error('Erro ao buscar endereço:', error)
-      alert('Erro ao buscar endereço. Verifique sua conexão ou tente novamente com um endereço mais específico.')
+      showAlert('Erro ao buscar endereço. Verifique sua conexão ou tente novamente com um endereço mais específico.')
     } finally {
       setIsSearchingAddress(false)
     }
@@ -2205,7 +2225,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
       const radius = parseFloat(locationRadius)
 
       if (isNaN(lat) || isNaN(lon) || isNaN(radius)) {
-        alert('Por favor, preencha todos os campos com valores válidos')
+        showAlert('Por favor, preencha todos os campos com valores válidos')
         return
       }
 
@@ -2231,17 +2251,17 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
           }
           
           setAllowedLocation(result.data?.allowedLocation || location)
-          alert('Área permitida atualizada com sucesso!')
+          showAlert('Área permitida atualizada com sucesso!')
           setConfigModalOpen(null)
         } else {
-          alert('Erro ao salvar área permitida')
+          showAlert('Erro ao salvar área permitida')
         }
       } else {
-        alert('Erro ao salvar área permitida')
+        showAlert('Erro ao salvar área permitida')
       }
     } catch (error) {
       console.error('Erro ao salvar localização:', error)
-      alert('Erro ao salvar área permitida')
+      showAlert('Erro ao salvar área permitida')
     } finally {
       setTimeout(() => {
         isSavingLocationRef.current = false
@@ -2327,6 +2347,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
               { id: 'overview', label: 'Visão Geral', icon: '📊' },
               { id: 'devices', label: 'Dispositivos', icon: '📱' },
               { id: 'policies', label: 'Políticas', icon: '📋' },
+              { id: 'restrictions', label: 'Restrições', icon: '🔒' },
               { id: 'monitoring', label: 'Monitoramento', icon: '📈' },
               { id: 'history', label: 'Histórico', icon: '📜' }
             ].map((tab) => (
@@ -2403,7 +2424,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   {/* Card de Redes Permitidas */}
                   <div
                     onClick={() => setConfigModalOpen('networks')}
-                    className="card p-4 cursor-pointer hover:shadow-lg transition-all border-2 border-gray-200 hover:border-primary"
+                    className="card p-4 cursor-pointer hover:shadow-lg transition-all border-2 border-[var(--border)] hover:border-primary"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -2424,7 +2445,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                                 </span>
                               ))}
                               {allowedNetworks.length > 3 && (
-                                <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs">
+                                <span className="px-2 py-1 bg-[var(--surface-elevated)] text-[var(--text-secondary)] rounded text-xs">
                                   +{allowedNetworks.length - 3}
                                 </span>
                               )}
@@ -2443,7 +2464,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   {/* Card de Localização Permitida */}
                   <div
                     onClick={() => setConfigModalOpen('location')}
-                    className="card p-4 cursor-pointer hover:shadow-lg transition-all border-2 border-gray-200 hover:border-primary"
+                    className="card p-4 cursor-pointer hover:shadow-lg transition-all border-2 border-[var(--border)] hover:border-primary"
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -2609,7 +2630,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                               console.error('Erro ao aplicar regras por usuário:', err)
                             }
                           }}
-                          className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                          className="w-4 h-4 text-primary border-[var(--border)] rounded focus:ring-primary"
                         />
                         <div>
                           <div className="font-medium text-primary">{u.name}</div>
@@ -2686,13 +2707,13 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         placeholder="Buscar apps..."
                         value={appSearchQuery}
                         onChange={(e) => setAppSearchQuery(e.target.value)}
-                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-[var(--border)] rounded-xl bg-[var(--surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
                     {selectedApps.length > 0 && (
                       <button
                         onClick={() => setSelectedApps([])}
-                        className="px-4 py-2.5 text-sm font-medium text-secondary hover:text-primary border border-gray-200 rounded-xl bg-white hover:bg-gray-50 transition-colors whitespace-nowrap"
+                        className="px-4 py-2.5 text-sm font-medium text-secondary hover:text-primary border border-[var(--border)] rounded-xl bg-[var(--surface)] hover:bg-[var(--surface-elevated)] transition-colors whitespace-nowrap"
                       >
                         Desmarcar tudo
                       </button>
@@ -2711,7 +2732,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         return (
                           <label
                             key={app.packageName}
-                            className="card p-3 flex items-center gap-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                            className="card p-3 flex items-center gap-3 cursor-pointer hover:bg-[var(--surface-elevated)] transition-colors"
                           >
                             <input
                               type="checkbox"
@@ -2723,7 +2744,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                                   setSelectedApps(selectedApps.filter((pkg) => pkg !== app.packageName))
                                 }
                               }}
-                              className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                              className="w-4 h-4 text-primary border-[var(--border)] rounded focus:ring-primary"
                             />
                             {app.icon && (
                               <img
@@ -2879,10 +2900,10 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             setGroupPolicies(p.data || [])
                           }
 
-                          alert(successMessage || 'Políticas processadas')
+                          showAlert(successMessage || 'Políticas processadas')
                         } catch (error) {
                           console.error('Erro ao salvar políticas:', error)
-                          alert('Erro ao salvar políticas. Verifique o console.')
+                          showAlert('Erro ao salvar políticas. Verifique o console.')
                         } finally {
                           setIsSavingPolicies(false)
                         }
@@ -2935,6 +2956,164 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
             </div>
           )}
 
+          {!isLoading && activeTab === 'restrictions' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-primary mb-2">Restrições do Dispositivo</h3>
+                <p className="text-sm text-secondary mb-4">
+                  Controle as funcionalidades bloqueadas nos dispositivos deste grupo.
+                  As restrições são aplicadas a todos os dispositivos do grupo.
+                </p>
+              </div>
+
+              {/* Segurança */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">Segurança</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'lockScreen', label: 'Tela de Bloqueio', desc: 'Habilitar bloqueio remoto do dispositivo', icon: '🔒' },
+                    { key: 'screenshotDisabled', label: 'Bloquear Screenshots', desc: 'Impedir capturas e gravações de tela', icon: '📸' },
+                    { key: 'factoryResetDisabled', label: 'Bloquear Reset de Fábrica', desc: 'Impedir restauração de fábrica', icon: '🏭' },
+                    { key: 'developerOptionsDisabled', label: 'Bloquear Opções de Desenvolvedor', desc: 'Impedir acesso às opções de desenvolvedor', icon: '🛠️' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.icon}</span>
+                        <div>
+                          <div className="text-sm font-medium text-white">{item.label}</div>
+                          <div className="text-xs text-white/60">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Conectividade */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">Conectividade</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'wifiDisabled', label: 'Bloquear Config. WiFi', desc: 'Impedir alteração de redes WiFi', icon: '📶' },
+                    { key: 'bluetoothDisabled', label: 'Bloquear Bluetooth', desc: 'Impedir pareamento Bluetooth', icon: '🔵' },
+                    { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
+                    { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
+                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir transferência de dados via USB', icon: '🔌' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.icon}</span>
+                        <div>
+                          <div className="text-sm font-medium text-white">{item.label}</div>
+                          <div className="text-xs text-white/60">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Sistema */}
+              <div>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3">Sistema</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {[
+                    { key: 'statusBarDisabled', label: 'Bloquear Barra de Status', desc: 'Impedir acesso ao painel de notificações', icon: '📊' },
+                    { key: 'settingsDisabled', label: 'Bloquear Configurações', desc: 'Impedir acesso ao app de Configurações', icon: '⚙️' },
+                    { key: 'installAppsDisabled', label: 'Bloquear Instalação de Apps', desc: 'Impedir instalar novos aplicativos', icon: '📦' },
+                    { key: 'uninstallAppsDisabled', label: 'Bloquear Desinstalação', desc: 'Impedir remover aplicativos', icon: '🗑️' },
+                    { key: 'cameraDisabled', label: 'Bloquear Câmera', desc: 'Desativar câmera do dispositivo', icon: '📷' },
+                    { key: 'locationDisabled', label: 'Bloquear Config. Localização', desc: 'Impedir alteração de configuração GPS', icon: '📍' },
+                    { key: 'autoTimeRequired', label: 'Forçar Hora Automática', desc: 'Impedir alteração manual de data/hora', icon: '🕐' },
+                  ].map((item) => (
+                    <label
+                      key={item.key}
+                      className="flex items-center justify-between p-4 rounded-xl border border-border bg-surface hover:bg-white/5 cursor-pointer transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.icon}</span>
+                        <div>
+                          <div className="text-sm font-medium text-white">{item.label}</div>
+                          <div className="text-xs text-white/60">{item.desc}</div>
+                        </div>
+                      </div>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={(deviceRestrictions as any)[item.key]}
+                          onChange={(e) => setDeviceRestrictions({ ...deviceRestrictions, [item.key]: e.target.checked })}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-white/20 rounded-full peer peer-checked:bg-primary transition-colors"></div>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform peer-checked:translate-x-5"></div>
+                      </div>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Botão salvar */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
+                <button
+                  onClick={async () => {
+                    if (!group) return
+                    setIsSavingRestrictions(true)
+                    try {
+                      // Enviar restrições para todos os dispositivos do grupo via WebSocket
+                      const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+                      const res = await fetch(`http://${wsHost}:3001/api/groups/${group.id}/send-restrictions`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ restrictions: deviceRestrictions })
+                      })
+                      if (res.ok) {
+                        const result = await res.json()
+                        showAlert(`Restrições aplicadas a ${result.sent || 0} dispositivo(s)`)
+                      } else {
+                        showAlert('Erro ao aplicar restrições. Verifique se o servidor WebSocket está rodando.')
+                      }
+                    } catch (error) {
+                      console.error('Erro ao salvar restrições:', error)
+                      showAlert('Erro ao conectar com o servidor.')
+                    } finally {
+                      setIsSavingRestrictions(false)
+                    }
+                  }}
+                  disabled={isSavingRestrictions}
+                  className="px-6 py-2 bg-primary text-black font-semibold rounded-lg hover:bg-primary/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isSavingRestrictions ? 'Aplicando...' : `Aplicar a ${devices.length} dispositivo(s)`}
+                </button>
+              </div>
+            </div>
+          )}
+
           {!isLoading && activeTab === 'monitoring' && (
             <div className="space-y-6">
               {/* Visão Geral */}
@@ -2954,8 +3133,8 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   </div>
                   <div className="card p-4">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                        <span className="text-gray-600 text-xl">○</span>
+                      <div className="w-10 h-10 bg-[var(--surface-elevated)] rounded-lg flex items-center justify-center">
+                        <span className="text-[var(--text-secondary)] text-xl">○</span>
                       </div>
                       <div>
                         <div className="text-xs text-secondary mb-1">Dispositivos Offline</div>
@@ -3057,7 +3236,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           <div className="flex items-start justify-between mb-4">
                             <div className="flex items-center gap-3">
                               <div className={`w-3 h-3 rounded-full ${
-                                device.status === 'online' ? 'bg-green-500' : 'bg-gray-400'
+                                device.status === 'online' ? 'bg-green-500' : 'bg-[var(--text-muted)]'
                               }`} />
                               <div>
                                 <h4 className="font-semibold text-primary text-lg">
@@ -3069,7 +3248,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                               device.status === 'online' 
                                 ? 'bg-green-100 text-green-700' 
-                                : 'bg-gray-100 text-gray-600'
+                                : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)]'
                             }`}>
                               {device.status === 'online' ? 'Online' : 'Offline'}
                             </div>
@@ -3078,7 +3257,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           {/* Grid de Informações */}
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                             {/* Status */}
-                            <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="border border-[var(--border)] rounded-lg p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-lg">📊</span>
                                 <span className="text-xs font-medium text-secondary uppercase">Status</span>
@@ -3087,7 +3266,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                                 <div className="flex items-center justify-between">
                                   <span className="text-xs text-secondary">Estado:</span>
                                   <span className={`text-xs font-semibold ${
-                                    device.status === 'online' ? 'text-green-600' : 'text-gray-600'
+                                    device.status === 'online' ? 'text-green-600' : 'text-[var(--text-secondary)]'
                                   }`}>
                                     {device.status === 'online' ? 'Conectado' : 'Desconectado'}
                                   </span>
@@ -3102,7 +3281,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             </div>
 
                             {/* Bateria */}
-                            <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="border border-[var(--border)] rounded-lg p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-lg">🔋</span>
                                 <span className="text-xs font-medium text-secondary uppercase">Bateria</span>
@@ -3128,7 +3307,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                                       </span>
                                     </div>
                                     {device.batteryLevel !== undefined && device.batteryLevel !== null && (
-                                      <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
+                                      <div className="w-full bg-[var(--surface-elevated)] rounded-full h-2 mt-2">
                                         <div
                                           className={`h-2 rounded-full ${getBatteryProgressColor(device.batteryLevel)}`}
                                           style={{ width: `${Math.min(Math.max(device.batteryLevel, 0), 100)}%` }}
@@ -3147,7 +3326,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             </div>
 
                             {/* Localização */}
-                            <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="border border-[var(--border)] rounded-lg p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-lg">📍</span>
                                 <span className="text-xs font-medium text-secondary uppercase">Localização</span>
@@ -3205,7 +3384,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                             </div>
 
                             {/* Rede WiFi */}
-                            <div className="border border-gray-200 rounded-lg p-3">
+                            <div className="border border-[var(--border)] rounded-lg p-3">
                               <div className="flex items-center gap-2 mb-2">
                                 <span className="text-lg">📶</span>
                                 <span className="text-xs font-medium text-secondary uppercase">Rede</span>
@@ -3266,7 +3445,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                                       <div className="flex items-center justify-between">
                                         <span className="text-xs text-secondary">Status WiFi:</span>
                                         <span className={`text-xs font-medium ${
-                                          device.isWifiEnabled ? 'text-green-600' : 'text-gray-600'
+                                          device.isWifiEnabled ? 'text-green-600' : 'text-[var(--text-secondary)]'
                                         }`}>
                                           {device.isWifiEnabled ? 'Ativado' : 'Desativado'}
                                         </span>
@@ -3326,7 +3505,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                   placeholder="Nome da rede WiFi (SSID)"
                   value={newNetworkName}
                   onChange={(e) => setNewNetworkName(e.target.value)}
-                  className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                  className="flex-1 px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   onKeyPress={(e) => {
                     if (e.key === 'Enter' && newNetworkName.trim()) {
                       setAllowedNetworks([...allowedNetworks, newNetworkName.trim()])
@@ -3387,7 +3566,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         disabled={allowedNetworks.includes(ssid || '')}
                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
                           allowedNetworks.includes(ssid || '')
-                            ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                            ? 'bg-[var(--surface-elevated)] text-[var(--text-muted)] cursor-not-allowed'
                             : 'bg-blue-50 text-blue-700 hover:bg-blue-100 cursor-pointer'
                         }`}
                       >
@@ -3412,7 +3591,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                     })
                   }
                 }}
-                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-elevated)] transition-colors"
               >
                 Cancelar
               </button>
@@ -3469,7 +3648,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                         handleSearchAddress()
                       }
                     }}
-                    className="flex-1 px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                    className="flex-1 px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                   />
                   <button
                     onClick={handleSearchAddress}
@@ -3510,7 +3689,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           manualUpdateCallbackRef.current()
                         }
                       }}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                   </div>
 
@@ -3530,7 +3709,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                           manualUpdateCallbackRef.current()
                         }
                       }}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                   </div>
 
@@ -3545,7 +3724,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                       placeholder="Ex: 5"
                       value={locationRadius}
                       onChange={(e) => setLocationRadius(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
+                      className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
                     />
                     <p className="text-xs text-secondary mt-1">
                       Defina o raio máximo permitido a partir do ponto central
@@ -3604,7 +3783,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                               setLocationLon(device.longitude.toString())
                             }
                           }}
-                          className="w-full text-left px-3 py-2 rounded-lg text-sm bg-white hover:bg-blue-100 transition-colors"
+                          className="w-full text-left px-3 py-2 rounded-lg text-sm bg-[var(--surface)] hover:bg-blue-100 transition-colors"
                         >
                           📍 {device.name} - {typeof device.latitude === 'number' ? device.latitude.toFixed(4) : 'N/D'}, {typeof device.longitude === 'number' ? device.longitude.toFixed(4) : 'N/D'}
                         </button>
@@ -3673,7 +3852,7 @@ export default function GroupModal({ group, isOpen, onClose, onAddDevices, onAdd
                     })
                   }
                 }}
-                className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-4 py-2 border border-[var(--border)] rounded-lg hover:bg-[var(--surface-elevated)] transition-colors"
               >
                 Cancelar
               </button>

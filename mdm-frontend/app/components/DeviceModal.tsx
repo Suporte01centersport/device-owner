@@ -5,6 +5,7 @@ import { Device, AppInfo } from '../types/device'
 import LocationView from './LocationView'
 import ReportsTab from './ReportsTab'
 import TermsModal from './TermsModal'
+import { showAlert, showConfirm } from '../lib/dialog'
 
 // Interfaces Device e AppInfo importadas de '../types/device'
 
@@ -215,10 +216,10 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
         timestamp: Date.now()
       })
       
-      alert(`Permissões salvas com sucesso!\n\nApps individuais: ${selectedApps.length}\nApps de política de grupo: ${groupPolicyApps.length}\nTotal: ${finalApps.length}\n\nℹ️ Apps individuais têm prioridade e não serão afetados pela política de grupo.`)
+      showAlert(`Permissões salvas com sucesso!\n\nApps individuais: ${selectedApps.length}\nApps de política de grupo: ${groupPolicyApps.length}\nTotal: ${finalApps.length}\n\nApps individuais têm prioridade e não serão afetados pela política de grupo.`)
     } catch (error) {
       console.error('Erro ao salvar permissões:', error)
-      alert('Erro ao salvar permissões')
+      showAlert('Erro ao salvar permissões')
     } finally {
       setIsSaving(false)
     }
@@ -230,7 +231,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
 
   const handleSendMessage = async () => {
     if (!messageText.trim()) {
-      alert('Por favor, digite uma mensagem')
+      showAlert('Por favor, digite uma mensagem')
       return
     }
 
@@ -265,11 +266,11 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
       // Fechar modal e limpar texto
       setShowMessageModal(false)
       setMessageText('')
-      alert('Mensagem enviada com sucesso!')
+      showAlert('Mensagem enviada com sucesso!')
       
     } catch (error) {
       console.error('Erro ao enviar mensagem:', error)
-      alert('Erro ao enviar mensagem')
+      showAlert('Erro ao enviar mensagem')
     } finally {
       setIsSendingMessage(false)
     }
@@ -326,8 +327,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     setShowHistoryModal(false)
   }
 
-  const handleClearHistory = () => {
-    if (confirm('Tem certeza que deseja limpar todo o histórico de mensagens? Esta ação não pode ser desfeita.')) {
+  const handleClearHistory = async () => {
+    if (await showConfirm('Tem certeza que deseja limpar todo o histórico de mensagens? Esta ação não pode ser desfeita.')) {
       setMessageHistory([])
       try {
         localStorage.removeItem(`messageHistory_${device.deviceId}`)
@@ -425,8 +426,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     device.status === 'online' ? 'status-dot-online' : 'status-dot-offline'
                   }`} />
                   <span className="text-sm text-black">{device.status}</span>
-                  <span className="text-sm text-gray-700">•</span>
-                  <span className="text-sm text-gray-700">{formatLastSeen(device.lastSeen)}</span>
+                  <span className="text-sm text-[var(--text-primary)]">•</span>
+                  <span className="text-sm text-[var(--text-primary)]">{formatLastSeen(device.lastSeen)}</span>
                 </div>
               </div>
             </div>
@@ -485,7 +486,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <div>
                       <div className="text-sm text-black">Bateria</div>
                       {isDataLoading() ? (
-                        <div className="text-xl font-bold text-gray-500">
+                        <div className="text-xl font-bold text-[var(--text-secondary)]">
                           Carregando...
                         </div>
                       ) : (
@@ -495,7 +496,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-700">
+                  <div className="text-xs text-[var(--text-primary)]">
                     {isDataLoading() ? 'aguarde' : (device.isCharging ? 'Carregando' : device.batteryStatus)}
                   </div>
                 </div>
@@ -508,7 +509,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <div>
                       <div className="text-sm text-black">Armazenamento</div>
                       {isDataLoading() ? (
-                        <div className="text-xl font-bold text-gray-500">
+                        <div className="text-xl font-bold text-[var(--text-secondary)]">
                           Carregando...
                         </div>
                       ) : (
@@ -518,7 +519,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-700">
+                  <div className="text-xs text-[var(--text-primary)]">
                     {isDataLoading() ? 'aguarde' : `${formatStorage(device.storageUsed)} / ${formatStorage(device.storageTotal)}`}
                   </div>
                 </div>
@@ -531,7 +532,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <div>
                       <div className="text-sm text-black">Apps</div>
                       {isDataLoading() ? (
-                        <div className="text-xl font-bold text-gray-500">
+                        <div className="text-xl font-bold text-[var(--text-secondary)]">
                           Carregando...
                         </div>
                       ) : (
@@ -541,7 +542,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                       )}
                     </div>
                   </div>
-                  <div className="text-xs text-gray-700">
+                  <div className="text-xs text-[var(--text-primary)]">
                     {isDataLoading() ? 'aguarde' : 'Instalados'}
                   </div>
                 </div>
@@ -558,7 +559,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                       </div>
                     </div>
                   </div>
-                  <div className="text-xs text-gray-700">No Launcher</div>
+                  <div className="text-xs text-[var(--text-primary)]">No Launcher</div>
                 </div>
               </div>
 
@@ -580,8 +581,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         </div>
                       </div>
                     ) : (
-                      <div className="bg-gray-100 border border-gray-300 rounded-lg p-3">
-                        <div className="flex items-center gap-2 text-gray-500">
+                      <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-3">
+                        <div className="flex items-center gap-2 text-[var(--text-secondary)]">
                           <span>👤</span>
                           <span className="text-sm">Nenhum usuário vinculado</span>
                         </div>
@@ -831,8 +832,8 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                   <div className="w-20 h-20 bg-border-light rounded-full flex items-center justify-center mx-auto mb-4">
                     <span className="text-3xl animate-pulse">📱</span>
                   </div>
-                  <h4 className="text-lg font-semibold text-gray-500 mb-2">Carregando aplicações...</h4>
-                  <p className="text-sm text-gray-400">
+                  <h4 className="text-lg font-semibold text-[var(--text-secondary)] mb-2">Carregando aplicações...</h4>
+                  <p className="text-sm text-[var(--text-muted)]">
                     Aguarde enquanto coletamos as informações das aplicações instaladas
                   </p>
                 </div>
@@ -842,7 +843,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <span className="text-3xl">📱</span>
                   </div>
                   <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma aplicação encontrada</h4>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-[var(--text-primary)]">
                     As aplicações instaladas serão exibidas aqui quando disponíveis
                   </p>
                 </div>
@@ -855,7 +856,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                       placeholder="Buscar aplicações..."
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
+                      className="w-full px-4 py-2.5 border border-[var(--border)] rounded-xl bg-[var(--surface)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition-all duration-200"
                     />
                   </div>
 
@@ -889,7 +890,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                           <span className="text-2xl">🔍</span>
                         </div>
                         <h4 className="text-lg font-semibold text-primary mb-1">Nenhuma aplicação encontrada</h4>
-                        <p className="text-sm text-gray-700">
+                        <p className="text-sm text-[var(--text-primary)]">
                           Tente ajustar os filtros ou termo de busca
                         </p>
                       </div>
@@ -900,7 +901,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         return (
                         <div key={app.packageName} className={`card p-4 hover:shadow-lg transition-all duration-200 ${
                           isIndividuallySelected ? 'ring-2 ring-primary bg-blue-50' : 
-                          'hover:bg-gray-50'
+                          'hover:bg-[var(--surface-elevated)]'
                         }`}>
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
@@ -908,7 +909,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                                 type="checkbox"
                                 checked={isIndividuallySelected}
                                 onChange={() => handleAppToggle(app.packageName)}
-                                className="w-4 h-4 text-primary border-gray-300 rounded focus:ring-primary"
+                                className="w-4 h-4 text-primary border-[var(--border)] rounded focus:ring-primary"
                                 disabled={isInGroupPolicy}
                                 title={isInGroupPolicy ? 'Este app já está sendo exibido por política de grupo' : ''}
                               />
@@ -936,7 +937,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                                 </div>
                                 <p className="text-sm text-black font-mono">{app.packageName || 'Package não disponível'}</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
-                                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">v{app.versionName || 'N/A'}</span>
+                                  <span className="text-xs bg-[var(--surface-elevated)] text-[var(--text-secondary)] px-2 py-1 rounded">v{app.versionName || 'N/A'}</span>
                                   {app.isSystemApp && (
                                     <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded">Sistema</span>
                                   )}
@@ -969,7 +970,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <div className="text-sm text-black">
                       {selectedApps.length} de {getFilteredApps().length} aplicações selecionadas
                       {getFilteredApps().length !== (device.installedApps?.length || 0) && (
-                        <span className="text-gray-700 ml-1">
+                        <span className="text-[var(--text-primary)] ml-1">
                           (filtradas de {device.installedApps?.length || 0} total)
                         </span>
                       )}
@@ -1005,7 +1006,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
         </div>
 
         {/* Footer - Controles Rápidos */}
-        <div className="border-t border-border p-4 bg-gray-50">
+        <div className="border-t border-border p-4 bg-[var(--surface-elevated)]">
           <div className="flex flex-wrap gap-3 justify-center max-w-2xl mx-auto">
             <button 
               className="btn btn-warning flex-1 min-w-[140px]"
@@ -1019,12 +1020,12 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                   })
                   const data = await res.json()
                   if (data.success) {
-                    alert('✅ Políticas aplicadas: bloqueio desativado, Settings bloqueado, Quick Settings restritos (WiFi, Bluetooth, claridade, som, lanterna)')
+                    showAlert('Políticas aplicadas: bloqueio desativado, Settings bloqueado, Quick Settings restritos (WiFi, Bluetooth, claridade, som, lanterna)')
                   } else {
-                    alert('❌ Erro: ' + (data.error || 'Não foi possível aplicar'))
+                    showAlert('Erro: ' + (data.error || 'Não foi possível aplicar'))
                   }
                 } catch (e) {
-                  alert('❌ Erro ao conectar com o servidor')
+                  showAlert('Erro ao conectar com o servidor')
                 } finally {
                   setIsApplyingPolicies(false)
                 }
@@ -1093,15 +1094,15 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   placeholder="Digite sua mensagem aqui..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
                   rows={4}
                   maxLength={500}
                 />
                 <div className="flex justify-between items-center mt-1">
-                  <span className="text-xs text-gray-700">
+                  <span className="text-xs text-[var(--text-primary)]">
                     {messageText.length}/500 caracteres
                   </span>
-                  <span className="text-xs text-gray-700">
+                  <span className="text-xs text-[var(--text-primary)]">
                     {500 - messageText.length} restantes
                   </span>
                 </div>
@@ -1149,7 +1150,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                     <span className="text-3xl">📋</span>
                   </div>
                   <h4 className="text-lg font-semibold text-primary mb-2">Nenhuma mensagem enviada</h4>
-                  <p className="text-sm text-gray-700">
+                  <p className="text-sm text-[var(--text-primary)]">
                     As mensagens enviadas para este dispositivo aparecerão aqui
                   </p>
                 </div>
@@ -1164,11 +1165,11 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                             {msg.deviceName}
                           </span>
                         </div>
-                        <span className="text-xs text-gray-700">
+                        <span className="text-xs text-[var(--text-primary)]">
                           {formatMessageTimestamp(msg.timestamp)}
                         </span>
                       </div>
-                      <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="bg-[var(--surface-elevated)] rounded-lg p-3">
                         <p className="text-sm text-black whitespace-pre-wrap">
                           {msg.message}
                         </p>
@@ -1181,7 +1182,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
             
             <div className="p-6 border-t border-border">
               <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-700">
+                <span className="text-sm text-[var(--text-primary)]">
                   {messageHistory.length} mensagem{messageHistory.length !== 1 ? 's' : ''} enviada{messageHistory.length !== 1 ? 's' : ''}
                 </span>
                 <div className="flex gap-3">

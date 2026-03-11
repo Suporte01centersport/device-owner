@@ -601,24 +601,24 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, index) => (
-          <div key={index} className="relative bg-white rounded-2xl p-6 hover:shadow-lg transition-all duration-300">
+          <div key={index} className="relative bg-[var(--surface)] rounded-2xl p-6 hover:shadow-lg transition-all duration-300">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-4">
                 <div className={`w-16 h-16 rounded-2xl flex items-center justify-center text-3xl ${
                   stat.changeType === 'positive' ? 'bg-green-50' :
-                  stat.changeType === 'negative' ? 'bg-red-50' : 'bg-gray-50'
+                  stat.changeType === 'negative' ? 'bg-red-50' : 'bg-[var(--surface-elevated)]'
                 }`}>
                   {stat.icon}
                 </div>
                 <div>
-                  <div className="text-4xl font-bold text-gray-900">{stat.value}</div>
-                  <div className="text-sm text-gray-600 font-medium">{stat.title}</div>
+                  <div className="text-4xl font-bold text-[var(--text-primary)]">{stat.value}</div>
+                  <div className="text-sm text-[var(--text-secondary)] font-medium">{stat.title}</div>
                 </div>
               </div>
               <div className="text-right">
                 <div className={`text-2xl font-bold ${
                   stat.changeType === 'positive' ? 'text-green-600' :
-                  stat.changeType === 'negative' ? 'text-red-600' : 'text-gray-500'
+                  stat.changeType === 'negative' ? 'text-red-600' : 'text-[var(--text-secondary)]'
                 }`}>
                   {stat.change}
                 </div>
@@ -640,7 +640,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
                   viewMode === 'atual'
                     ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
                 }`}
                 title="Ver dados do momento"
               >
@@ -651,7 +651,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
                   viewMode === 'historico'
                     ? 'bg-primary text-white'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
                 }`}
                 title="Ver histórico por período"
               >
@@ -666,7 +666,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                       className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
                         chartPeriod === p
                           ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-[var(--surface-elevated)] text-[var(--text-secondary)] hover:bg-[var(--surface-elevated)]'
                       }`}
                     >
                       {p === '7d' ? '7d' : p === '14d' ? '14d' : '30d'}
@@ -767,17 +767,17 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
 
           {/* Lista de dispositivos conectados agora */}
           {(onlineDevices > 0 || onlineComputers > 0) && (
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <h4 className="text-sm font-semibold text-gray-800 mb-3">Conectados agora</h4>
+            <div className="mt-6 pt-4 border-t border-[var(--border)]">
+              <h4 className="text-sm font-semibold text-[var(--text-primary)] mb-3">Conectados agora</h4>
               <div className="space-y-2 max-h-40 overflow-y-auto">
                 {combinedDevices
                   .filter(d => d.status === 'online')
                   .map((d) => (
-                    <div key={d.deviceId} className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg">
+                    <div key={d.deviceId} className="flex items-center gap-3 py-2 px-3 bg-[var(--surface-elevated)] rounded-lg">
                       <span className="text-lg">📱</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">{d.name}</div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-sm font-medium text-[var(--text-primary)] truncate">{d.name}</div>
+                        <div className="text-xs text-[var(--text-secondary)]">
                           {d.assignedUserName ? `Usuário: ${d.assignedUserName}` : 'Sem usuário vinculado'}
                         </div>
                       </div>
@@ -786,13 +786,13 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                 {combinedComputers
                   .filter(c => (c.status || '').toLowerCase() === 'online')
                   .map((c) => (
-                    <div key={c.computerId} className="flex items-center gap-3 py-2 px-3 bg-blue-50 rounded-lg">
+                    <div key={c.computerId} className="flex items-center gap-3 py-2 px-3 bg-[var(--surface-elevated)] rounded-lg">
                       <span className="text-lg">💻</span>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium text-gray-900 truncate">
+                        <div className="text-sm font-medium text-[var(--text-primary)] truncate">
                           {c.name || c.hostname || c.computerId}
                         </div>
-                        <div className="text-xs text-gray-600">
+                        <div className="text-xs text-[var(--text-secondary)]">
                           {c.assignedUserName || c.loggedInUser
                             ? `Usuário: ${c.assignedUserName || c.loggedInUser}`
                             : 'Sem usuário vinculado'}
@@ -823,7 +823,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
           <div className="space-y-4">
             {recentActivities.length > 0 ? (
               recentActivities.map((activity) => (
-                <div key={activity.id} className="flex items-start gap-3 hover:bg-gray-50 p-2 rounded-lg transition-colors duration-200">
+                <div key={activity.id} className="flex items-start gap-3 hover:bg-[var(--surface-elevated)] p-2 rounded-lg transition-colors duration-200">
                   <div className={`w-2 h-2 rounded-full mt-2 ${
                     activity.type === 'success' ? 'bg-green-500' :
                     activity.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
@@ -838,8 +838,8 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               ))
             ) : (
               <div className="text-center py-8">
-                <div className="text-gray-400 text-4xl mb-2">📱</div>
-                <div className="text-sm text-gray-500">Nenhuma atividade recente</div>
+                <div className="text-[var(--text-muted)] text-4xl mb-2">📱</div>
+                <div className="text-sm text-[var(--text-secondary)]">Nenhuma atividade recente</div>
               </div>
             )}
           </div>
@@ -908,7 +908,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
                 const deviceName = device?.name || `Dispositivo ${deviceId.slice(-4)}`
                 
                 return (
-                  <div key={deviceId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={deviceId} className="flex items-center justify-between p-3 bg-[var(--surface-elevated)] rounded-lg">
                     <div className="flex items-center gap-3">
                       <div className={`w-3 h-3 rounded-full ${
                         status.status === 'received' ? 'bg-green-500' :
