@@ -24,6 +24,9 @@ export default function PoliciesPage() {
   const [loading, setLoading] = useState(true)
   const [groupStats, setGroupStats] = useState<Record<string, any>>({})
   const [filterGroupId, setFilterGroupId] = useState<string>('')
+  const [expandedPanel, setExpandedPanel] = useState<'groups' | 'devicesInGroups' | 'appPolicies' | 'freeDevices' | null>(null)
+  const [quickAssignDeviceId, setQuickAssignDeviceId] = useState<string>('')
+  const [quickAssignGroupId, setQuickAssignGroupId] = useState<string>('')
 
   // Estados para formulários
   const [newGroup, setNewGroup] = useState({
@@ -42,6 +45,8 @@ export default function PoliciesPage() {
 
   // Estado de restrições por grupo
   const [restrictionsGroupId, setRestrictionsGroupId] = useState<string>('')
+  const [selectedDeviceIds, setSelectedDeviceIds] = useState<string[]>([])
+  const [restrictionTarget, setRestrictionTarget] = useState<'all' | 'group' | 'devices'>('all')
   const [deviceRestrictions, setDeviceRestrictions] = useState({
     lockScreen: true,
     kioskMode: false,
@@ -69,6 +74,7 @@ export default function PoliciesPage() {
     smsDisabled: false,
   })
   const [isSavingRestrictions, setIsSavingRestrictions] = useState(false)
+  const [restrictionsSaved, setRestrictionsSaved] = useState(false)
 
   // Carregar dados iniciais
   useEffect(() => {
@@ -162,6 +168,21 @@ export default function PoliciesPage() {
         }
       }
       setDevices(devicesList)
+
+      // Carregar restrições salvas do servidor
+      try {
+        const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
+        const restrictionsRes = await fetch(`http://${wsHost}:3001/api/restrictions`)
+        if (restrictionsRes.ok) {
+          const restrictionsData = await restrictionsRes.json()
+          if (restrictionsData.success && restrictionsData.global) {
+            setDeviceRestrictions(prev => ({ ...prev, ...restrictionsData.global }))
+            setRestrictionsSaved(true)
+          }
+        }
+      } catch (e) {
+        console.warn('Não foi possível carregar restrições salvas:', e)
+      }
     } catch (error) {
       console.error('Erro ao carregar dados:', error)
     } finally {
@@ -411,76 +432,227 @@ export default function PoliciesPage() {
         </div>
       </div>
 
-      {/* Estatísticas */}
+      {/* Estatísticas - Cards interativos */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="card p-6">
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-blue-500/20 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl">📱</span>
-            </div>
-            <div>
-              <p className="text-sm text-secondary">Total de Grupos</p>
-              <p className="text-2xl font-bold text-primary">{groups.length}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="card p-6">
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-green-500/20 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl">🔗</span>
-            </div>
-            <div>
-              <p className="text-sm text-secondary">Dispositivos em Grupos</p>
-              <p className="text-2xl font-bold text-primary">
-                {groups.reduce((sum, group) => sum + group.deviceCount, 0)}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div
-          className="card p-6 cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => setIsPoliciesOverviewModalOpen(true)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && setIsPoliciesOverviewModalOpen(true)}
-        >
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-yellow-500/20 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl">📋</span>
-            </div>
-            <div>
-              <p className="text-sm text-secondary">Políticas de Apps</p>
-              <p className="text-2xl font-bold text-primary">
-                {groups.reduce((sum, group) => sum + (group.appPolicies?.length || 0), 0)}
-              </p>
-              <p className="text-xs text-secondary mt-1">Clique para gerenciar</p>
+        {[
+          { key: 'groups' as const, icon: '📱', color: 'blue', label: 'Total de Grupos', value: groups.length, sub: 'Clique para ver/criar' },
+          { key: 'devicesInGroups' as const, icon: '🔗', color: 'green', label: 'Dispositivos em Grupos', value: groups.reduce((s, g) => s + g.deviceCount, 0), sub: 'Clique para gerenciar' },
+          { key: 'appPolicies' as const, icon: '📋', color: 'yellow', label: 'Políticas de Apps', value: groups.reduce((s, g) => s + (g.appPolicies?.length || 0), 0), sub: 'Clique para gerenciar' },
+          { key: 'freeDevices' as const, icon: '🎯', color: 'purple', label: 'Dispositivos Livres', value: devices.length - groups.reduce((s, g) => s + g.deviceCount, 0), sub: 'Clique para atribuir' },
+        ].map((card) => (
+          <div
+            key={card.key}
+            className={`card p-6 cursor-pointer hover:shadow-lg transition-all ${expandedPanel === card.key ? `ring-2 ring-${card.color}-500/50` : ''}`}
+            onClick={() => {
+              setExpandedPanel(expandedPanel === card.key ? null : card.key)
+              if (card.key === 'freeDevices') {
+                fetch('/api/devices/free').then(r => r.json()).then(res => res.success && Array.isArray(res.data) && setFreeDevices(res.data)).catch(() => {})
+              }
+            }}
+            role="button"
+            tabIndex={0}
+          >
+            <div className="flex items-center">
+              <div className={`w-12 h-12 bg-${card.color}-500/20 rounded-lg flex items-center justify-center mr-4`}>
+                <span className="text-2xl">{card.icon}</span>
+              </div>
+              <div>
+                <p className="text-sm text-secondary">{card.label}</p>
+                <p className="text-2xl font-bold text-primary">{card.value}</p>
+                <p className="text-xs text-secondary mt-1">{card.sub}</p>
+              </div>
             </div>
           </div>
-        </div>
-
-        <div
-          className="card p-6 cursor-pointer hover:shadow-lg transition-shadow"
-          onClick={() => setIsFreeDevicesModalOpen(true)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => e.key === 'Enter' && setIsFreeDevicesModalOpen(true)}
-        >
-          <div className="flex items-center">
-            <div className="w-12 h-12 bg-purple-500/20 rounded-lg flex items-center justify-center mr-4">
-              <span className="text-2xl">🎯</span>
-            </div>
-            <div>
-              <p className="text-sm text-secondary">Dispositivos Livres</p>
-              <p className="text-2xl font-bold text-primary">
-                {devices.length - groups.reduce((sum, group) => sum + group.deviceCount, 0)}
-              </p>
-              <p className="text-xs text-secondary mt-1">Clique para atribuir</p>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
+
+      {/* Painel expandido do card clicado */}
+      {expandedPanel === 'groups' && (
+        <div className="card p-5 mb-8 animate-in fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-primary">Grupos de Dispositivos</h3>
+            <div className="flex gap-2">
+              <button onClick={() => setIsCreateModalOpen(true)} className="btn btn-primary btn-sm">Novo Grupo</button>
+              <button onClick={() => setExpandedPanel(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm px-2">Fechar</button>
+            </div>
+          </div>
+          {groups.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] text-center py-6">Nenhum grupo criado. Clique em "Novo Grupo" para criar.</p>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {groups.map((group) => (
+                <div key={group.id} className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 transition-colors">
+                  <div className="flex items-center gap-3 min-w-0 cursor-pointer" onClick={() => { setSelectedGroup(group); setIsGroupModalOpen(true) }}>
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg" style={{ backgroundColor: (group.color || '#3B82F6') + '33' }}>
+                      {getGroupIcon(group.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[var(--text-primary)] truncate">{group.name}</div>
+                      <div className="text-xs text-[var(--text-muted)]">{group.deviceCount} dispositivos · {group.appPolicies?.length || 0} políticas</div>
+                    </div>
+                  </div>
+                  <button onClick={() => handleDeleteGroup(group.id)} className="text-[var(--text-muted)] hover:text-red-400 text-xs ml-2 flex-shrink-0" title="Deletar">🗑️</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {expandedPanel === 'devicesInGroups' && (
+        <div className="card p-5 mb-8 animate-in fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-primary">Dispositivos Atribuídos a Grupos</h3>
+            <button onClick={() => setExpandedPanel(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm px-2">Fechar</button>
+          </div>
+          {groups.filter(g => g.deviceCount > 0).length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] text-center py-6">Nenhum dispositivo atribuído a grupos.</p>
+          ) : (
+            <div className="space-y-4">
+              {groups.filter(g => g.deviceCount > 0).map((group) => (
+                <div key={group.id}>
+                  <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: group.color || '#3B82F6' }}></span>
+                    {group.name} ({group.deviceCount})
+                    <button
+                      onClick={() => { setSelectedGroup(group); setIsDeviceAssignmentModalOpen(true) }}
+                      className="text-xs text-[var(--primary)] hover:underline font-normal normal-case ml-auto"
+                    >Gerenciar</button>
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    {(group.devices || []).map((device: any) => (
+                      <div key={device.deviceId || device.id} className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                        <span className={`w-2 h-2 rounded-full flex-shrink-0 ${device.status === 'online' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-[var(--text-primary)] truncate">{device.name || device.model || device.deviceId}</div>
+                          <div className="text-xs text-[var(--text-muted)]">{device.model || ''}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {expandedPanel === 'appPolicies' && (
+        <div className="card p-5 mb-8 animate-in fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-primary">Políticas de Apps por Grupo</h3>
+            <button onClick={() => setExpandedPanel(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm px-2">Fechar</button>
+          </div>
+          {groups.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] text-center py-6">Crie um grupo primeiro para adicionar políticas de apps.</p>
+          ) : (
+            <div className="space-y-4">
+              {groups.map((group) => (
+                <div key={group.id}>
+                  <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span className="w-3 h-3 rounded inline-block" style={{ backgroundColor: group.color || '#3B82F6' }}></span>
+                    {group.name} ({group.appPolicies?.length || 0} apps)
+                    <button
+                      onClick={() => { setSelectedGroup(group); setIsAppPolicyModalOpen(true) }}
+                      className="text-xs text-[var(--primary)] hover:underline font-normal normal-case ml-auto"
+                    >Adicionar / Editar</button>
+                  </h4>
+                  {(group.appPolicies?.length || 0) === 0 ? (
+                    <p className="text-xs text-[var(--text-muted)] pl-5 pb-2">Nenhuma política. Clique em "Adicionar / Editar" acima.</p>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {group.appPolicies.map((policy) => (
+                        <div key={policy.id || policy.packageName} className="flex items-center justify-between p-3 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="text-lg">{policy.policyType === 'block' ? '🚫' : policy.policyType === 'require' ? '✅' : '📱'}</span>
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-[var(--text-primary)] truncate">{policy.appName}</div>
+                              <div className="text-xs text-[var(--text-muted)] truncate">{policy.packageName}</div>
+                            </div>
+                          </div>
+                          <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ml-2 ${
+                            policy.policyType === 'block' ? 'bg-red-500/20 text-red-400' : policy.policyType === 'require' ? 'bg-green-500/20 text-green-400' : 'bg-blue-500/20 text-blue-400'
+                          }`}>
+                            {policy.policyType === 'block' ? 'Bloqueado' : policy.policyType === 'require' ? 'Obrigatório' : 'Permitido'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {expandedPanel === 'freeDevices' && (
+        <div className="card p-5 mb-8 animate-in fade-in">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-primary">Dispositivos Livres (sem grupo)</h3>
+            <button onClick={() => setExpandedPanel(null)} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] text-sm px-2">Fechar</button>
+          </div>
+          {freeDevices.length === 0 ? (
+            <p className="text-sm text-[var(--text-muted)] text-center py-6">Nenhum dispositivo livre. Todos estão atribuídos a grupos.</p>
+          ) : (
+            <div className="space-y-3">
+              {groups.length > 0 && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-dashed border-[var(--primary)]/30 bg-[var(--primary)]/5">
+                  <span className="text-sm text-[var(--text-secondary)]">Atribuir rápido:</span>
+                  <select
+                    value={quickAssignDeviceId}
+                    onChange={(e) => setQuickAssignDeviceId(e.target.value)}
+                    className="flex-1 px-3 py-1.5 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)]"
+                  >
+                    <option value="">Selecione dispositivo</option>
+                    {freeDevices.map((d: any) => (
+                      <option key={d.deviceId || d.id} value={d.deviceId || d.id}>
+                        {d.name || d.model || d.deviceId || d.id}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    value={quickAssignGroupId}
+                    onChange={(e) => setQuickAssignGroupId(e.target.value)}
+                    className="flex-1 px-3 py-1.5 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)]"
+                  >
+                    <option value="">Selecione grupo</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id}>{g.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    disabled={!quickAssignDeviceId || !quickAssignGroupId}
+                    onClick={async () => {
+                      if (quickAssignDeviceId && quickAssignGroupId) {
+                        await handleAssignDevice(quickAssignDeviceId, quickAssignGroupId)
+                        setFreeDevices(prev => prev.filter((d: any) => (d.deviceId || d.id) !== quickAssignDeviceId))
+                        setQuickAssignDeviceId('')
+                        setQuickAssignGroupId('')
+                        loadData()
+                      }
+                    }}
+                    className="px-4 py-1.5 bg-[var(--primary)] text-black font-semibold rounded-lg text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-80 transition-colors"
+                  >
+                    Atribuir
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {freeDevices.map((device: any) => (
+                  <div key={device.deviceId || device.id} className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--surface)]">
+                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${device.status === 'online' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-[var(--text-primary)] truncate">{device.name || device.model || device.deviceId || device.id}</div>
+                      <div className="text-xs text-[var(--text-muted)]">{device.model || 'Desconhecido'} {device.manufacturer ? `· ${device.manufacturer}` : ''}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Lista de Grupos - layout em cubos */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -557,25 +729,116 @@ export default function PoliciesPage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-primary">Restrições de Dispositivo</h2>
-              <p className="text-sm text-secondary mt-1">Controle as funcionalidades bloqueadas nos dispositivos conectados.</p>
+              <p className="text-sm text-secondary mt-1">
+                Controle as funcionalidades bloqueadas. Restrições são salvas e aplicadas automaticamente quando o dispositivo conecta.
+                {restrictionsSaved && <span className="text-green-400 ml-2">Salvas no servidor</span>}
+              </p>
             </div>
-            {groups.length > 0 && (
+            <div className="flex items-center gap-3">
               <select
-                value={restrictionsGroupId}
-                onChange={(e) => setRestrictionsGroupId(e.target.value)}
-                className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[240px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                value={restrictionTarget}
+                onChange={(e) => {
+                  const val = e.target.value as 'all' | 'group' | 'devices'
+                  setRestrictionTarget(val)
+                  if (val !== 'devices') setSelectedDeviceIds([])
+                  if (val !== 'group') setRestrictionsGroupId('')
+                }}
+                className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[200px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
               >
-                <option value="">Todos os dispositivos</option>
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.name} ({g.deviceCount})
-                  </option>
-                ))}
+                <option value="all">Todos os dispositivos</option>
+                {groups.length > 0 && <option value="group">Por grupo</option>}
+                {devices.length > 0 && <option value="devices">Selecionar dispositivos</option>}
               </select>
-            )}
+
+              {restrictionTarget === 'group' && groups.length > 0 && (
+                <select
+                  value={restrictionsGroupId}
+                  onChange={(e) => setRestrictionsGroupId(e.target.value)}
+                  className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[200px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+                >
+                  <option value="">Selecione um grupo</option>
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name} ({g.deviceCount})
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
           </div>
 
             <div className="card p-6 space-y-6">
+              {/* Seleção de dispositivos específicos */}
+              {restrictionTarget === 'devices' && (
+                <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)]">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-[var(--text-primary)] flex items-center gap-2">
+                      <span>📱</span> Selecionar Dispositivos
+                      <span className="text-xs text-[var(--text-muted)] font-normal">
+                        ({selectedDeviceIds.length} selecionado{selectedDeviceIds.length !== 1 ? 's' : ''})
+                      </span>
+                    </h4>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setSelectedDeviceIds(devices.map(d => d.deviceId || d.id))}
+                        className="text-xs px-3 py-1 rounded bg-[var(--primary)]/20 text-[var(--primary)] hover:bg-[var(--primary)]/30 transition-colors"
+                      >
+                        Selecionar todos
+                      </button>
+                      <button
+                        onClick={() => setSelectedDeviceIds([])}
+                        className="text-xs px-3 py-1 rounded bg-white/10 text-[var(--text-secondary)] hover:bg-white/20 transition-colors"
+                      >
+                        Limpar
+                      </button>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 max-h-48 overflow-y-auto">
+                    {devices.map((device) => {
+                      const did = device.deviceId || device.id
+                      const isSelected = selectedDeviceIds.includes(did)
+                      return (
+                        <label
+                          key={did}
+                          className={`flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-colors border ${
+                            isSelected
+                              ? 'border-[var(--primary)] bg-[var(--primary)]/10'
+                              : 'border-transparent bg-white/5 hover:bg-white/10'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedDeviceIds([...selectedDeviceIds, did])
+                              } else {
+                                setSelectedDeviceIds(selectedDeviceIds.filter(id => id !== did))
+                              }
+                            }}
+                            className="w-4 h-4 rounded accent-[var(--primary)]"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-medium text-[var(--text-primary)] truncate">
+                              {device.name || device.model || did}
+                            </div>
+                            <div className="text-xs text-[var(--text-muted)] flex items-center gap-2">
+                              <span className={`inline-block w-2 h-2 rounded-full ${device.status === 'online' ? 'bg-green-400' : 'bg-gray-400'}`}></span>
+                              {device.model || 'Desconhecido'}
+                            </div>
+                          </div>
+                        </label>
+                      )
+                    })}
+                  </div>
+                  {devices.length === 0 && (
+                    <p className="text-sm text-[var(--text-muted)] text-center py-4">
+                      Nenhum dispositivo disponível
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Segurança */}
               <div>
                 <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
@@ -706,27 +969,44 @@ export default function PoliciesPage() {
               <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
                 <button
                   onClick={async () => {
+                    if (restrictionTarget === 'devices' && selectedDeviceIds.length === 0) {
+                      showAlert('Selecione pelo menos um dispositivo.')
+                      return
+                    }
+                    if (restrictionTarget === 'group' && !restrictionsGroupId) {
+                      showAlert('Selecione um grupo.')
+                      return
+                    }
                     setIsSavingRestrictions(true)
                     try {
                       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
                       let url: string
                       let targetName: string
-                      if (restrictionsGroupId) {
+                      let bodyPayload: any = { restrictions: deviceRestrictions }
+
+                      if (restrictionTarget === 'group' && restrictionsGroupId) {
                         const group = groups.find(g => g.id === restrictionsGroupId)
                         url = `http://${wsHost}:3001/api/groups/${restrictionsGroupId}/send-restrictions`
-                        targetName = group?.name || 'grupo'
+                        targetName = `grupo "${group?.name || 'grupo'}"`
                       } else {
                         url = `http://${wsHost}:3001/api/devices/send-restrictions`
-                        targetName = 'todos os dispositivos'
+                        if (restrictionTarget === 'devices') {
+                          bodyPayload.targetDeviceIds = selectedDeviceIds
+                          targetName = `${selectedDeviceIds.length} dispositivo(s) selecionado(s)`
+                        } else {
+                          targetName = 'todos os dispositivos'
+                        }
                       }
+
                       const res = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ restrictions: deviceRestrictions })
+                        body: JSON.stringify(bodyPayload)
                       })
                       if (res.ok) {
                         const result = await res.json()
-                        showAlert(`Restrições aplicadas a ${result.sent || 0} dispositivo(s) de "${targetName}"`)
+                        setRestrictionsSaved(true)
+                        showAlert(`Restrições aplicadas e salvas! Enviado para ${result.sent || 0} de ${result.total || 0} dispositivo(s) em ${targetName}.\n\nAs restrições serão reaplicadas automaticamente quando um dispositivo reconectar.`)
                       } else {
                         showAlert('Erro ao aplicar restrições. Verifique se o servidor WebSocket está rodando.')
                       }
@@ -747,13 +1027,91 @@ export default function PoliciesPage() {
                     </>
                   ) : (
                     <>
-                      Aplicar {restrictionsGroupId ? `ao grupo "${groups.find(g => g.id === restrictionsGroupId)?.name}"` : 'a todos os dispositivos'}
+                      Aplicar e Salvar {restrictionTarget === 'group' ? `ao grupo "${groups.find(g => g.id === restrictionsGroupId)?.name || ''}"` : restrictionTarget === 'devices' ? `a ${selectedDeviceIds.length} dispositivo(s)` : 'a todos os dispositivos'}
                     </>
                   )}
                 </button>
               </div>
             </div>
         </div>
+
+      {/* Seção de Apps Liberados / Bloqueados - mesmo estilo dos toggles de restrições */}
+      {groups.some(g => g.appPolicies?.length > 0) && (
+        <div className="mt-8">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-xl font-bold text-primary">Apps Liberados / Bloqueados</h2>
+              <p className="text-sm text-secondary mt-1">Controle quais aplicativos estão liberados ou bloqueados por grupo.</p>
+            </div>
+          </div>
+          <div className="card p-6 space-y-6">
+            {groups.filter(g => g.appPolicies?.length > 0).map((group) => (
+              <div key={group.id}>
+                <h4 className="text-sm font-semibold text-secondary uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <span
+                    className="w-4 h-4 rounded inline-block"
+                    style={{ backgroundColor: group.color || '#3B82F6' }}
+                  ></span>
+                  {group.name}
+                  <span className="text-xs font-normal text-[var(--text-muted)]">({group.appPolicies.length} apps)</span>
+                  <button
+                    onClick={() => {
+                      setSelectedGroup(group)
+                      setIsAppPolicyModalOpen(true)
+                    }}
+                    className="ml-auto text-xs px-3 py-1 rounded bg-[var(--primary)]/20 text-[var(--primary)] hover:bg-[var(--primary)]/30 transition-colors"
+                  >
+                    + Adicionar app
+                  </button>
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {group.appPolicies.map((policy) => {
+                    const isAllowed = policy.policyType !== 'block'
+                    return (
+                      <label
+                        key={policy.id || policy.packageName}
+                        className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--surface)] hover:bg-white/5 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <span className="text-xl flex-shrink-0">
+                            {policy.policyType === 'block' ? '🚫' : policy.policyType === 'require' ? '✅' : '📱'}
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-[var(--text-primary)]">{policy.appName}</div>
+                            <div className="text-xs text-[var(--text-muted)] truncate">{policy.packageName}</div>
+                          </div>
+                        </div>
+                        <div className="relative flex-shrink-0 ml-3">
+                          <input
+                            type="checkbox"
+                            checked={isAllowed}
+                            onChange={() => {
+                              const newType = isAllowed ? 'block' : 'allow'
+                              const updatedPolicy: AppPolicy = { ...policy, policyType: newType, isAllowed: !isAllowed }
+                              setGroups(prev => prev.map(g => {
+                                if (g.id !== group.id) return g
+                                return {
+                                  ...g,
+                                  appPolicies: g.appPolicies.map(p =>
+                                    (p.id === policy.id || p.packageName === policy.packageName) ? updatedPolicy : p
+                                  )
+                                }
+                              }))
+                            }}
+                            className="sr-only peer"
+                          />
+                          <div className={`w-11 h-6 rounded-full transition-colors ${isAllowed ? 'bg-[var(--primary)]' : 'bg-red-500/60'}`}></div>
+                          <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isAllowed ? 'left-[1.375rem]' : 'left-0.5'}`}></div>
+                        </div>
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Modal do Grupo */}
       <GroupModal

@@ -1018,12 +1018,16 @@ function LocationMapModal({
         mapInstanceRef.current.remove()
       }
 
-      const map = window.L.map(mapRef.current).setView([location.lat, location.lng], 13)
+      if (!mapRef.current.offsetWidth || !mapRef.current.offsetHeight) return
+
+      const map = window.L.map(mapRef.current, { fadeAnimation: false }).setView([location.lat, location.lng], 13)
 
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         maxZoom: 19
       }).addTo(map)
+
+      setTimeout(() => { try { map.invalidateSize() } catch(_) {} }, 100)
 
       const deviceIcon = window.L.divIcon({
         className: 'custom-device-marker',

@@ -167,26 +167,10 @@ object AppMonitor {
                 
             } catch (e: SecurityException) {
                 Log.e(TAG, "❌ SecurityException ao tentar forçar parada de $blockedPackageName: ${e.message}")
-                Log.e(TAG, "ℹ️ App pode não ter permissões para ser finalizado.")
-                
-                // ✅ FALLBACK: Tentar usar Device Policy Manager se disponível
-                try {
-                    val dpm = ctx.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-                    val componentName = ComponentName(ctx, com.mdm.launcher.DeviceAdminReceiver::class.java)
-                    
-                    if (dpm.isDeviceOwnerApp(ctx.packageName)) {
-                        // Tentar ocultar o app usando Device Owner
-                        dpm.setApplicationHidden(componentName, blockedPackageName, true)
-                        Log.d(TAG, "✅ App $blockedPackageName ocultado via Device Owner")
-                    } else {
-                        Log.w(TAG, "⚠️ Não é Device Owner - não pode ocultar app")
-                    }
-                } catch (e2: SecurityException) {
-                    Log.e(TAG, "❌ SecurityException ao ocultar app: ${e2.message}")
-                } catch (e2: Exception) {
-                    Log.e(TAG, "❌ Erro ao ocultar app: ${e2.message}")
-                }
-                
+                // NÃO usar setApplicationHidden - oculta o app permanentemente e impede reabrir
+                // Apenas retornar ao launcher é suficiente
+                Log.w(TAG, "⚠️ Não foi possível finalizar $blockedPackageName - apenas retornando ao launcher")
+
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Erro ao tentar finalizar app $blockedPackageName: ${e.message}")
                 

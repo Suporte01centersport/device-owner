@@ -58,6 +58,11 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
   const [computers, setComputers] = useState<Computer[]>([])
   const [chartPeriod, setChartPeriod] = useState<'7d' | '14d' | '30d'>('7d')
   const [viewMode, setViewMode] = useState<'atual' | 'historico'>('atual')
+  const [recentAlerts, setRecentAlerts] = useState<Array<{ id: string; message: string; severity: 'critical' | 'warning' | 'info'; timestamp: number }>>([])
+  const [globalMessageOpen, setGlobalMessageOpen] = useState(false)
+  const [globalMessageText, setGlobalMessageText] = useState('')
+  const [globalMessageSending, setGlobalMessageSending] = useState(false)
+  const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
   useEffect(() => {
     // Marcar como cliente após hidratação
@@ -333,6 +338,129 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     onMessage(handleMessage)
   }, [onMessage])
 
+  // Carregar alertas recentes
+  useEffect(() => {
+    let isMounted = true
+    const loadAlerts = async () => {
+      try {
+        const response = await fetch('/api/alerts')
+        if (!response.ok) return
+        const data = await response.json()
+        if (isMounted && Array.isArray(data.alerts)) {
+          setRecentAlerts(data.alerts.slice(0, 5))
+        }
+      } catch {
+        // API de alertas pode não existir - gerar alertas baseados nos dispositivos
+        if (isMounted) {
+          const generated: typeof recentAlerts = []
+          combinedDevices.forEach(d => {
+            if (d.batteryLevel < 20 && d.batteryLevel > 0) {
+              generated.push({
+                id: `bat-${d.deviceId}`,
+                message: `${d.name || d.deviceId}: Bateria em ${d.batteryLevel}%`,
+                severity: d.batteryLevel < 10 ? 'critical' : 'warning',
+                timestamp: d.lastSeen || Date.now()
+              })
+            }
+            if (d.status === 'offline') {
+              generated.push({
+                id: `off-${d.deviceId}`,
+                message: `${d.name || d.deviceId}: Dispositivo offline`,
+                severity: 'warning',
+                timestamp: d.lastSeen || Date.now()
+              })
+            }
+          })
+          setRecentAlerts(generated.sort((a, b) => b.timestamp - a.timestamp).slice(0, 5))
+        }
+      }
+    }
+    loadAlerts()
+    const interval = setInterval(loadAlerts, 60000)
+    return () => { isMounted = false; clearInterval(interval) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [devices])
+
+  const handleExportCSV = async () => {
+    try {
+      const response = await fetch('/api/devices/export')
+      if (response.ok) {
+        const blob = await response.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      } else {
+        // Fallback: gerar CSV local
+        const csvHeader = 'ID,Nome,Status,Bateria,Device Owner,Profile Owner,Último Acesso,Usuário\n'
+        const csvRows = devices.map(d => [
+          d.deviceId,
+          `"${(d.name || '').replace(/"/g, '""')}"`,
+          d.status,
+          d.batteryLevel,
+          d.isDeviceOwner ? 'Sim' : 'Não',
+          d.isProfileOwner ? 'Sim' : 'Não',
+          d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D',
+          `"${(d.assignedUserName || 'N/A').replace(/"/g, '""')}"`
+        ].join(','))
+        const csvContent = csvHeader + csvRows.join('\n')
+        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
+        a.click()
+        URL.revokeObjectURL(url)
+      }
+    } catch {
+      // Fallback local
+      const csvHeader = 'ID,Nome,Status,Bateria\n'
+      const csvRows = devices.map(d => `${d.deviceId},"${d.name || ''}",${d.status},${d.batteryLevel}`)
+      const blob = new Blob(['\ufeff' + csvHeader + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
+      a.click()
+      URL.revokeObjectURL(url)
+    }
+  }
+
+  const handleBackupConfig = async () => {
+    setBackupStatus('loading')
+    try {
+      const response = await fetch('/api/config/backup', { method: 'POST' })
+      if (response.ok) {
+        setBackupStatus('success')
+      } else {
+        setBackupStatus('error')
+      }
+    } catch {
+      setBackupStatus('error')
+    }
+    setTimeout(() => setBackupStatus('idle'), 3000)
+  }
+
+  const handleSendGlobalMessage = async () => {
+    if (!globalMessageText.trim()) return
+    setGlobalMessageSending(true)
+    try {
+      await fetch('/api/devices/notify-all', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: globalMessageText })
+      })
+      setGlobalMessageText('')
+      setGlobalMessageOpen(false)
+    } catch {
+      console.error('Erro ao enviar mensagem global')
+    } finally {
+      setGlobalMessageSending(false)
+    }
+  }
+
   const combinedDevices = useMemo(() => devices, [devices])
 
   const combinedComputers = useMemo(() => computers, [computers])
@@ -393,6 +521,33 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     if (percent >= 50) return `+${percent}%`
     return `${percent}%`
   }
+
+  // Enhanced Dashboard computations
+  const offlineDevices = combinedDevices.length - onlineDevices
+  const batteryAlerts = combinedDevices.filter(d => d.batteryLevel > 0 && d.batteryLevel < 20).length
+
+  const onlinePercent = combinedDevices.length > 0 ? Math.round((onlineDevices / combinedDevices.length) * 100) : 0
+  const offlinePercent = 100 - onlinePercent
+
+  const batteryLow = combinedDevices.filter(d => d.batteryLevel >= 0 && d.batteryLevel < 20).length
+  const batteryMid = combinedDevices.filter(d => d.batteryLevel >= 20 && d.batteryLevel < 50).length
+  const batteryHigh = combinedDevices.filter(d => d.batteryLevel >= 50).length
+  const batteryMax = Math.max(batteryLow, batteryMid, batteryHigh, 1)
+
+  const complianceStats = useMemo(() => {
+    if (combinedDevices.length === 0) return { compliant: 0, total: 0, percent: 0 }
+    const compliant = combinedDevices.filter(d => {
+      const hasRestrictions = d.restrictions && Object.keys(d.restrictions).length > 0
+      const isOnline = d.status === 'online'
+      const hasUser = !!d.assignedUserName
+      return hasRestrictions && isOnline && hasUser
+    }).length
+    return {
+      compliant,
+      total: combinedDevices.length,
+      percent: Math.round((compliant / combinedDevices.length) * 100)
+    }
+  }, [combinedDevices])
 
   const stats = [
     {
@@ -992,6 +1147,310 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
             {onlineDevices}/{combinedDevices.length}
           </div>
           <div className="text-sm text-secondary">Online/Total</div>
+        </div>
+      </div>
+
+      {/* ======= ENHANCED DASHBOARD SECTIONS ======= */}
+
+      {/* Status Overview Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-blue-600/20 flex items-center justify-center">
+              <span className="text-xl">📱</span>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-[var(--text-primary)]">{combinedDevices.length}</div>
+              <div className="text-xs text-[var(--text-secondary)]">Total de Dispositivos</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-green-600/20 flex items-center justify-center">
+              <span className="text-xl">🟢</span>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-green-400">{onlineDevices}</div>
+              <div className="text-xs text-[var(--text-secondary)]">Online</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-red-600/20 flex items-center justify-center">
+              <span className="text-xl">🔴</span>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-red-400">{offlineDevices}</div>
+              <div className="text-xs text-[var(--text-secondary)]">Offline</div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-5">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 rounded-lg bg-yellow-600/20 flex items-center justify-center">
+              <span className="text-xl">🔋</span>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-yellow-400">{batteryAlerts}</div>
+              <div className="text-xs text-[var(--text-secondary)]">Alertas Bateria (&lt;20%)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Charts Section - Pure CSS */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Online/Offline Pie Chart */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Online / Offline</h3>
+          <div className="flex flex-col items-center">
+            <div className="relative w-40 h-40 mb-4">
+              <div
+                className="w-full h-full rounded-full"
+                style={{
+                  background: combinedDevices.length > 0
+                    ? `conic-gradient(#22c55e ${onlinePercent * 3.6}deg, #ef4444 ${onlinePercent * 3.6}deg 360deg)`
+                    : 'conic-gradient(var(--surface-elevated) 0deg, var(--surface-elevated) 360deg)',
+                }}
+              />
+              <div className="absolute inset-3 rounded-full bg-[var(--surface)] flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-[var(--text-primary)]">{onlinePercent}%</div>
+                  <div className="text-xs text-[var(--text-secondary)]">online</div>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-6">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-green-500" />
+                <span className="text-sm text-[var(--text-secondary)]">Online ({onlineDevices})</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full bg-red-500" />
+                <span className="text-sm text-[var(--text-secondary)]">Offline ({offlineDevices})</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Battery Distribution Bar Chart */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Distribuicao de Bateria</h3>
+          <div className="space-y-5 mt-6">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Critico (0-20%)</span>
+                <span className="text-sm font-semibold text-red-400">{batteryLow}</span>
+              </div>
+              <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-red-500 rounded-full transition-all duration-500"
+                  style={{ width: `${batteryMax > 0 ? (batteryLow / batteryMax) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Medio (20-50%)</span>
+                <span className="text-sm font-semibold text-yellow-400">{batteryMid}</span>
+              </div>
+              <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-yellow-500 rounded-full transition-all duration-500"
+                  style={{ width: `${batteryMax > 0 ? (batteryMid / batteryMax) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Bom (50-100%)</span>
+                <span className="text-sm font-semibold text-green-400">{batteryHigh}</span>
+              </div>
+              <div className="w-full h-5 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  style={{ width: `${batteryMax > 0 ? (batteryHigh / batteryMax) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent Alerts Panel */}
+        <div className="card p-6">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Alertas Recentes</h3>
+          <div className="space-y-3">
+            {recentAlerts.length > 0 ? (
+              recentAlerts.map((alert) => (
+                <div key={alert.id} className="flex items-start gap-3 p-3 bg-[var(--surface-elevated)] rounded-lg">
+                  <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                    alert.severity === 'critical' ? 'bg-red-500' :
+                    alert.severity === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'
+                  }`} />
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-sm font-medium truncate ${
+                      alert.severity === 'critical' ? 'text-red-400' :
+                      alert.severity === 'warning' ? 'text-yellow-400' : 'text-blue-400'
+                    }`}>
+                      {alert.message}
+                    </div>
+                    <div className="text-xs text-[var(--text-muted)] mt-0.5">
+                      {new Date(alert.timestamp).toLocaleString('pt-BR')}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-8">
+                <div className="text-4xl mb-2">✅</div>
+                <div className="text-sm text-[var(--text-secondary)]">Nenhum alerta ativo</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Quick Actions Panel (Enhanced) */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Acoes Rapidas Avancadas</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          <button
+            className="btn btn-secondary hover:scale-105 transition-transform duration-200 flex items-center gap-2"
+            onClick={handleExportCSV}
+          >
+            <span>📥</span>
+            Exportar Inventario CSV
+          </button>
+          <button
+            className={`btn hover:scale-105 transition-transform duration-200 flex items-center gap-2 ${
+              backupStatus === 'loading' ? 'btn-secondary opacity-60 cursor-wait' :
+              backupStatus === 'success' ? 'btn-success' :
+              backupStatus === 'error' ? 'btn-error' : 'btn-secondary'
+            }`}
+            onClick={handleBackupConfig}
+            disabled={backupStatus === 'loading'}
+          >
+            <span>{backupStatus === 'success' ? '✅' : backupStatus === 'error' ? '❌' : backupStatus === 'loading' ? '⏳' : '💾'}</span>
+            {backupStatus === 'success' ? 'Backup Concluido!' :
+             backupStatus === 'error' ? 'Erro no Backup' :
+             backupStatus === 'loading' ? 'Fazendo Backup...' : 'Backup Configuracoes'}
+          </button>
+          <button
+            className={`btn ${globalMessageOpen ? 'btn-primary' : 'btn-secondary'} hover:scale-105 transition-transform duration-200 flex items-center gap-2`}
+            onClick={() => setGlobalMessageOpen(!globalMessageOpen)}
+          >
+            <span>📢</span>
+            Enviar Mensagem Global
+          </button>
+        </div>
+
+        {/* Inline Global Message Form */}
+        {globalMessageOpen && (
+          <div className="mt-4 p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border)] animate-fade-in">
+            <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
+              Mensagem para todos os dispositivos:
+            </label>
+            <textarea
+              className="w-full p-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none focus:outline-none focus:border-[var(--primary)] transition-colors"
+              rows={3}
+              placeholder="Digite a mensagem a ser enviada para todos os dispositivos..."
+              value={globalMessageText}
+              onChange={(e) => setGlobalMessageText(e.target.value)}
+            />
+            <div className="flex justify-end gap-3 mt-3">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setGlobalMessageOpen(false); setGlobalMessageText('') }}
+              >
+                Cancelar
+              </button>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={handleSendGlobalMessage}
+                disabled={globalMessageSending || !globalMessageText.trim()}
+              >
+                {globalMessageSending ? 'Enviando...' : 'Enviar'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Compliance Overview */}
+      <div className="card p-6">
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Visao de Conformidade</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Compliance Gauge */}
+          <div className="flex flex-col items-center">
+            <div className="relative w-36 h-36 mb-3">
+              <div
+                className="w-full h-full rounded-full"
+                style={{
+                  background: `conic-gradient(var(--primary) ${complianceStats.percent * 3.6}deg, var(--surface-elevated) ${complianceStats.percent * 3.6}deg 360deg)`,
+                }}
+              />
+              <div className="absolute inset-3 rounded-full bg-[var(--surface)] flex items-center justify-center">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-[var(--text-primary)]">{complianceStats.percent}%</div>
+                  <div className="text-xs text-[var(--text-secondary)]">conforme</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-sm text-[var(--text-secondary)]">
+              {complianceStats.compliant} de {complianceStats.total} dispositivos
+            </div>
+          </div>
+
+          {/* Compliance Details */}
+          <div className="space-y-4">
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Com restricoes aplicadas</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">
+                  {combinedDevices.filter(d => d.restrictions && Object.keys(d.restrictions).length > 0).length}/{combinedDevices.length}
+                </span>
+              </div>
+              <div className="w-full h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${combinedDevices.length > 0 ? (combinedDevices.filter(d => d.restrictions && Object.keys(d.restrictions).length > 0).length / combinedDevices.length) * 100 : 0}%`,
+                    backgroundColor: 'var(--primary)'
+                  }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Online</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">{onlineDevices}/{combinedDevices.length}</span>
+              </div>
+              <div className="w-full h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-green-500 rounded-full transition-all duration-500"
+                  style={{ width: `${onlinePercent}%` }}
+                />
+              </div>
+            </div>
+            <div>
+              <div className="flex justify-between mb-1">
+                <span className="text-sm text-[var(--text-secondary)]">Com usuario atribuido</span>
+                <span className="text-sm font-semibold text-[var(--text-primary)]">
+                  {combinedDevices.filter(d => !!d.assignedUserName).length}/{combinedDevices.length}
+                </span>
+              </div>
+              <div className="w-full h-3 bg-[var(--surface-elevated)] rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-blue-500 rounded-full transition-all duration-500"
+                  style={{
+                    width: `${combinedDevices.length > 0 ? (combinedDevices.filter(d => !!d.assignedUserName).length / combinedDevices.length) * 100 : 0}%`
+                  }}
+                />
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

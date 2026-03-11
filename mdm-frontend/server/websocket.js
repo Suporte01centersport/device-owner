@@ -302,6 +302,79 @@ class ConnectionHealthMonitor {
     }
 }
 
+// ═══════════════════════════════════════════════
+// Alertas automáticos e Audit Log
+// ═══════════════════════════════════════════════
+
+async function logAudit(action, targetType, targetId, targetName, details = {}) {
+    try {
+        await query(
+            'INSERT INTO audit_logs (action, target_type, target_id, target_name, details) VALUES ($1, $2, $3, $4, $5)',
+            [action, targetType, targetId, targetName, JSON.stringify(details)]
+        );
+    } catch (e) {
+        console.error('Audit log error:', e.message);
+    }
+}
+
+async function createBatteryAlert(deviceId, deviceName, batteryLevel) {
+    if (batteryLevel < 15) {
+        try {
+            await query(
+                `INSERT INTO alerts (type, severity, device_id, device_name, message, details)
+                 SELECT $1, $2, $3, $4, $5, $6
+                 WHERE NOT EXISTS (
+                   SELECT 1 FROM alerts WHERE type = $1 AND device_id = $3 AND is_resolved = false
+                 )`,
+                ['battery_low', batteryLevel < 5 ? 'critical' : 'warning', deviceId, deviceName,
+                 `Bateria baixa: ${batteryLevel}%`, JSON.stringify({ batteryLevel })]
+            );
+        } catch (e) {
+            console.error('Alert error (battery_low):', e.message);
+        }
+    }
+}
+
+async function resolveBatteryAlert(deviceId) {
+    try {
+        await query(
+            `UPDATE alerts SET is_resolved = true, resolved_at = NOW()
+             WHERE device_id = $1 AND type = 'battery_low' AND is_resolved = false`,
+            [deviceId]
+        );
+    } catch (e) {
+        console.error('Alert resolve error (battery):', e.message);
+    }
+}
+
+async function createOfflineAlert(deviceId, deviceName) {
+    try {
+        await query(
+            `INSERT INTO alerts (type, severity, device_id, device_name, message, details)
+             SELECT $1, $2, $3, $4, $5, $6
+             WHERE NOT EXISTS (
+               SELECT 1 FROM alerts WHERE type = $1 AND device_id = $3 AND is_resolved = false
+             )`,
+            ['device_offline', 'warning', deviceId, deviceName || 'Dispositivo Desconhecido',
+             `Dispositivo ficou offline`, JSON.stringify({ disconnectedAt: new Date().toISOString() })]
+        );
+    } catch (e) {
+        console.error('Alert error (device_offline):', e.message);
+    }
+}
+
+async function resolveOfflineAlert(deviceId) {
+    try {
+        await query(
+            `UPDATE alerts SET is_resolved = true, resolved_at = NOW()
+             WHERE device_id = $1 AND type = 'device_offline' AND is_resolved = false`,
+            [deviceId]
+        );
+    } catch (e) {
+        console.error('Alert resolve error (offline):', e.message);
+    }
+}
+
 // Criar servidor HTTP para API REST
 const server = http.createServer((req, res) => {
     // Configurar CORS
@@ -646,6 +719,81 @@ const server = http.createServer((req, res) => {
             res.end(JSON.stringify({ success: false, error: err.message }));
         }
         
+    } else if (req.method === 'GET' && path === '/api/restrictions') {
+        // Retorna restrições salvas (global + per-device)
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            success: true,
+            global: globalRestrictions,
+            perDevice: perDeviceRestrictions
+        }));
+
+    } else if (req.method === 'POST' && path === '/api/devices/send-restrictions') {
+        // Enviar restrições para dispositivos (todos, por grupo, ou selecionados) - SALVA E APLICA
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const { restrictions, targetDeviceIds } = JSON.parse(body);
+                if (!restrictions || typeof restrictions !== 'object') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'restrictions é obrigatório' }));
+                    return;
+                }
+
+                // Salvar restrições para persistência e auto-aplicar em reconexões
+                if (Array.isArray(targetDeviceIds) && targetDeviceIds.length > 0) {
+                    for (const did of targetDeviceIds) {
+                        perDeviceRestrictions[did] = restrictions;
+                    }
+                    log.info('Restrições salvas para dispositivos específicos', { count: targetDeviceIds.length });
+                } else {
+                    globalRestrictions = restrictions;
+                    perDeviceRestrictions = {};
+                    log.info('Restrições globais salvas');
+                }
+                saveRestrictionsToFile();
+
+                // Determinar quais dispositivos enviar
+                let targetEntries;
+                if (Array.isArray(targetDeviceIds) && targetDeviceIds.length > 0) {
+                    targetEntries = targetDeviceIds.map(did => [did, connectedDevices.get(did)]).filter(([, ws]) => ws);
+                } else {
+                    targetEntries = Array.from(connectedDevices.entries());
+                }
+
+                let sent = 0;
+                for (const [deviceId, deviceWs] of targetEntries) {
+                    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+                        try {
+                            deviceWs.send(JSON.stringify({
+                                type: 'set_device_restrictions',
+                                data: restrictions,
+                                timestamp: Date.now()
+                            }));
+                            sent++;
+                        } catch (e) {
+                            log.error('Erro ao enviar restrições', { deviceId, error: e.message });
+                        }
+                    }
+                }
+                // ═══ Audit log: restrições aplicadas via API ═══
+                for (const [did] of targetEntries) {
+                    const targetDevice = persistentDevices.get(did);
+                    logAudit('restriction_changed', 'device', did, targetDevice?.name || did, {
+                        restrictions, source: 'http_api'
+                    });
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, sent, total: targetEntries.length, saved: true }));
+            } catch (error) {
+                log.error('Erro ao enviar restrições', { error: error.message });
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+
     } else if (path.startsWith('/api/devices/') && req.method === 'POST') {
         // Endpoints para comandos de dispositivos
         let body = '';
@@ -924,43 +1072,6 @@ const server = http.createServer((req, res) => {
             }
         });
         
-    } else if (req.method === 'POST' && path === '/api/devices/send-restrictions') {
-        // Enviar restrições para TODOS os dispositivos conectados
-        let body = '';
-        req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
-            try {
-                const { restrictions } = JSON.parse(body);
-                if (!restrictions || typeof restrictions !== 'object') {
-                    res.writeHead(400, { 'Content-Type': 'application/json' });
-                    res.end(JSON.stringify({ success: false, error: 'restrictions é obrigatório' }));
-                    return;
-                }
-                log.info('Enviando restrições para todos os dispositivos', { restrictions });
-                let sent = 0;
-                for (const [deviceId, deviceWs] of connectedDevices.entries()) {
-                    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
-                        try {
-                            deviceWs.send(JSON.stringify({
-                                type: 'set_device_restrictions',
-                                data: restrictions,
-                                timestamp: Date.now()
-                            }));
-                            sent++;
-                        } catch (e) {
-                            log.error('Erro ao enviar restrições', { deviceId, error: e.message });
-                        }
-                    }
-                }
-                res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, sent, total: connectedDevices.size }));
-            } catch (error) {
-                log.error('Erro ao enviar restrições', { error: error.message });
-                res.writeHead(500, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: false, error: error.message }));
-            }
-        });
-
     } else if (req.method === 'POST' && path.startsWith('/api/groups/') && path.includes('/send-restrictions')) {
         // Rota para enviar restrições de dispositivo para todos os dispositivos do grupo
         let body = '';
@@ -1063,9 +1174,14 @@ let pendingKioskAppsForAll = null;
 // Senha de administrador global
 let globalAdminPassword = '';
 
+// Restrições globais (aplicadas a todos por padrão) e por dispositivo
+let globalRestrictions = null;
+let perDeviceRestrictions = {}; // { deviceId: { ...restrictions } }
+
 // Arquivo para persistência
 const DEVICES_FILE = path.join(__dirname, 'devices.json');
 const ADMIN_PASSWORD_FILE = path.join(__dirname, 'admin_password.json');
+const RESTRICTIONS_FILE = path.join(__dirname, 'restrictions.json');
 const supportMessagesPath = path.join(__dirname, 'support_messages.json');
 
 // Estatísticas do servidor
@@ -1269,6 +1385,42 @@ function saveAdminPasswordToFile() {
     }
 }
 
+function loadRestrictionsFromFile() {
+    try {
+        if (fs.existsSync(RESTRICTIONS_FILE)) {
+            const data = JSON.parse(fs.readFileSync(RESTRICTIONS_FILE, 'utf8'));
+            globalRestrictions = data.global || null;
+            perDeviceRestrictions = data.perDevice || {};
+            log.info('Restrições carregadas do arquivo', {
+                hasGlobal: !!globalRestrictions,
+                perDeviceCount: Object.keys(perDeviceRestrictions).length
+            });
+        }
+    } catch (error) {
+        log.error('Erro ao carregar restrições do arquivo', error);
+    }
+}
+
+function saveRestrictionsToFile() {
+    try {
+        fs.writeFileSync(RESTRICTIONS_FILE, JSON.stringify({
+            global: globalRestrictions,
+            perDevice: perDeviceRestrictions,
+            updatedAt: new Date().toISOString()
+        }, null, 2));
+        log.debug('Restrições salvas no arquivo');
+    } catch (error) {
+        log.error('Erro ao salvar restrições no arquivo', error);
+    }
+}
+
+// Retorna as restrições aplicáveis a um dispositivo (per-device > global)
+function getRestrictionsForDevice(deviceId) {
+    if (perDeviceRestrictions[deviceId]) return perDeviceRestrictions[deviceId];
+    if (globalRestrictions) return globalRestrictions;
+    return null;
+}
+
 // Função para limpar dados de aplicativos com valores null
 function cleanInstalledAppsData() {
     let cleanedCount = 0;
@@ -1317,6 +1469,9 @@ loadAdminPasswordFromFile();
 console.log('globalAdminPassword:', globalAdminPassword);
 console.log('Tipo:', typeof globalAdminPassword);
 console.log('Tamanho:', globalAdminPassword ? globalAdminPassword.length : 0);
+
+// Carregar restrições salvas na inicialização
+loadRestrictionsFromFile();
 
 // Limpar dados existentes com valores null
 cleanInstalledAppsData();
@@ -1429,7 +1584,15 @@ wss.on('connection', ws => {
                 }
                 
                 log.info(`Dispositivo desconectado`, { deviceId });
-                
+
+                // ═══ Alertas automáticos: dispositivo offline + audit log ═══
+                const offlineDeviceName = persistentDevices.get(deviceId)?.name || 'Dispositivo Desconhecido';
+                createOfflineAlert(deviceId, offlineDeviceName);
+                logAudit('device_disconnected', 'device', deviceId, offlineDeviceName, {
+                    reason: reason?.toString() || 'websocket_closed',
+                    code
+                });
+
                 // Limpar dados sensíveis quando desconectado
                 if (persistentDevices.has(deviceId)) {
                     const device = persistentDevices.get(deviceId);
@@ -1846,7 +2009,7 @@ async function handleDeviceStatus(ws, data) {
                 dbUserBinding = {
                     assignedDeviceUserId: dbDevice.assigned_device_user_id,
                     assignedUserId: dbDevice.user_id,
-                    assignedUserName: dbDevice.user_name ? dbDevice.user_name.split(' ')[0] : null,
+                    assignedUserName: dbDevice.user_name || null,
                     assignedUserCpf: dbDevice.user_cpf
                 };
                 
@@ -2035,6 +2198,23 @@ persistentDevices.set(deviceId, deviceData);
     } catch (error) {
         console.error('❌ Erro ao registrar status no histórico:', error);
     }
+
+    // ═══ Alertas automáticos: resolver offline, verificar bateria, audit log ═══
+    resolveOfflineAlert(deviceId);
+    const batteryLevel = data.data.batteryLevel;
+    if (typeof batteryLevel === 'number') {
+        if (batteryLevel < 15) {
+            createBatteryAlert(deviceId, finalName, batteryLevel);
+        } else if (batteryLevel > 20) {
+            resolveBatteryAlert(deviceId);
+        }
+    }
+    logAudit('device_connected', 'device', deviceId, finalName, {
+        model: data.data.model,
+        manufacturer: data.data.manufacturer,
+        androidVersion: data.data.androidVersion,
+        isReconnection
+    });
     
     // ✅ NOTIFICAR SOBRE CONFLITO DE USUÁRIO (se houver)
     if (userConflict) {
@@ -2082,7 +2262,7 @@ persistentDevices.set(deviceId, deviceData);
                 userBinding = {
                     assignedDeviceUserId: row.assigned_device_user_id,
                     assignedUserId: row.user_id,
-                    assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                    assignedUserName: row.user_name || null
                 };
             }
         } catch (error) {
@@ -2128,6 +2308,17 @@ persistentDevices.set(deviceId, deviceData);
         console.log(`Senha de administrador enviada automaticamente para dispositivo ${deviceId}:`, message);
     } else {
         console.log(`Nenhuma senha de administrador definida para enviar ao dispositivo ${deviceId}`);
+    }
+
+    // ✅ AUTO-APLICAR RESTRIÇÕES salvas ao dispositivo que conectou/reconectou
+    const savedRestrictions = getRestrictionsForDevice(deviceId);
+    if (savedRestrictions && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'set_device_restrictions',
+            data: savedRestrictions,
+            timestamp: Date.now()
+        }));
+        console.log(`🔒 Restrições auto-aplicadas ao dispositivo ${deviceId}`);
     }
 
     // Enviar configuração do servidor (URL pública) para que dispositivo possa reconectar de qualquer rede
@@ -2262,7 +2453,7 @@ persistentDevices.set(deviceId, deviceData);
                     userBinding = {
                         assignedDeviceUserId: row.assigned_device_user_id,
                         assignedUserId: row.user_id,
-                        assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                        assignedUserName: row.user_name || null
                     };
                     console.log(`✅ Usuário vinculado encontrado: ${row.user_name} (${row.user_id})`);
                 } else {
@@ -2396,7 +2587,7 @@ persistentDevices.set(deviceId, deviceData);
                     userBinding = {
                         assignedDeviceUserId: row.assigned_device_user_id,
                         assignedUserId: row.user_id,
-                        assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null
+                        assignedUserName: row.user_name || null
                     };
                     console.log(`✅ Usuário vinculado no status: ${row.user_name} (ID: ${row.user_id})`);
                 } else {
@@ -2477,7 +2668,13 @@ function handleDeviceRestrictions(ws, data) {
         connectionId: ws.connectionId,
         restrictions: data.data
     });
-    
+
+    // ═══ Audit log: restrições alteradas ═══
+    const restrictionDevice = persistentDevices.get(ws.deviceId);
+    logAudit('restriction_changed', 'device', ws.deviceId, restrictionDevice?.name || ws.deviceId, {
+        restrictions: data.data
+    });
+
     // Notificar clientes web
     notifyWebClients({
         type: 'device_restrictions_updated',
@@ -2633,7 +2830,7 @@ async function handleWebClient(ws, data) {
             // ✅ DADOS DE USUÁRIO VINCULADO DO BANCO
             assignedDeviceUserId: row.assigned_device_user_id || null,
             assignedUserId: row.user_id || null,
-            assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null,
+            assignedUserName: row.user_name || null,
             assignedUserCpf: row.user_cpf || null
         }));
         
@@ -2794,12 +2991,17 @@ async function handleDeleteDevice(ws, data) {
         connectedDevices.delete(deviceId);
         
         console.log(`🗑️ Dispositivo ${deviceId} removido permanentemente da memória e do banco de dados`);
-        
+
         log.info(`Dispositivo deletado permanentemente`, {
             deviceId: deviceId,
             deviceName: deviceData?.name || 'desconhecido',
             connectionId: ws.connectionId,
             note: 'Dispositivo deletado permanentemente do banco de dados e da memória'
+        });
+
+        // ═══ Audit log: dispositivo deletado ═══
+        logAudit('device_deleted', 'device', deviceId, deviceData?.name || 'desconhecido', {
+            connectionId: ws.connectionId
         });
         
         // Enviar confirmação para o cliente que solicitou a deleção
@@ -2943,7 +3145,14 @@ function handleUpdateAppPermissions(ws, data) {
     
     // Salvar no PostgreSQL
     saveDeviceToDatabase(device);
-    
+
+    // ═══ Audit log: permissões de apps atualizadas ═══
+    logAudit('app_permissions_changed', 'device', deviceId, device.name || deviceId, {
+        allowedAppsCount: appsToApply.length,
+        isIndividual,
+        allowedApps: appsToApply
+    });
+
     log.info(`Permissões de aplicativos atualizadas`, {
         deviceId: deviceId,
         connectionId: ws.connectionId,
@@ -3492,6 +3701,11 @@ function handleFormatDevice(ws, data) {
     if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
         deviceWs.send(JSON.stringify({ type: 'format_device', timestamp: Date.now() }));
         log.info(`Comando format_device enviado`, { deviceId, connectionId: ws.connectionId });
+        // ═══ Audit log: formatação de dispositivo ═══
+        const fmtDevice = persistentDevices.get(deviceId);
+        logAudit('command_sent', 'device', deviceId, fmtDevice?.name || deviceId, {
+            command: 'format_device'
+        });
         return { success: true };
     }
     log.warn(`Dispositivo não encontrado ou desconectado para formatação`, { deviceId, connectionId: ws.connectionId });
@@ -3518,6 +3732,11 @@ function handleLockDevice(ws, data) {
         };
         deviceWs.send(JSON.stringify(message));
         log.info(`Comando de bloqueio enviado`, { deviceId, connectionId: ws.connectionId });
+        // ═══ Audit log: bloqueio de dispositivo ═══
+        const lockDev = persistentDevices.get(deviceId);
+        logAudit('command_sent', 'device', deviceId, lockDev?.name || deviceId, {
+            command: 'lock_device'
+        });
         // Aguardar lock_device_confirmed do dispositivo para notificar o cliente web
     } else {
         log.warn(`Dispositivo não encontrado ou desconectado para bloqueio`, { deviceId, connectionId: ws.connectionId });
@@ -3829,7 +4048,7 @@ setInterval(async () => {
             userBindingsMap.set(row.device_id, {
                 assignedDeviceUserId: row.assigned_device_user_id,
                 assignedUserId: row.user_id,
-                assignedUserName: row.user_name ? row.user_name.split(' ')[0] : null,
+                assignedUserName: row.user_name || null,
                 assignedUserCpf: row.user_cpf
             });
         });

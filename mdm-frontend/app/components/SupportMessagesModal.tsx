@@ -600,6 +600,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
         device={device}
         isOpen={showLocationModal}
         onClose={() => setShowLocationModal(false)}
+        sendMessage={sendMessage}
       />
 
       {/* Modal de detalhes da mensagem - mesma cor do fundo */}

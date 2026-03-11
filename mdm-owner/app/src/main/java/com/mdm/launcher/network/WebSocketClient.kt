@@ -312,7 +312,8 @@ class WebSocketClient private constructor(
                 lastKnownLocation = null,
                 locationAccuracy = 0.0f,
                 locationProvider = "unknown",
-                locationHistoryCount = 0
+                locationHistoryCount = 0,
+                isRooted = false
             )
         }
         

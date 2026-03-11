@@ -1,0 +1,30 @@
+{
+  "global": {
+    "lockScreen": true,
+    "kioskMode": true,
+    "statusBarDisabled": false,
+    "wifiDisabled": false,
+    "bluetoothDisabled": false,
+    "bluetoothPairingDisabled": true,
+    "cameraDisabled": true,
+    "screenshotDisabled": true,
+    "installAppsDisabled": true,
+    "uninstallAppsDisabled": true,
+    "settingsDisabled": true,
+    "factoryResetDisabled": true,
+    "usbDisabled": true,
+    "nfcDisabled": true,
+    "hotspotDisabled": true,
+    "locationDisabled": true,
+    "developerOptionsDisabled": true,
+    "autoTimeRequired": true,
+    "addAccountDisabled": true,
+    "shareDisabled": true,
+    "externalStorageDisabled": true,
+    "airplaneModeDisabled": true,
+    "outgoingCallsDisabled": true,
+    "smsDisabled": true
+  },
+  "perDevice": {},
+  "updatedAt": "2026-03-11T17:57:57.715Z"
+}

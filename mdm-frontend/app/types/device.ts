@@ -53,6 +53,15 @@ export interface Device {
   lastKnownLocation?: string
   locationProvider?: string
   locationHistoryCount?: number
+  // Campos de modo perdido
+  lostMode?: boolean
+  lostModeMessage?: string
+  // Campos adicionais de segurança e identificação
+  isRooted?: boolean
+  simNumber?: string
+  phoneNumber?: string
+  dataUsageBytes?: number
+  wifiSsid?: string
   // Campos de uso do app
   appUsageData?: AppUsageData
   lastUsageUpdate?: number

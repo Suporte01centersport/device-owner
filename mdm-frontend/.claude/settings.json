@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Desenvolupamentoevice-owner/mdm-owner/app/src/main/java/com/mdm/launcher/service/**)",
+      "Bash(find /c/Desenvolvimento/device-owner/mdm-frontend -name .env* -type f)",
+      "Bash(netsh advfirewall:*)"
+    ]
+  }
+}

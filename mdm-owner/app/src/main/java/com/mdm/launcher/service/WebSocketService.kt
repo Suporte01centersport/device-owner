@@ -357,6 +357,37 @@ class WebSocketService : Service() {
         webSocketClient?.onNetworkChanged()
     }
 
+    /**
+     * Envia todas as localizações acumuladas enquanto estava offline
+     */
+    private fun flushPendingLocations() {
+        try {
+            val pending = com.mdm.launcher.utils.LocationHistoryManager.drainPendingLocations(this)
+            if (pending.isEmpty()) return
+
+            Log.d(TAG, "📤 Enviando ${pending.size} localizações pendentes acumuladas offline...")
+            var sent = 0
+            for (locationJson in pending) {
+                if (webSocketClient?.isConnected() != true) {
+                    // Conexão caiu novamente, re-enfileirar as restantes
+                    val remaining = pending.drop(sent)
+                    for (r in remaining) {
+                        com.mdm.launcher.utils.LocationHistoryManager.addPendingLocation(this, r)
+                    }
+                    Log.w(TAG, "⚠️ Conexão perdida durante flush - ${remaining.size} localizações re-enfileiradas")
+                    return
+                }
+                webSocketClient?.sendMessage(locationJson)
+                sent++
+                // Pequeno delay para não sobrecarregar o servidor
+                Thread.sleep(100)
+            }
+            Log.d(TAG, "✅ Todas as $sent localizações pendentes enviadas com sucesso")
+        } catch (e: Exception) {
+            Log.e(TAG, "❌ Erro ao enviar localizações pendentes", e)
+        }
+    }
+
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW).apply {
@@ -404,6 +435,11 @@ class WebSocketService : Service() {
                                 sendDeviceStatusWithRealData()
                             }
                         }
+                        // Enviar localizações pendentes acumuladas offline
+                        serviceScope.launch {
+                            kotlinx.coroutines.delay(3000L) // Aguardar conexão estabilizar
+                            flushPendingLocations()
+                        }
                         // Aplicar políticas ao conectar (desbloqueio, Settings, Quick Settings)
                         com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this@WebSocketService)
                         sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
@@ -450,6 +486,26 @@ class WebSocketService : Service() {
                     if (allowedAppsList != null) {
                         val sharedPreferences = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                         sharedPreferences.edit().putString("allowed_apps", gson.toJson(allowedAppsList)).apply()
+
+                        // Garantir que apps permitidos estejam visíveis (unhide)
+                        try {
+                            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                            val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+                            if (dpm.isDeviceOwnerApp(packageName)) {
+                                for (app in allowedAppsList) {
+                                    val pkg = app as? String ?: continue
+                                    try {
+                                        if (dpm.isApplicationHidden(adminComponent, pkg)) {
+                                            dpm.setApplicationHidden(adminComponent, pkg, false)
+                                            Log.d(TAG, "App permitido desoculto: $pkg")
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Erro ao desocultar apps permitidos: ${e.message}")
+                        }
+
                         val intent = Intent("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
                         intent.setPackage(packageName)
                         intent.putExtra("message", message)
@@ -876,6 +932,23 @@ class WebSocketService : Service() {
                                     // O startLockTask será chamado pelo MainActivity
                                 }
 
+                                // Restringir Quick Settings a apenas WiFi, Bluetooth e Lanterna
+                                com.mdm.launcher.utils.DevicePolicyHelper.restrictQuickSettingsTiles(this)
+                                // Garantir que Settings está oculto (impede acesso via engrenagem)
+                                if (data["settingsDisabled"] == true) {
+                                    com.mdm.launcher.utils.DevicePolicyHelper.blockSettingsAccess(this)
+                                }
+                                // Bloquear menu power (desligar/reiniciar) - remove GLOBAL_ACTIONS do Lock Task
+                                com.mdm.launcher.utils.DevicePolicyHelper.enableLockTaskWithStatusBar(this)
+                                // Impedir boot em modo seguro
+                                try {
+                                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.N) {
+                                        dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SAFE_BOOT)
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "DISALLOW_SAFE_BOOT não suportado: ${e.message}")
+                                }
+
                                 Log.d(TAG, "Restrições aplicadas com sucesso")
                                 webSocketClient?.sendMessage(gson.toJson(mapOf(
                                     "type" to "restrictions_applied",
@@ -887,6 +960,110 @@ class WebSocketService : Service() {
                         }
                     } catch (e: Exception) {
                         Log.e(TAG, "Erro ao aplicar restrições: ${e.message}", e)
+                    }
+                }
+                "selective_wipe" -> {
+                    Log.d(TAG, "Comando de wipe seletivo recebido")
+                    try {
+                        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
+
+                        // Limpar dados de apps não-sistema
+                        val pm = packageManager
+                        val packages = pm.getInstalledPackages(0)
+                        for (pkg in packages) {
+                            if (pkg.packageName != packageName &&
+                                ((pkg.applicationInfo?.flags ?: 0) and android.content.pm.ApplicationInfo.FLAG_SYSTEM) == 0) {
+                                try {
+                                    dpm.clearApplicationUserData(adminComponent, pkg.packageName, java.util.concurrent.Executors.newSingleThreadExecutor()) { _, success ->
+                                        Log.d(TAG, "Wipe seletivo ${pkg.packageName}: $success")
+                                    }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Erro ao limpar ${pkg.packageName}: ${e.message}")
+                                }
+                            }
+                        }
+
+                        // Send confirmation
+                        val gson = com.google.gson.Gson()
+                        webSocketClient?.sendMessage(gson.toJson(mapOf(
+                            "type" to "selective_wipe_confirmed",
+                            "deviceId" to DeviceIdManager.getDeviceId(this),
+                            "success" to true,
+                            "timestamp" to System.currentTimeMillis()
+                        )))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro no wipe seletivo", e)
+                    }
+                }
+                "lost_mode" -> {
+                    val data = jsonObject["data"] as? Map<*, *> ?: jsonObject
+                    val enabled = data["enabled"] as? Boolean ?: false
+                    val lostMessage = data["message"] as? String ?: "Este dispositivo foi reportado como perdido"
+                    Log.d(TAG, "Modo perdido: enabled=$enabled, message=$lostMessage")
+
+                    val prefs = getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
+                    prefs.edit().putBoolean("lost_mode", enabled).putString("lost_mode_message", lostMessage).apply()
+
+                    if (enabled) {
+                        // Start alarm sound
+                        sendBroadcast(Intent("com.mdm.launcher.START_ALARM").setPackage(packageName))
+                        // Lock device
+                        val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                        dpm.lockNow()
+                        // Force continuous location updates
+                        sendBroadcast(Intent("com.mdm.launcher.FORCE_LOCATION_UPDATE").setPackage(packageName))
+                    } else {
+                        // Stop alarm
+                        sendBroadcast(Intent("com.mdm.launcher.STOP_ALARM").setPackage(packageName))
+                    }
+                }
+                "configure_wifi" -> {
+                    val data = jsonObject["data"] as? Map<*, *> ?: jsonObject
+                    val ssid = data["ssid"] as? String
+                    if (ssid.isNullOrEmpty()) return
+                    val password = data["password"] as? String ?: ""
+                    val security = data["security"] as? String ?: "WPA" // WPA, WEP, OPEN
+                    Log.d(TAG, "Configurando WiFi: $ssid")
+
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            // Android 10+ - usar WifiNetworkSuggestion
+                            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                            val suggestion = android.net.wifi.WifiNetworkSuggestion.Builder()
+                                .setSsid(ssid)
+                                .apply { if (password.isNotEmpty()) setWpa2Passphrase(password) }
+                                .build()
+                            wifiManager.removeNetworkSuggestions(listOf(suggestion))
+                            val status = wifiManager.addNetworkSuggestions(listOf(suggestion))
+                            Log.d(TAG, "WiFi suggestion status: $status")
+                        } else {
+                            // Android < 10
+                            @Suppress("DEPRECATION")
+                            val wifiConfig = android.net.wifi.WifiConfiguration().apply {
+                                SSID = "\"$ssid\""
+                                when (security.uppercase()) {
+                                    "WPA" -> preSharedKey = "\"$password\""
+                                    "WEP" -> { wepKeys[0] = "\"$password\""; wepTxKeyIndex = 0 }
+                                    else -> allowedKeyManagement.set(android.net.wifi.WifiConfiguration.KeyMgmt.NONE)
+                                }
+                            }
+                            @Suppress("DEPRECATION")
+                            val wifiManager = applicationContext.getSystemService(Context.WIFI_SERVICE) as android.net.wifi.WifiManager
+                            val netId = wifiManager.addNetwork(wifiConfig)
+                            @Suppress("DEPRECATION")
+                            val enabled = wifiManager.enableNetwork(netId, true)
+                            Log.d(TAG, "WiFi config added: netId=$netId, enabled=$enabled")
+                        }
+
+                        webSocketClient?.sendMessage(com.google.gson.Gson().toJson(mapOf(
+                            "type" to "wifi_configured",
+                            "deviceId" to DeviceIdManager.getDeviceId(this),
+                            "ssid" to ssid,
+                            "success" to true
+                        )))
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Erro ao configurar WiFi", e)
                     }
                 }
                 else -> {

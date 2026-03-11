@@ -489,7 +489,9 @@ body {
   background: var(--surface);
   border-right: 1px solid var(--border);
   z-index: 50;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .main-content {
@@ -597,6 +599,20 @@ body {
 
 .animate-slide-in {
   animation: slideIn 0.3s ease-out;
+}
+
+/* Bell animation for alerts */
+@keyframes bounce-subtle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(10deg); }
+  50% { transform: rotate(-10deg); }
+  75% { transform: rotate(5deg); }
+}
+
+.animate-bounce-subtle {
+  animation: bounce-subtle 1s ease-in-out infinite;
+  animation-delay: 2s;
+  animation-iteration-count: 3;
 }
 
 /* Utilities */

@@ -101,23 +101,20 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
 
   return (
     <div 
-      className="relative card p-6 cursor-pointer hover:shadow-lg transition-all group !bg-background !border-border !text-white"
+      className="relative card p-6 cursor-pointer hover:shadow-lg transition-all group !bg-background !border-border"
       onClick={onClick}
     >
       {/* Header */}
       <div className="flex justify-between items-start mb-4">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-white/10 rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform border border-white/20">
+          <div className="w-12 h-12 bg-[var(--surface-elevated)] rounded-lg flex items-center justify-center group-hover:scale-105 transition-transform border border-[var(--border)]">
             <span className="text-xl">📱</span>
           </div>
           <div>
-            <h3 className="font-semibold text-white group-hover:text-white/90 transition-colors">
+            <h3 className="font-semibold text-[var(--text-primary)] transition-colors">
               {device.name}
             </h3>
-            {device.assignedUserName && (
-              <p className="text-sm font-medium text-white/80">{device.assignedUserName}</p>
-            )}
-            <p className="text-sm text-white/70">{device.model} • {device.manufacturer}</p>
+            <p className="text-sm text-[var(--text-secondary)]">{device.model} • {device.manufacturer}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -125,29 +122,37 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
             device.status === 'online' ? 'status-dot-online' : 'status-dot-offline'
           }`} />
           <span className={`text-xs font-medium ${
-            device.status === 'online' ? 'text-white' : 'text-red-400'
+            device.status === 'online' ? 'text-[var(--text-primary)]' : 'text-red-400'
           }`}>
             {device.status === 'online' ? 'online' : 'offline'}
           </span>
         </div>
       </div>
 
+      {/* Atribuído a */}
+      <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)]">
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Atribuído a</span>
+        <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
+          {device.assignedUserName || 'Nenhum usuário'}
+        </p>
+      </div>
+
       {/* Device Info */}
       <div className="space-y-3 mb-4">
         <div className="flex justify-between items-center">
-          <span className="text-sm text-white/80">Android</span>
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm text-[var(--text-secondary)]">Android</span>
+          <span className="text-sm font-medium text-[var(--text-primary)]">
             {device.androidVersion} (API {device.apiLevel})
           </span>
         </div>
         
         <div className="flex justify-between items-center">
-          <span className="text-sm text-white/80">Bateria</span>
+          <span className="text-sm text-[var(--text-secondary)]">Bateria</span>
           {device.status === 'offline' ? (
-            <span className="text-sm text-white/70">N/D</span>
+            <span className="text-sm text-[var(--text-secondary)]">N/D</span>
           ) : isDataLoading() ? (
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium text-white/70">
+              <span className="text-sm font-medium text-[var(--text-secondary)]">
                 Carregando...
               </span>
             </div>
@@ -162,7 +167,7 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
                   style={{ width: `${device.batteryLevel}%` }}
                 />
               </div>
-              <span className="text-sm font-medium text-white">
+              <span className="text-sm font-medium text-[var(--text-primary)]">
                 {device.batteryLevel}%
               </span>
               {device.isCharging && <span className="text-green-400 text-xs">⚡</span>}
@@ -171,30 +176,30 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-white/80">Armazenamento</span>
+          <span className="text-sm text-[var(--text-secondary)]">Armazenamento</span>
           {device.status === 'offline' ? (
-            <span className="text-sm text-white/70">N/D</span>
+            <span className="text-sm text-[var(--text-secondary)]">N/D</span>
           ) : isDataLoading() ? (
             <div className="text-right">
-              <div className="text-sm font-medium text-white/70">
+              <div className="text-sm font-medium text-[var(--text-secondary)]">
                 Carregando...
               </div>
-              <div className="text-xs text-white/60">aguarde</div>
+              <div className="text-xs text-[var(--text-muted)]">aguarde</div>
             </div>
           ) : (
             <div className="text-right">
-              <div className="text-sm font-medium text-white">
+              <div className="text-sm font-medium text-[var(--text-primary)]">
                 {formatStorage(device.storageUsed)} / {formatStorage(device.storageTotal)}
               </div>
-              <div className="text-xs text-white/70">{storagePercentage}% usado</div>
+              <div className="text-xs text-[var(--text-secondary)]">{storagePercentage}% usado</div>
             </div>
           )}
         </div>
 
         <div className="flex justify-between items-center">
-          <span className="text-sm text-white/80">Última atualização</span>
+          <span className="text-sm text-[var(--text-secondary)]">Última atualização</span>
           <span className={`text-sm font-medium ${
-            device.status === 'online' ? 'text-white' : 'text-red-400'
+            device.status === 'online' ? 'text-[var(--text-primary)]' : 'text-red-400'
           }`}>
             {device.status === 'online' ? formatLastSeen(device.lastSeen) : 'Desconectado'}
           </span>
@@ -232,9 +237,9 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
       )}
 
       {/* Actions */}
-      <div className="flex gap-2 pt-4 border-t border-white/20">
+      <div className="flex gap-2 pt-4 border-t border-[var(--border)]">
         <button 
-          className="btn btn-sm relative flex-1 !bg-white/10 !border-white/20 !text-white hover:!bg-white/20"
+          className="btn btn-sm relative flex-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
           onClick={(e) => {
             e.stopPropagation()
             onSupport()
@@ -249,7 +254,7 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
           )}
         </button>
         <button 
-          className="btn btn-sm flex-1 !bg-white/10 !border-white/20 !text-white hover:!bg-white/20"
+          className="btn btn-sm flex-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
           onClick={(e) => {
             e.stopPropagation()
             setShowUpdateConfirm(true)

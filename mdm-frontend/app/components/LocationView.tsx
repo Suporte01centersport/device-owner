@@ -397,6 +397,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
         <DeviceLocationMap 
           device={device}
           className="mb-6"
+          sendMessage={sendMessage}
         />
       )}
 
@@ -521,6 +522,7 @@ export default function LocationView({ device, sendMessage }: LocationViewProps)
                     <DeviceLocationMap 
                       device={device}
                       className="h-full rounded-lg"
+                      sendMessage={sendMessage}
                     />
                   </div>
                   {locationHistory.length > 0 && (

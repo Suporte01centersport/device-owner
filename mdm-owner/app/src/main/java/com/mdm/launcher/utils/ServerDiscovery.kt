@@ -33,7 +33,8 @@ object ServerDiscovery {
     // 🎯 SERVIDORES CONFIGURADOS (fallback para produção - apenas em release builds)
     private val LINUX_SERVERS = listOf(
         "ws://45.172.99.137:3001",  // Servidor público (IP externo - qualquer rede)
-        "ws://192.168.2.100:3001",  // Servidor principal rede local
+        "ws://192.168.2.83:3001",   // Servidor principal rede local (PC Windows)
+        "ws://192.168.2.100:3001",  // Servidor alternativo rede local
         "ws://192.168.1.100:3001",  // Servidor alternativo rede local
         "ws://10.0.0.100:3001"      // Servidor corporativo rede local
     )

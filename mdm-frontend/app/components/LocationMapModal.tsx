@@ -8,6 +8,7 @@ interface LocationMapModalProps {
   device: Device
   isOpen: boolean
   onClose: () => void
+  sendMessage?: (message: any) => void
 }
 
 async function fetchAddress(lat: number, lng: number): Promise<string | null> {
@@ -24,7 +25,7 @@ async function fetchAddress(lat: number, lng: number): Promise<string | null> {
   }
 }
 
-export default function LocationMapModal({ device, isOpen, onClose }: LocationMapModalProps) {
+export default function LocationMapModal({ device, isOpen, onClose, sendMessage }: LocationMapModalProps) {
   const [address, setAddress] = useState<string | null>(device.address || null)
   const [loadingAddress, setLoadingAddress] = useState(false)
 
@@ -98,7 +99,7 @@ export default function LocationMapModal({ device, isOpen, onClose }: LocationMa
                   )}
                 </div>
               </div>
-              <DeviceLocationMap device={device} className="rounded-lg" />
+              <DeviceLocationMap device={device} className="rounded-lg" sendMessage={sendMessage} />
             </>
           )}
         </div>

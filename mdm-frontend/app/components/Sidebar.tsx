@@ -48,6 +48,24 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Gerenciar usuários do sistema'
     },
     {
+      id: 'alerts',
+      label: 'Alertas',
+      icon: '🔔',
+      description: 'Alertas e notificações'
+    },
+    {
+      id: 'scheduled',
+      label: 'Agendamentos',
+      icon: '⏰',
+      description: 'Comandos agendados'
+    },
+    {
+      id: 'compliance',
+      label: 'Compliance',
+      icon: '✅',
+      description: 'Relatório de conformidade'
+    },
+    {
       id: 'settings',
       label: 'Configurações',
       icon: '⚙️',
@@ -81,8 +99,8 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="p-4 space-y-2">
+        {/* Navigation - scrollable */}
+        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
           {menuItems.map((item) => (
             <button
               key={item.id}
@@ -90,16 +108,16 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
                 onViewChange(item.id)
                 onClose()
               }}
-              className={`w-full flex items-center gap-3 p-3 rounded-lg text-left transition-all ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
                 currentView === item.id
                   ? 'bg-primary text-white shadow-md'
                   : 'text-secondary hover:bg-border-light hover:text-primary'
               }`}
             >
-              <span className="text-xl">{item.icon}</span>
-              <div className="flex-1">
-                <div className="font-medium">{item.label}</div>
-                <div className={`text-xs ${
+              <span className="text-lg flex-shrink-0">{item.icon}</span>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">{item.label}</div>
+                <div className={`text-xs truncate ${
                   currentView === item.id ? 'text-blue-100' : 'text-muted'
                 }`}>
                   {item.description}
@@ -109,15 +127,15 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
           ))}
         </nav>
 
-        {/* Footer */}
-        <div className="absolute bottom-0 left-0 right-0 p-4 border-t border-border">
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-border-light">
-            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center">
+        {/* Footer - fixed at bottom */}
+        <div className="flex-shrink-0 p-3 border-t border-border">
+          <div className="flex items-center gap-3 p-2 rounded-lg bg-border-light">
+            <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
               <span className="text-white text-sm font-semibold">U</span>
             </div>
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <div className="text-sm font-medium text-primary">Usuário</div>
-              <div className="text-xs text-secondary">admin@mdm.com</div>
+              <div className="text-xs text-secondary truncate">admin@mdm.com</div>
             </div>
           </div>
         </div>

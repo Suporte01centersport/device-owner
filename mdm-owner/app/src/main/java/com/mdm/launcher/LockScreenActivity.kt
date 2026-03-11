@@ -142,17 +142,16 @@ class LockScreenActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    /** Consumir teclas físicas - impede sair da tela de cadeado com power/volume/home/etc */
+    /** Consumir TODAS as teclas físicas (down + up) - impede sair da tela de cadeado */
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            val hardwareKeys = intArrayOf(
-                KeyEvent.KEYCODE_POWER, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
-                KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME,
-                KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH,
-                KeyEvent.KEYCODE_ESCAPE
-            )
-            if (event.keyCode in hardwareKeys) return true
-        }
+        val hardwareKeys = intArrayOf(
+            KeyEvent.KEYCODE_POWER, KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN,
+            KeyEvent.KEYCODE_VOLUME_MUTE, KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME,
+            KeyEvent.KEYCODE_MENU, KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH,
+            KeyEvent.KEYCODE_ESCAPE
+        )
+        // Consumir tanto ACTION_DOWN quanto ACTION_UP para bloquear long-press e combos
+        if (event.keyCode in hardwareKeys) return true
         return super.dispatchKeyEvent(event)
     }
 

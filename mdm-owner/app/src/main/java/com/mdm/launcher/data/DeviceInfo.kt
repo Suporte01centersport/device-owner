@@ -48,5 +48,6 @@ data class DeviceInfo(
     val locationProvider: String? = null,
     val lastLocationUpdate: Long? = null,
     val address: String? = null,
-    val locationHistoryCount: Int = 0
+    val locationHistoryCount: Int = 0,
+    val isRooted: Boolean = false
 )

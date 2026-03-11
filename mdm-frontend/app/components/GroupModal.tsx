@@ -542,9 +542,18 @@ function LocationMap({ latitude, longitude, radiusKm, onLocationChange, onManual
             try {
               console.log('🗺️ Inicializando mapa Leaflet...')
               
+              // Verificar se container tem dimensões reais
+              if (!mapRef.current.offsetWidth || !mapRef.current.offsetHeight) {
+                console.warn('Container sem dimensões, adiando criação do mapa')
+                return
+              }
+
               // Criar mapa de forma simples
-              const map = window.L.map(mapRef.current).setView([lat, lng], getZoom(radiusKm))
+              const map = window.L.map(mapRef.current, { fadeAnimation: false }).setView([lat, lng], getZoom(radiusKm))
               mapInstanceRef.current = map
+
+              // Forçar recálculo de tamanho
+              setTimeout(() => { try { map.invalidateSize() } catch(_) {} }, 100)
 
               console.log('✅ Mapa criado, adicionando tiles...')
 

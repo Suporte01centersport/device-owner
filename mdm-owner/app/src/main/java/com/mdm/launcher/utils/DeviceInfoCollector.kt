@@ -125,9 +125,10 @@ object DeviceInfoCollector {
             locationProvider = locationInfo.fifth,
             lastLocationUpdate = locationInfo.sixth,
             address = locationInfo.seventh,
-            locationHistoryCount = locationInfo.eighth
+            locationHistoryCount = locationInfo.eighth,
+            isRooted = RootDetector.isDeviceRooted()
         )
-        
+
         Log.i("DeviceInfoCollector", "✅ DeviceInfo criado e pronto para envio ao servidor")
         
         deviceInfo

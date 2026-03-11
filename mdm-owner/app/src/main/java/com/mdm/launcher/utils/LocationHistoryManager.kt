@@ -20,7 +20,9 @@ data class LocationEntry(
 object LocationHistoryManager {
     private const val TAG = "LocationHistoryManager"
     private const val PREF_NAME = "location_history"
+    private const val PENDING_PREF_NAME = "pending_locations"
     private const val MAX_ENTRIES = 1000 // Máximo de 1000 entradas
+    private const val MAX_PENDING_ENTRIES = 500 // Máximo de localizações pendentes para envio
     private const val MAX_AGE_DAYS = 30 // Manter apenas 30 dias de histórico
     
     // Distâncias inteligentes baseadas no contexto
@@ -213,6 +215,90 @@ object LocationHistoryManager {
         return results[0]
     }
     
+    // ==================== FILA DE LOCALIZAÇÕES PENDENTES (OFFLINE) ====================
+
+    /**
+     * Adiciona uma localização à fila de pendentes para envio quando reconectar
+     */
+    fun addPendingLocation(context: Context, locationJson: String) {
+        synchronized(lock) {
+            try {
+                val pending = loadPendingLocations(context)
+                pending.add(locationJson)
+
+                // Limitar tamanho da fila
+                val trimmed = if (pending.size > MAX_PENDING_ENTRIES) {
+                    Log.d(TAG, "Fila de pendentes cheia, removendo ${pending.size - MAX_PENDING_ENTRIES} mais antigas")
+                    pending.takeLast(MAX_PENDING_ENTRIES).toMutableList()
+                } else {
+                    pending
+                }
+
+                val json = gson.toJson(trimmed)
+                context.getSharedPreferences(PENDING_PREF_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString("pending_queue", json)
+                    .apply()
+
+                Log.d(TAG, "📦 Localização adicionada à fila offline (${trimmed.size} pendentes)")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao adicionar localização pendente", e)
+            }
+        }
+    }
+
+    /**
+     * Retorna e limpa todas as localizações pendentes para envio
+     */
+    fun drainPendingLocations(context: Context): List<String> {
+        synchronized(lock) {
+            return try {
+                val pending = loadPendingLocations(context)
+                if (pending.isEmpty()) return emptyList()
+
+                // Limpar a fila
+                context.getSharedPreferences(PENDING_PREF_NAME, Context.MODE_PRIVATE)
+                    .edit()
+                    .remove("pending_queue")
+                    .apply()
+
+                Log.d(TAG, "📤 ${pending.size} localizações pendentes drenadas para envio")
+                pending
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao drenar localizações pendentes", e)
+                emptyList()
+            }
+        }
+    }
+
+    /**
+     * Retorna quantidade de localizações pendentes
+     */
+    fun getPendingCount(context: Context): Int {
+        synchronized(lock) {
+            return loadPendingLocations(context).size
+        }
+    }
+
+    private fun loadPendingLocations(context: Context): MutableList<String> {
+        return try {
+            val json = context.getSharedPreferences(PENDING_PREF_NAME, Context.MODE_PRIVATE)
+                .getString("pending_queue", null)
+
+            if (json != null) {
+                val type = object : TypeToken<MutableList<String>>() {}.type
+                gson.fromJson(json, type) ?: mutableListOf()
+            } else {
+                mutableListOf()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao carregar localizações pendentes", e)
+            mutableListOf()
+        }
+    }
+
+    // ==================== FIM FILA PENDENTES ====================
+
     /**
      * Determina a distância mínima necessária baseada no contexto de movimento
      */

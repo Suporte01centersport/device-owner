@@ -1,6 +1,7 @@
 /**
  * Lista fixa de apps típicos de um Nokia 50 padrão com conta Google.
  * Inclui WMS e apps comuns do ecossistema Android/Google.
+ * Ordem: WMS primeiro (obrigatório), restante em ordem alfabética por appName.
  */
 export interface PresetApp {
   packageName: string
@@ -15,7 +16,7 @@ const gicon = (domain: string) =>
   `https://t2.gstatic.com/faviconV2?client=SOCIAL&type=FAVICON&fallback_opts=TYPE,SIZE,URL&url=https://${domain}&size=256`
 
 export const PRESET_APPS: PresetApp[] = [
-  // WMS - Obrigatório com logo da empresa
+  // WMS - Obrigatório (sempre primeiro)
   {
     packageName: 'com.centersporti.wmsmobile',
     appName: 'WMS',
@@ -23,20 +24,28 @@ export const PRESET_APPS: PresetApp[] = [
     mandatory: true,
     iconUrl: '/wms-logo.png',
   },
-  // Telefone e comunicação
+  // Restante em ordem alfabética
   {
-    packageName: 'com.google.android.dialer',
-    appName: 'Telefone',
-    emoji: '☎️',
-    iconUrl: gicon('voice.google.com'),
+    packageName: 'com.android.calculator2',
+    appName: 'Calculadora',
+    emoji: '🔢',
   },
   {
-    packageName: 'com.google.android.apps.messaging',
-    appName: 'Mensagens',
-    emoji: '💬',
-    iconUrl: 'https://www.gstatic.com/images/branding/product/2x/messages_48dp.png',
+    packageName: 'com.android.camera2',
+    appName: 'Câmera',
+    emoji: '📷',
   },
-  // Email e produtividade
+  {
+    packageName: 'com.android.chrome',
+    appName: 'Chrome',
+    emoji: '🌐',
+    iconUrl: gicon('chrome.google.com'),
+  },
+  {
+    packageName: 'com.android.settings',
+    appName: 'Configurações',
+    emoji: '⚙️',
+  },
   {
     packageName: 'com.google.android.gm',
     appName: 'Gmail',
@@ -44,16 +53,10 @@ export const PRESET_APPS: PresetApp[] = [
     iconUrl: gicon('gmail.com'),
   },
   {
-    packageName: 'com.google.android.apps.docs',
-    appName: 'Google Drive',
-    emoji: '☁️',
-    iconUrl: gicon('drive.google.com'),
-  },
-  {
-    packageName: 'com.google.android.apps.tachyon',
-    appName: 'Google Meet',
-    emoji: '📹',
-    iconUrl: gicon('meet.google.com'),
+    packageName: 'com.google.android.googlequicksearchbox',
+    appName: 'Google',
+    emoji: '🔍',
+    iconUrl: gicon('google.com'),
   },
   {
     packageName: 'com.google.android.calendar',
@@ -62,17 +65,22 @@ export const PRESET_APPS: PresetApp[] = [
     iconUrl: gicon('calendar.google.com'),
   },
   {
+    packageName: 'com.google.android.apps.docs',
+    appName: 'Google Drive',
+    emoji: '☁️',
+    iconUrl: gicon('drive.google.com'),
+  },
+  {
+    packageName: 'com.google.android.apps.photos',
+    appName: 'Google Fotos',
+    emoji: '🖼️',
+    iconUrl: gicon('photos.google.com'),
+  },
+  {
     packageName: 'com.google.android.keep',
     appName: 'Google Keep',
     emoji: '📝',
     iconUrl: gicon('keep.google.com'),
-  },
-  // Navegador e mapas
-  {
-    packageName: 'com.android.chrome',
-    appName: 'Chrome',
-    emoji: '🌐',
-    iconUrl: gicon('chrome.google.com'),
   },
   {
     packageName: 'com.google.android.apps.maps',
@@ -81,29 +89,22 @@ export const PRESET_APPS: PresetApp[] = [
     iconUrl: gicon('maps.google.com'),
   },
   {
-    packageName: 'com.google.android.googlequicksearchbox',
-    appName: 'Google',
-    emoji: '🔍',
-    iconUrl: gicon('google.com'),
-  },
-  // Mídia e entretenimento
-  {
-    packageName: 'com.google.android.youtube',
-    appName: 'YouTube',
-    emoji: '▶️',
-    iconUrl: gicon('youtube.com'),
+    packageName: 'com.google.android.apps.tachyon',
+    appName: 'Google Meet',
+    emoji: '📹',
+    iconUrl: gicon('meet.google.com'),
   },
   {
-    packageName: 'com.google.android.apps.photos',
-    appName: 'Google Fotos',
-    emoji: '🖼️',
-    iconUrl: gicon('photos.google.com'),
+    packageName: 'com.google.android.apps.messaging',
+    appName: 'Mensagens',
+    emoji: '💬',
+    iconUrl: 'https://www.gstatic.com/images/branding/product/2x/messages_48dp.png',
   },
-  // Utilitários
   {
-    packageName: 'com.android.calculator2',
-    appName: 'Calculadora',
-    emoji: '🔢',
+    packageName: 'com.android.vending',
+    appName: 'Play Store',
+    emoji: '🛒',
+    iconUrl: gicon('play.google.com'),
   },
   {
     packageName: 'com.google.android.deskclock',
@@ -112,21 +113,15 @@ export const PRESET_APPS: PresetApp[] = [
     iconUrl: 'https://www.gstatic.com/images/branding/product/2x/google_clock_48dp.png',
   },
   {
-    packageName: 'com.android.camera2',
-    appName: 'Câmera',
-    emoji: '📷',
+    packageName: 'com.google.android.dialer',
+    appName: 'Telefone',
+    emoji: '☎️',
+    iconUrl: gicon('voice.google.com'),
   },
-  // Configurações (desbloqueada para Wi-Fi/Bluetooth)
   {
-    packageName: 'com.android.settings',
-    appName: 'Configurações',
-    emoji: '⚙️',
-  },
-  // Loja e sistema
-  {
-    packageName: 'com.android.vending',
-    appName: 'Play Store',
-    emoji: '🛒',
-    iconUrl: gicon('play.google.com'),
+    packageName: 'com.google.android.youtube',
+    appName: 'YouTube',
+    emoji: '▶️',
+    iconUrl: gicon('youtube.com'),
   },
 ]

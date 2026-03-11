@@ -16,6 +16,9 @@ import ConfirmModal from './components/ConfirmModal'
 import PoliciesPage from './policies/page'
 import UEMPage from './uem/page'
 import AllowedAppsPage from './components/AllowedAppsPage'
+import AlertsPage from './components/AlertsPage'
+import ScheduledCommandsPage from './components/ScheduledCommandsPage'
+import CompliancePage from './components/CompliancePage'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
 import { showAlert, showConfirm } from './lib/dialog'
@@ -1108,37 +1111,37 @@ export default function Home() {
       return
     }
     console.log('🗑️ Enviando requisição de deleção:', deviceId)
-    
-    // Tentar WebSocket primeiro
-    const sent = sendMessage({
-      type: 'delete_device',
-      deviceId: deviceId,
-      timestamp: Date.now()
-    })
-    
-    // Se WebSocket não conectado, usar API como fallback
-    if (!sent) {
-      try {
-        const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
-        const result = await response.json()
-        if (result.success) {
-          updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
-          console.log('✅ Dispositivo deletado via API')
-        } else {
-          showAlert(`❌ Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
-        }
-      } catch (e) {
-        console.error('Erro ao deletar via API:', e)
-        showAlert('❌ Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
+
+    try {
+      // Usar API como método principal (confiável)
+      const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
+      const result = await response.json()
+      if (result.success) {
+        updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
+        // Também notificar via WebSocket para outros clientes
+        sendMessage({
+          type: 'delete_device',
+          deviceId: deviceId,
+          timestamp: Date.now()
+        })
+        setIsModalOpen(false)
+        setSelectedDevice(null)
+        console.log('✅ Dispositivo deletado')
+      } else {
+        showAlert(`❌ Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
       }
+    } catch (e) {
+      console.error('Erro ao deletar via API:', e)
+      showAlert('❌ Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
     }
   }, [sendMessage, updateDevices])
 
-  const handleUpdateApp = useCallback((apkUrl: string, version: string) => {
-    if (!updateDevice) return
+  const handleUpdateApp = useCallback((apkUrl: string, version: string, device?: Device) => {
+    const dev = device || updateDevice
+    if (!dev) return
 
-    const deviceName = updateDevice.name
-    const deviceId = updateDevice.deviceId
+    const deviceName = dev.name
+    const deviceId = dev.deviceId
 
     // Mostrar barra de progresso IMEDIATAMENTE ao clicar
     setUpdateProgress({ deviceId, deviceName, progress: 0, status: 'Enviando comando ao dispositivo...', startTime: Date.now(), startProgress: 0 })
@@ -1431,6 +1434,12 @@ export default function Home() {
         )
       case 'uem':
         return <UEMPage />
+      case 'alerts':
+        return <AlertsPage />
+      case 'scheduled':
+        return <ScheduledCommandsPage />
+      case 'compliance':
+        return <CompliancePage />
       case 'devices':
         return (
           <div className="p-6">
@@ -1704,7 +1713,7 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                    <div className="bg-white border border-white/30 rounded-lg p-3">
                       <div className="text-xs font-bold text-red-600">
                         <span className="font-bold text-red-600">📋 Instruções:</span>
                         <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
@@ -1854,6 +1863,7 @@ export default function Home() {
             }
             handleSupportClick(device)
           }}
+          onViewChange={setCurrentView}
         />
 
         {/* Content */}
@@ -1961,7 +1971,7 @@ export default function Home() {
             setIsUpdateModalOpen(false)
             setUpdateDevice(null)
           }}
-          onConfirm={handleUpdateApp}
+          onConfirm={(apkUrl: string, version: string) => handleUpdateApp(apkUrl, version, updateDevice!)}
         />
       )}
 

@@ -35,13 +35,12 @@ object DevicePolicyHelper {
             // LOCK_TASK_FEATURE_SYSTEM_INFO = 1 (status bar com hora, bateria, etc.)
             // LOCK_TASK_FEATURE_NOTIFICATIONS = 2 (puxar barra de notificações - Quick Settings)
             // LOCK_TASK_FEATURE_HOME = 4 (botão home)
-            // LOCK_TASK_FEATURE_GLOBAL_ACTIONS = 16 (menu power longo)
+            // LOCK_TASK_FEATURE_GLOBAL_ACTIONS = 16 (menu power longo) - REMOVIDO para impedir desligar/reiniciar
             val features = DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
                 DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or
-                DevicePolicyManager.LOCK_TASK_FEATURE_HOME or
-                DevicePolicyManager.LOCK_TASK_FEATURE_GLOBAL_ACTIONS
+                DevicePolicyManager.LOCK_TASK_FEATURE_HOME
             dpm.setLockTaskFeatures(adminComponent, features)
-            Log.d(TAG, "Lock Task Features configurados: statusBar + notificações + home + globalActions")
+            Log.d(TAG, "Lock Task Features configurados: statusBar + notificações + home (sem globalActions - menu power bloqueado)")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao configurar Lock Task Features: ${e.message}")
         }
@@ -65,7 +64,7 @@ object DevicePolicyHelper {
         }
     }
 
-    /** Libera WiFi e Bluetooth - permite abrir ao segurar nos tiles do Quick Settings. Chamar sempre que aplicar políticas. */
+    /** Libera WiFi e Bluetooth - permite ligar/desligar pelos tiles do Quick Settings. NÃO desbloqueia Settings. */
     fun liberateWifiBluetooth(context: Context) {
         try {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -73,10 +72,9 @@ object DevicePolicyHelper {
             if (!dpm.isDeviceOwnerApp(context.packageName)) return
             dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_WIFI)
             dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
-            for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
-                try { dpm.setApplicationHidden(componentName, pkg, false) } catch (_: Exception) {}
-            }
-            Log.d(TAG, "WiFi e Bluetooth liberados")
+            // NÃO desocultar Settings - os tiles de WiFi/BT funcionam sem o app Settings visível
+            // Manter Settings oculto para impedir acesso via engrenagem na barra de notificações
+            Log.d(TAG, "WiFi e Bluetooth liberados (Settings permanece oculto)")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao liberar WiFi/Bluetooth: ${e.message}")
         }
@@ -271,20 +269,25 @@ object DevicePolicyHelper {
         try {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(context, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(context.packageName)) return
 
             liberateWifiBluetooth(context)
 
+            // Ocultar Settings para impedir acesso via engrenagem na barra de notificações
+            for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
+                try { dpm.setApplicationHidden(componentName, pkg, true) } catch (_: Exception) {}
+            }
+
             try {
                 dpm.addUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT)
-                // Impede usuário alterar - MDM mantém 5 min como padrão
             } catch (_: Exception) {}
-            Log.d(TAG, "Bloqueio de configurações aplicado (Settings visível para WiFi/Bluetooth)")
+            Log.d(TAG, "Bloqueio de configurações aplicado (Settings oculto)")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao bloquear Settings", e)
         }
     }
 
-    /** Libera WiFi e Bluetooth temporariamente - segurar botão config para adicionar dispositivos */
+    /** Libera WiFi e Bluetooth temporariamente - sem exibir Settings */
     fun temporarilyAllowWifiBluetoothConfig(context: Context) {
         try {
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
@@ -292,16 +295,10 @@ object DevicePolicyHelper {
             if (dpm.isDeviceOwnerApp(context.packageName)) {
                 dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_WIFI)
                 dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
-                // Exibir Settings - incluir pacotes de fabricantes (Realme/OPPO/Samsung)
-                for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
-                    try {
-                        dpm.setApplicationHidden(componentName, pkg, false)
-                        Log.d(TAG, "Settings exibido: $pkg")
-                    } catch (_: Exception) {}
-                }
+                // NÃO exibir Settings - tiles WiFi/BT funcionam sem o app Settings
                 context.getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE)
                     .edit().putBoolean("wifi_bluetooth_panel_open", true).apply()
-                Log.d(TAG, "WiFi/Bluetooth liberados temporariamente (segurar config)")
+                Log.d(TAG, "WiFi/Bluetooth liberados temporariamente (Settings permanece oculto)")
             }
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao liberar WiFi/Bluetooth: ${e.message}")
@@ -326,9 +323,19 @@ object DevicePolicyHelper {
         temporarilyAllowWifiBluetoothConfig(context)
     }
 
-    /** Não reoculta Settings - mantém visível para WiFi/Bluetooth no Quick Settings */
+    /** Reoculta Settings após uso temporário */
     fun rehideSettings(context: Context) {
-        // Settings permanece visível para permitir abrir painéis WiFi/Bluetooth ao segurar nos tiles
+        try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val componentName = ComponentName(context, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(context.packageName)) return
+            for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
+                try { dpm.setApplicationHidden(componentName, pkg, true) } catch (_: Exception) {}
+            }
+            Log.d(TAG, "Settings reoculto")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao reocultar Settings: ${e.message}")
+        }
     }
 
     /**

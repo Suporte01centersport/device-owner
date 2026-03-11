@@ -69,13 +69,13 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
         if (res.ok) {
           const data = await res.json()
           let packages = (data.data || []).map((p: any) => p.package_name).filter((p: string) => p !== MDM_PACKAGE)
-          
+
           // Garantir que WMS sempre está incluído
           const wmsPackage = WMS_PACKAGE
           if (!packages.includes(wmsPackage)) {
             packages = [wmsPackage, ...packages]
           }
-          
+
           setSelectedApps(new Set(packages))
           const presetPkgs = new Set(PRESET_APPS.map(a => a.packageName))
           const extras = packages.filter((p: string) => !presetPkgs.has(p))
@@ -88,29 +88,27 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
     loadPolicies()
   }, [filterType, selectedGroupId])
 
-  // Carregar allowedApps ao selecionar dispositivo (apenas quando a seleção muda, não quando devices atualiza)
+  // Carregar allowedApps ao selecionar dispositivo
   useEffect(() => {
     if (filterType !== 'device' || !selectedDeviceId) return
     const device = mobileDevices.find(d => d.deviceId === selectedDeviceId)
     if (device?.allowedApps) {
       let filtered = device.allowedApps.filter(p => p !== MDM_PACKAGE)
-      
-      // Garantir que WMS sempre está incluído
+
       const wmsPackage = WMS_PACKAGE
       if (!filtered.includes(wmsPackage)) {
         filtered = [wmsPackage, ...filtered]
       }
-      
+
       setSelectedApps(new Set(filtered))
       const presetPkgs = new Set(PRESET_APPS.map(a => a.packageName))
       const extras = filtered.filter(p => !presetPkgs.has(p))
       setCustomApps(extras.map(p => ({ packageName: p, appName: p.split('.').pop() || p })))
     } else {
-      // Se não tiver allowedApps, começar com WMS obrigatório
       setSelectedApps(new Set([WMS_PACKAGE]))
       setCustomApps([])
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- só carregar quando seleção muda, não quando devices atualiza (evita sobrescrever checkboxes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filterType, selectedDeviceId])
 
   const isMandatory = (packageName: string) =>
@@ -147,13 +145,12 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
 
   const handleSave = async () => {
     let packageList = Array.from(selectedApps).filter(p => p !== MDM_PACKAGE)
-    
-    // Garantir que WMS sempre está incluído (é obrigatório)
+
     const wmsPackage = WMS_PACKAGE
     if (!packageList.includes(wmsPackage)) {
       packageList = [wmsPackage, ...packageList]
     }
-    
+
     if (filterType === 'device') {
       if (!selectedDeviceId) {
         showAlert('Selecione um celular')
@@ -171,7 +168,6 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
         })
         const sent = await Promise.resolve(result)
         if (sent) {
-          // Instalar apps selecionados que não estão no celular
           const toInstall = packageList.filter(pkg => pkg !== MDM_PACKAGE && !installedPackages.has(pkg))
           for (const pkg of toInstall) {
             sendMessage({ type: 'install_app', deviceId: selectedDeviceId, packageName: pkg, timestamp: Date.now() })
@@ -227,48 +223,53 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
   const hasSelection = filterType === 'device' ? !!selectedDeviceId : !!selectedGroupId
   const canShowApps = hasSelection
 
+  const allApps = [
+    ...PRESET_APPS,
+    ...customApps.map(a => ({ packageName: a.packageName, appName: a.appName, emoji: '📱' as const }))
+  ]
+
   return (
     <div className="p-6">
       <div className="mb-6 bg-primary rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Apps liberados Celular</h1>
-        <p className="text-white/90 mt-1">Libere apps por celular ou por grupo. Marque os apps que deseja exibir.</p>
+        <p className="text-white/90 mt-1">Libere apps por celular ou por grupo. Ative os apps que deseja exibir no dispositivo.</p>
       </div>
 
-      {/* Card de seleção - sempre visível */}
-      <div className="bg-background rounded-xl border border-white/20 shadow-sm p-6 mb-6">
-        <h3 className="text-base font-semibold text-white mb-4">Escolha o celular ou grupo</h3>
+      {/* Card de seleção */}
+      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-sm p-6 mb-6">
+        <h3 className="text-base font-semibold text-[var(--text-primary)] mb-4">Escolha o celular ou grupo</h3>
         <div className="flex flex-wrap gap-4 items-center">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-white">Liberar por:</span>
-            <div className="flex rounded-lg border border-white/30 overflow-hidden">
+            <span className="text-sm font-medium text-[var(--text-primary)]">Liberar por:</span>
+            <div className="flex rounded-lg border border-[var(--border)] overflow-hidden">
               <button
                 type="button"
-              onClick={() => {
-                setFilterType('device')
-                setSelectedDeviceId('')
-                setSelectedGroupId('')
-                setCustomApps([])
-              }}
+                onClick={() => {
+                  setFilterType('device')
+                  setSelectedDeviceId('')
+                  setSelectedGroupId('')
+                  setCustomApps([])
+                }}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   filterType === 'device'
-                    ? 'bg-primary text-white'
-                    : 'bg-white/10 text-white hover:bg-white/20'
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-white/10 text-[var(--text-primary)] hover:bg-white/20'
                 }`}
               >
                 Celular
               </button>
               <button
                 type="button"
-              onClick={() => {
-                setFilterType('group')
-                setSelectedDeviceId('')
-                setSelectedGroupId('')
-                setCustomApps([])
-              }}
+                onClick={() => {
+                  setFilterType('group')
+                  setSelectedDeviceId('')
+                  setSelectedGroupId('')
+                  setCustomApps([])
+                }}
                 className={`px-4 py-2 text-sm font-medium transition-colors ${
                   filterType === 'group'
-                    ? 'bg-primary text-white'
-                    : 'bg-white/10 text-white hover:bg-white/20'
+                    ? 'bg-[var(--primary)] text-white'
+                    : 'bg-white/10 text-[var(--text-primary)] hover:bg-white/20'
                 }`}
               >
                 Grupo
@@ -278,158 +279,162 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
 
           {filterType === 'device' && (
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-white whitespace-nowrap">Celular:</label>
-              <div className="relative flex-1 max-w-md">
-                <select
-                  value={selectedDeviceId}
-                  onChange={(e) => setSelectedDeviceId(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-white/40 rounded-lg bg-background text-white font-medium text-base hover:border-white/60 focus:border-primary focus:outline-none transition-colors [&_option]:text-white [&_option]:bg-background appearance-none cursor-pointer select-none"
-                >
-                  {/* Opção placeholder só para evitar valor inválido */}
-                  <option
-                    value=""
-                    disabled
-                    className="text-white/60 bg-background"
-                  >
-                    Selecione o celular
-                  </option>
-                  {mobileDevices.length === 0 ? (
-                    <option value="" disabled className="text-white/60 bg-background">Nenhum celular conectado</option>
-                  ) : (
-                    mobileDevices.map((d) => (
-                      <option key={d.deviceId} value={d.deviceId} className="text-white bg-background font-medium">
-                        {d.name || d.model || d.deviceId} {d.status === 'online' ? '🟢' : '🔴'}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </div>
+              <label className="text-sm font-medium text-[var(--text-primary)] whitespace-nowrap">Celular:</label>
+              <select
+                value={selectedDeviceId}
+                onChange={(e) => setSelectedDeviceId(e.target.value)}
+                className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface)] text-[var(--text-primary)] font-medium text-sm focus:border-[var(--primary)] focus:outline-none transition-colors appearance-none cursor-pointer min-w-[200px]"
+              >
+                <option value="" disabled>Selecione o celular</option>
+                {mobileDevices.length === 0 ? (
+                  <option value="" disabled>Nenhum celular conectado</option>
+                ) : (
+                  mobileDevices.map((d) => (
+                    <option key={d.deviceId} value={d.deviceId}>
+                      {d.name || d.model || d.deviceId} {d.status === 'online' ? '🟢' : '🔴'}
+                    </option>
+                  ))
+                )}
+              </select>
             </div>
           )}
 
           {filterType === 'group' && (
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-white whitespace-nowrap">Grupo:</label>
-              <div className="relative flex-1 max-w-md">
-                <select
-                  value={selectedGroupId}
-                  onChange={(e) => setSelectedGroupId(e.target.value)}
-                  className="w-full px-3 py-2 border-2 border-white/40 rounded-lg bg-background text-white font-medium text-base hover:border-white/60 focus:border-primary focus:outline-none transition-colors [&_option]:text-white [&_option]:bg-background appearance-none cursor-pointer"
-                >
-                  <option value="" className="text-white/60 bg-background">Selecione um grupo</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id} className="text-white bg-background font-medium">
-                      {g.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              <label className="text-sm font-medium text-[var(--text-primary)] whitespace-nowrap">Grupo:</label>
+              <select
+                value={selectedGroupId}
+                onChange={(e) => setSelectedGroupId(e.target.value)}
+                className="px-3 py-2 border border-[var(--border)] rounded-lg bg-[var(--surface)] text-[var(--text-primary)] font-medium text-sm focus:border-[var(--primary)] focus:outline-none transition-colors appearance-none cursor-pointer min-w-[200px]"
+              >
+                <option value="">Selecione um grupo</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>{g.name}</option>
+                ))}
+              </select>
             </div>
           )}
         </div>
       </div>
 
-      {/* Grid de apps com checkboxes */}
+      {/* Grid de apps com toggles */}
       {canShowApps ? (
-        <div className="space-y-4">
-          <p className="text-sm text-white">
-            Marque os apps que deseja liberar. Desmarque para não exibir.
-          </p>
+        <div className="space-y-6">
           {/* Adicionar app customizado */}
-          <div className="flex gap-2 mb-4">
+          <div className="flex gap-2">
             <input
               type="text"
               value={customAppInput}
               onChange={(e) => setCustomAppInput(e.target.value)}
               placeholder="Package name (ex: com.exemplo.app)"
-              className="input flex-1 max-w-md px-3 py-2 border border-white/30 rounded-lg bg-background text-white placeholder:text-white/60"
+              className="flex-1 max-w-md px-4 py-2.5 border border-[var(--border)] rounded-xl bg-[var(--surface)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] text-sm focus:border-[var(--primary)] focus:outline-none"
               onKeyDown={(e) => e.key === 'Enter' && handleAddCustomApp()}
             />
             <button
               type="button"
               onClick={handleAddCustomApp}
               disabled={!customAppInput.trim()}
-              className="btn btn-secondary"
+              className="px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] font-medium rounded-xl hover:bg-white/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
             >
               + Adicionar app
             </button>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-            {[...PRESET_APPS, ...customApps.map(a => ({ packageName: a.packageName, appName: a.appName, emoji: '📱' as const }))].map((app) => {
+
+          {/* Grid no estilo dos toggles de restrições */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {allApps.map((app) => {
               const mandatory = isMandatory(app.packageName)
               const checked = mandatory || selectedApps.has(app.packageName)
               const notInstalled = !mandatory && filterType === 'device' && selectedDeviceId && installedPackages.size > 0 && !installedPackages.has(app.packageName)
+
               return (
                 <label
                   key={app.packageName}
-                  onClick={() => handleToggleApp(app.packageName)}
-                  onKeyDown={(e) => !mandatory && e.key === 'Enter' && handleToggleApp(app.packageName)}
-                  role="button"
-                  tabIndex={0}
-                  className={`group relative flex flex-col gap-2 p-4 rounded-2xl border-2 transition-all duration-200 shadow-sm select-none ${
+                  className={`flex items-center justify-between p-4 rounded-xl border cursor-pointer transition-colors ${
                     mandatory
-                      ? 'border-amber-500/60 bg-background ring-2 ring-amber-500/30 cursor-not-allowed'
-                      : checked
-                        ? 'border-primary bg-background ring-2 ring-primary/40 shadow-primary/10 cursor-pointer hover:shadow-md'
-                        : 'border-white/20 bg-background hover:border-white/40 cursor-pointer hover:shadow-md'
+                      ? 'border-amber-500/40 bg-[var(--surface)]'
+                      : 'border-[var(--border)] bg-[var(--surface)] hover:bg-white/5'
                   }`}
                 >
-                  {mandatory && (
-                    <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white leading-none">
-                      Obrigatório
-                    </span>
-                  )}
-                  {notInstalled && (
-                    <span className="absolute top-2 right-2 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/80 text-white leading-none">
-                      Instalar
-                    </span>
-                  )}
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <AppIcon
+                      packageName={app.packageName}
+                      emoji={app.emoji}
+                      size={36}
+                      className="flex-shrink-0 rounded-lg"
+                      iconUrl={(app as any).iconUrl}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-[var(--text-primary)] truncate">{app.appName}</span>
+                        {mandatory && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/90 text-white leading-none flex-shrink-0">
+                            Obrigatório
+                          </span>
+                        )}
+                        {notInstalled && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-orange-500/80 text-white leading-none flex-shrink-0">
+                            Instalar
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-[var(--text-muted)] truncate font-mono">
+                        {app.packageName.split('.').pop()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="relative flex-shrink-0 ml-3">
                     <input
                       type="checkbox"
                       checked={checked}
                       disabled={mandatory}
                       onChange={() => handleToggleApp(app.packageName)}
-                      className="w-5 h-5 text-primary border-white/30 rounded-md focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background shrink-0 disabled:opacity-70 disabled:cursor-not-allowed"
+                      className="sr-only peer"
                     />
-                    <AppIcon
-                      packageName={app.packageName}
-                      emoji={app.emoji}
-                      size={40}
-                      className="ring-1 ring-white/10"
-                      iconUrl={(app as any).iconUrl}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="font-semibold text-white truncate text-sm">{app.appName}</div>
-                      <div className="text-[10px] text-white/50 truncate font-mono">{app.packageName.split('.').pop()}</div>
-                    </div>
+                    <div className={`w-11 h-6 rounded-full transition-colors ${
+                      mandatory
+                        ? 'bg-amber-500'
+                        : 'bg-white/20 peer-checked:bg-[var(--primary)]'
+                    }`}></div>
+                    <div className={`absolute left-0.5 top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      checked ? 'translate-x-5' : ''
+                    }`}></div>
                   </div>
                 </label>
               )
             })}
           </div>
-          <div className="flex justify-end pt-4">
+
+          {/* Botão salvar */}
+          <div className="flex justify-end pt-2">
             <button
               type="button"
               onClick={handleSave}
               disabled={isSaving}
-              className="btn btn-primary"
+              className="px-6 py-2.5 bg-[var(--primary)] text-black font-semibold rounded-lg hover:opacity-80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
-              {isSaving ? 'Salvando...' : 'Salvar'}
+              {isSaving ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-black"></div>
+                  Salvando...
+                </>
+              ) : (
+                'Salvar e Aplicar'
+              )}
             </button>
           </div>
         </div>
       ) : (
-        <div className="text-center py-12 bg-background rounded-xl border border-white/20">
+        <div className="text-center py-12 bg-[var(--surface)] rounded-xl border border-[var(--border)]">
           <div className="w-20 h-20 bg-white/10 rounded-full flex items-center justify-center mx-auto mb-4">
             <span className="text-3xl">📱</span>
           </div>
-          <h3 className="text-lg font-semibold text-white mb-2">
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-2">
             {filterType === 'device' && mobileDevices.length === 0
               ? 'Nenhum celular conectado'
               : 'Selecione um celular ou grupo acima'}
           </h3>
-          <p className="text-white/80">
+          <p className="text-[var(--text-muted)]">
             {filterType === 'device' && mobileDevices.length === 0
               ? 'Conecte dispositivos móveis para configurar os apps liberados'
               : 'Use o seletor acima para escolher o celular ou grupo e configurar os apps'}

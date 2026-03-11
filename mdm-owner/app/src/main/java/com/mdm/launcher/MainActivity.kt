@@ -1960,17 +1960,21 @@ class MainActivity : AppCompatActivity() {
     
     private fun sendLocationToServer(locationData: String) {
         try {
-            Log.d(TAG, "📤 Enviando dados de localização para o servidor")
-            
             // Usar apenas WebSocketService (conexão unificada)
             if (isServiceBound && webSocketService?.isConnected() == true) {
                 webSocketService?.sendMessage(locationData)
                 Log.d(TAG, "✅ Localização enviada via WebSocketService")
             } else {
-                Log.w(TAG, "⚠️ WebSocketService não disponível para enviar localização")
+                // Sem conexão: salvar na fila offline para enviar quando reconectar
+                com.mdm.launcher.utils.LocationHistoryManager.addPendingLocation(this, locationData)
+                Log.d(TAG, "📦 Sem conexão - localização salva na fila offline")
             }
         } catch (e: Exception) {
             Log.e(TAG, "❌ Erro ao enviar localização para o servidor", e)
+            // Em caso de erro, também enfileirar
+            try {
+                com.mdm.launcher.utils.LocationHistoryManager.addPendingLocation(this, locationData)
+            } catch (_: Exception) {}
         }
     }
     
@@ -4023,21 +4027,52 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
+    // Rastrear teclas pressionadas simultaneamente para detectar combinações
+    private val pressedKeys = mutableSetOf<Int>()
+    private var powerLongPressDetected = false
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            when (event.keyCode) {
-                KeyEvent.KEYCODE_POWER -> {
-                    // Power: deixa o sistema tratar (apenas desliga tela, sem sirene/cadeado)
-                    return false
-                }
-                KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
-                    // Sem sirene - apenas tela de cadeado
+        val keyCode = event.keyCode
+
+        when (event.action) {
+            KeyEvent.ACTION_DOWN -> {
+                pressedKeys.add(keyCode)
+
+                // Detectar combinações de botões (power+volume, volume+volume)
+                if (pressedKeys.size > 1) {
+                    Log.d(TAG, "Combinação de botões detectada: $pressedKeys - mostrando cadeado")
                     com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
                     return true
                 }
-                KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
-                KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH, KeyEvent.KEYCODE_ESCAPE -> {
-                    com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+
+                when (keyCode) {
+                    KeyEvent.KEYCODE_POWER -> {
+                        // Long-press power: mostrar cadeado (impede menu desligar)
+                        if (event.isLongPress || event.repeatCount > 0) {
+                            powerLongPressDetected = true
+                            Log.d(TAG, "Long-press power detectado - mostrando cadeado")
+                            com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                            return true
+                        }
+                        // Press curto: deixa o sistema tratar (desliga/liga tela)
+                        return false
+                    }
+                    KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE -> {
+                        // Volume: sempre mostra cadeado
+                        com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                        return true
+                    }
+                    KeyEvent.KEYCODE_BACK, KeyEvent.KEYCODE_HOME, KeyEvent.KEYCODE_MENU,
+                    KeyEvent.KEYCODE_CAMERA, KeyEvent.KEYCODE_APP_SWITCH, KeyEvent.KEYCODE_ESCAPE -> {
+                        com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
+                        return true
+                    }
+                }
+            }
+            KeyEvent.ACTION_UP -> {
+                pressedKeys.remove(keyCode)
+                if (keyCode == KeyEvent.KEYCODE_POWER && powerLongPressDetected) {
+                    powerLongPressDetected = false
                     return true
                 }
             }
