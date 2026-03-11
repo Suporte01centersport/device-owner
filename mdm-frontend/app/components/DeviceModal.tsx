@@ -120,14 +120,14 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         // Se há um modal interno aberto, não fechar o modal principal
-        if (!showTermsModal) {
+        if (!showTermsModal && !showMessageModal && !showHistoryModal) {
           onClose()
         }
       }
     }
     document.addEventListener('keydown', handleEsc)
     return () => document.removeEventListener('keydown', handleEsc)
-  }, [onClose, showTermsModal])
+  }, [onClose, showTermsModal, showMessageModal, showHistoryModal])
   
   const [deviceGroups, setDeviceGroups] = useState<Array<{ id: string; name: string; color: string; policies: Array<{ packageName: string; appName: string }> }>>([])
   const [groupPolicyApps, setGroupPolicyApps] = useState<string[]>([]) // Apps que estão em políticas de grupo
@@ -497,7 +497,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
       className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
       onClick={(e) => {
         // Só fecha o modal principal se não houver modal interno aberto
-        if (!showTermsModal) {
+        if (!showTermsModal && !showMessageModal && !showHistoryModal) {
           onClose()
         }
       }}
