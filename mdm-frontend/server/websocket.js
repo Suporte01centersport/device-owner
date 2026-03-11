@@ -924,6 +924,43 @@ const server = http.createServer((req, res) => {
             }
         });
         
+    } else if (req.method === 'POST' && path === '/api/devices/send-restrictions') {
+        // Enviar restrições para TODOS os dispositivos conectados
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try {
+                const { restrictions } = JSON.parse(body);
+                if (!restrictions || typeof restrictions !== 'object') {
+                    res.writeHead(400, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'restrictions é obrigatório' }));
+                    return;
+                }
+                log.info('Enviando restrições para todos os dispositivos', { restrictions });
+                let sent = 0;
+                for (const [deviceId, deviceWs] of connectedDevices.entries()) {
+                    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+                        try {
+                            deviceWs.send(JSON.stringify({
+                                type: 'set_device_restrictions',
+                                data: restrictions,
+                                timestamp: Date.now()
+                            }));
+                            sent++;
+                        } catch (e) {
+                            log.error('Erro ao enviar restrições', { deviceId, error: e.message });
+                        }
+                    }
+                }
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, sent, total: connectedDevices.size }));
+            } catch (error) {
+                log.error('Erro ao enviar restrições', { error: error.message });
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: error.message }));
+            }
+        });
+
     } else if (req.method === 'POST' && path.startsWith('/api/groups/') && path.includes('/send-restrictions')) {
         // Rota para enviar restrições de dispositivo para todos os dispositivos do grupo
         let body = '';

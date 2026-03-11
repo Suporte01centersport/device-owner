@@ -545,32 +545,28 @@ export default function PoliciesPage() {
       </div>
 
       {/* Seção de Restrições de Dispositivo */}
-      {groups.length > 0 && (
         <div className="mt-8">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-xl font-bold text-primary">Restrições de Dispositivo</h2>
-              <p className="text-sm text-secondary mt-1">Controle as funcionalidades bloqueadas nos dispositivos. Selecione um grupo e configure as restrições.</p>
+              <p className="text-sm text-secondary mt-1">Controle as funcionalidades bloqueadas nos dispositivos conectados.</p>
             </div>
+            {groups.length > 0 && (
+              <select
+                value={restrictionsGroupId}
+                onChange={(e) => setRestrictionsGroupId(e.target.value)}
+                className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[240px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
+              >
+                <option value="">Todos os dispositivos</option>
+                {groups.map((g) => (
+                  <option key={g.id} value={g.id}>
+                    {g.name} ({g.deviceCount})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
 
-          {/* Seletor de grupo */}
-          <div className="mb-4">
-            <select
-              value={restrictionsGroupId}
-              onChange={(e) => setRestrictionsGroupId(e.target.value)}
-              className="px-4 py-2.5 border border-[var(--border)] rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] min-w-[280px] font-medium focus:ring-2 focus:ring-[var(--primary)] focus:border-transparent"
-            >
-              <option value="">Selecione um grupo para configurar</option>
-              {groups.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name} ({g.deviceCount} dispositivos)
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {restrictionsGroupId && (
             <div className="card p-6 space-y-6">
               {/* Segurança */}
               <div>
@@ -694,19 +690,27 @@ export default function PoliciesPage() {
               <div className="flex justify-end gap-3 pt-4 border-t border-[var(--border)]">
                 <button
                   onClick={async () => {
-                    const group = groups.find(g => g.id === restrictionsGroupId)
-                    if (!group) return
                     setIsSavingRestrictions(true)
                     try {
                       const wsHost = typeof window !== 'undefined' ? (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : 'localhost'
-                      const res = await fetch(`http://${wsHost}:3001/api/groups/${group.id}/send-restrictions`, {
+                      let url: string
+                      let targetName: string
+                      if (restrictionsGroupId) {
+                        const group = groups.find(g => g.id === restrictionsGroupId)
+                        url = `http://${wsHost}:3001/api/groups/${restrictionsGroupId}/send-restrictions`
+                        targetName = group?.name || 'grupo'
+                      } else {
+                        url = `http://${wsHost}:3001/api/devices/send-restrictions`
+                        targetName = 'todos os dispositivos'
+                      }
+                      const res = await fetch(url, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ restrictions: deviceRestrictions })
                       })
                       if (res.ok) {
                         const result = await res.json()
-                        showAlert(`Restrições aplicadas a ${result.sent || 0} dispositivo(s) do grupo "${group.name}"`)
+                        showAlert(`Restrições aplicadas a ${result.sent || 0} dispositivo(s) de "${targetName}"`)
                       } else {
                         showAlert('Erro ao aplicar restrições. Verifique se o servidor WebSocket está rodando.')
                       }
@@ -727,16 +731,13 @@ export default function PoliciesPage() {
                     </>
                   ) : (
                     <>
-                      <span>🚀</span>
-                      Aplicar ao grupo "{groups.find(g => g.id === restrictionsGroupId)?.name}"
+                      Aplicar {restrictionsGroupId ? `ao grupo "${groups.find(g => g.id === restrictionsGroupId)?.name}"` : 'a todos os dispositivos'}
                     </>
                   )}
                 </button>
               </div>
             </div>
-          )}
         </div>
-      )}
 
       {/* Modal do Grupo */}
       <GroupModal

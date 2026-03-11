@@ -40,7 +40,7 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
   const [saveMessage, setSaveMessage] = useState('')
   const [loadError, setLoadError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [showSaved, setShowSaved] = useState(false)
+
 
   useEffect(() => {
     if (isOpen) {
@@ -212,153 +212,86 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
     ? 'p-6 w-full flex justify-center'
     : 'fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 overflow-y-auto'
 
+  const inputClass = "w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
+
   return (
     <div className={outerClass} onClick={asPage ? undefined : onClose}>
       <div
-        className="w-full max-w-lg my-8"
+        className="flex gap-4 my-8 max-w-4xl w-full"
         onClick={asPage ? undefined : (e) => e.stopPropagation()}
       >
-        <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xl overflow-hidden">
-          {/* Header */}
-          <div className="px-5 py-4 border-b border-[var(--border)] flex justify-between items-center">
-            <div>
-              <h2 className="text-base font-bold text-[var(--text-primary)]">Cadastrar Usuário</h2>
-              <p className="text-xs text-[var(--text-muted)]">Preencha os dados e adicione à fila</p>
-            </div>
-            <button
-              onClick={onClose}
-              className="w-7 h-7 flex items-center justify-center text-[var(--text-muted)] hover:text-[var(--text-primary)] rounded-lg hover:bg-white/10 transition-colors"
-              title={asPage ? 'Voltar' : 'Fechar'}
-            >
-              {asPage ? '←' : '✕'}
-            </button>
+        {/* CARD ESQUERDO - Formulário */}
+        <div className="flex-1 bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xl overflow-hidden flex flex-col">
+          <div className="px-5 py-3 border-b border-[var(--border)] flex justify-between items-center">
+            <h2 className="text-sm font-bold text-[var(--text-primary)]">Cadastrar Usuário</h2>
+            <button onClick={onClose} className="text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/10 rounded-lg w-7 h-7 flex items-center justify-center transition-colors">✕</button>
           </div>
 
           {loadError && (
-            <div className="mx-5 mt-4 p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs">
-              {loadError}
-            </div>
+            <div className="mx-4 mt-3 p-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-amber-400 text-xs">{loadError}</div>
           )}
 
-          {/* Form */}
-          <div className="p-5 space-y-4">
-            {/* Nome + CPF */}
-            <div className="grid grid-cols-2 gap-3">
+          <div className="p-4 space-y-3 flex-1 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Nome *</label>
-                <input
-                  type="text"
-                  value={form.name}
-                  onChange={(e) => updateForm('name', e.target.value)}
-                  placeholder="Nome completo"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">Nome *</label>
+                <input type="text" value={form.name} onChange={(e) => updateForm('name', e.target.value)} placeholder="Nome completo" className={inputClass} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">CPF *</label>
-                <input
-                  type="text"
-                  value={form.cpf}
-                  onChange={(e) => updateForm('cpf', e.target.value)}
-                  placeholder="000.000.000-00"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">CPF *</label>
+                <input type="text" value={form.cpf} onChange={(e) => updateForm('cpf', e.target.value)} placeholder="000.000.000-00" className={inputClass} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">Ano nasc.</label>
+                <input type="number" value={form.birth_year} onChange={(e) => updateForm('birth_year', e.target.value)} placeholder="1990" min={1900} max={new Date().getFullYear()} className={inputClass} />
+              </div>
+              <div>
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">ID periférico</label>
+                <input type="text" value={form.center_peripheral} onChange={(e) => updateForm('center_peripheral', e.target.value)} placeholder="Nº Center" className={inputClass} />
               </div>
             </div>
 
-            {/* Ano + Periférico */}
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Ano nasc.</label>
-                <input
-                  type="number"
-                  value={form.birth_year}
-                  onChange={(e) => updateForm('birth_year', e.target.value)}
-                  placeholder="1990"
-                  min={1900}
-                  max={new Date().getFullYear()}
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">ID periférico</label>
-                <input
-                  type="text"
-                  value={form.center_peripheral}
-                  onChange={(e) => updateForm('center_peripheral', e.target.value)}
-                  placeholder="Nº Center"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            {/* Tipo + Senha líder */}
-            <div className="flex items-center gap-4">
-              <span className="text-xs font-medium text-[var(--text-secondary)]">Tipo:</span>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="role" checked={form.role === 'operador'} onChange={() => updateForm('role', 'operador')} className="w-3.5 h-3.5 text-[var(--primary)]" />
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[var(--text-secondary)]">Tipo:</span>
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="role" checked={form.role === 'operador'} onChange={() => updateForm('role', 'operador')} className="w-3 h-3" />
                 <span className="text-sm text-[var(--text-primary)]">Operador</span>
               </label>
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input type="radio" name="role" checked={form.role === 'líder'} onChange={() => updateForm('role', 'líder')} className="w-3.5 h-3.5 text-[var(--primary)]" />
+              <label className="flex items-center gap-1 cursor-pointer">
+                <input type="radio" name="role" checked={form.role === 'líder'} onChange={() => updateForm('role', 'líder')} className="w-3 h-3" />
                 <span className="text-sm text-[var(--text-primary)]">Líder</span>
               </label>
               {form.role === 'líder' && (
-                <input
-                  type="password"
-                  inputMode="numeric"
-                  maxLength={4}
-                  value={form.unlock_password}
-                  onChange={(e) => updateForm('unlock_password', e.target.value.replace(/\D/g, ''))}
-                  placeholder="Senha 4 dig."
-                  className="w-28 px-3 py-1.5 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
+                <input type="password" inputMode="numeric" maxLength={4} value={form.unlock_password} onChange={(e) => updateForm('unlock_password', e.target.value.replace(/\D/g, ''))} placeholder="Senha 4 dig." className="w-28 px-2 py-1.5 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]" />
               )}
             </div>
 
-            {/* Modelo + Serial */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Modelo celular</label>
-                <input
-                  type="text"
-                  value={form.device_model}
-                  onChange={(e) => updateForm('device_model', e.target.value)}
-                  placeholder="Galaxy A54"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">Modelo celular</label>
+                <input type="text" value={form.device_model} onChange={(e) => updateForm('device_model', e.target.value)} placeholder="Galaxy A54" className={inputClass} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Nº de série</label>
-                <input
-                  type="text"
-                  value={form.device_serial_number}
-                  onChange={(e) => updateForm('device_serial_number', e.target.value)}
-                  placeholder="Serial number"
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg text-sm bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)] focus:ring-1 focus:ring-[var(--primary)] focus:border-transparent"
-                />
+                <label className="block text-xs text-[var(--text-secondary)] mb-1">Nº de série</label>
+                <input type="text" value={form.device_serial_number} onChange={(e) => updateForm('device_serial_number', e.target.value)} placeholder="Serial number" className={inputClass} />
               </div>
             </div>
 
-            {/* Add button */}
-            <button
-              onClick={handleAddUser}
-              disabled={!form.name.trim() || !form.cpf.trim()}
-              className="w-full px-4 py-2.5 bg-[var(--primary)] hover:bg-[var(--primary)]/80 text-black font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
+            <button onClick={handleAddUser} disabled={!form.name.trim() || !form.cpf.trim()} className="w-full px-4 py-2 bg-[var(--primary)] hover:opacity-80 text-black font-semibold rounded-lg text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
               Adicionar à fila
             </button>
 
-            {/* Pending queue */}
             {pendingUsers.length > 0 && (
               <div className="border border-[var(--primary)]/30 rounded-lg overflow-hidden">
-                <div className="px-3 py-2 bg-[var(--primary)]/10 flex justify-between items-center">
+                <div className="px-3 py-1.5 bg-[var(--primary)]/10 flex justify-between items-center">
                   <span className="text-xs font-semibold text-[var(--primary)]">Fila ({pendingUsers.length})</span>
                   <button onClick={handleClearPending} className="text-xs text-red-400 hover:text-red-300">Limpar</button>
                 </div>
                 <div className="divide-y divide-[var(--border)]">
                   {pendingUsers.map((user, idx) => (
-                    <div key={idx} className="flex items-center justify-between px-3 py-2 text-sm">
+                    <div key={idx} className="flex items-center justify-between px-3 py-1.5 text-sm">
                       <div className="flex items-center gap-2">
                         <span className="text-xs">{user.role === 'líder' ? '👑' : '👤'}</span>
                         <span className="text-[var(--text-primary)] font-medium">{user.name}</span>
@@ -372,74 +305,51 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
             )}
 
             {saveMessage && (
-              <div className="p-2.5 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm text-center">
-                {saveMessage}
-              </div>
+              <div className="p-2 bg-green-500/10 border border-green-500/30 rounded-lg text-green-400 text-sm text-center">{saveMessage}</div>
             )}
           </div>
 
-          {/* Footer */}
-          <div className="px-5 py-3 border-t border-[var(--border)] flex items-center justify-between">
-            <button
-              onClick={onClose}
-              disabled={isSaving}
-              className="px-4 py-2 bg-white/10 hover:bg-white/20 text-[var(--text-primary)] rounded-lg text-sm transition-colors disabled:opacity-50"
-            >
+          <div className="px-4 py-2.5 border-t border-[var(--border)] flex justify-between">
+            <button onClick={onClose} disabled={isSaving} className="px-3 py-1.5 bg-white/10 hover:bg-white/20 text-[var(--text-primary)] rounded-lg text-sm transition-colors disabled:opacity-50">
               {asPage ? 'Voltar' : 'Fechar'}
             </button>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setShowSaved(!showSaved)}
-                className="px-3 py-2 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-white/5 rounded-lg transition-colors"
-              >
-                {showSaved ? 'Ocultar' : 'Ver'} cadastrados ({sortedSaved.length})
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={pendingUsers.length === 0 || isSaving}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5"
-              >
-                {isSaving ? <><span className="animate-spin inline-block">⏳</span> Salvando...</> : <>Salvar {pendingUsers.length > 0 && `(${pendingUsers.length})`}</>}
-              </button>
-            </div>
+            <button onClick={handleSave} disabled={pendingUsers.length === 0 || isSaving} className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed">
+              {isSaving ? 'Salvando...' : `Salvar ${pendingUsers.length > 0 ? `(${pendingUsers.length})` : ''}`}
+            </button>
           </div>
+        </div>
 
-          {/* Saved users expandable */}
-          {showSaved && (
-            <div className="border-t border-[var(--border)] max-h-64 overflow-y-auto">
-              {sortedSaved.length === 0 ? (
-                <div className="p-6 text-center text-[var(--text-muted)] text-sm">
-                  {isLoading ? 'Carregando...' : 'Nenhum usuário cadastrado.'}
-                </div>
-              ) : (
-                <div className="divide-y divide-[var(--border)]">
-                  {sortedSaved.map((user) => (
-                    <div
-                      key={user.id}
-                      className="flex items-center justify-between px-5 py-2.5 hover:bg-white/5 transition-colors"
-                    >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <span className="text-sm">{user.role === 'líder' ? '👑' : '👤'}</span>
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user.name}</p>
-                          <p className="text-xs text-[var(--text-muted)]">
-                            {user.cpf}{user.device_model ? ` · ${user.device_model}` : ''}
-                          </p>
-                        </div>
+        {/* CARD DIREITO - Cadastrados */}
+        <div className="w-72 bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-xl overflow-hidden flex flex-col">
+          <div className="px-4 py-3 border-b border-[var(--border)] flex items-center justify-between">
+            <h2 className="text-sm font-bold text-[var(--text-primary)]">Cadastrados ({sortedSaved.length})</h2>
+            {isLoading && <span className="text-xs text-[var(--text-muted)] animate-pulse">...</span>}
+          </div>
+          <div className="flex-1 overflow-y-auto max-h-[520px]">
+            {sortedSaved.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-32 text-[var(--text-muted)] text-xs text-center gap-1 p-4">
+                <span className="text-2xl">👤</span>
+                <span>{isLoading ? 'Carregando...' : 'Nenhum usuário cadastrado.'}</span>
+              </div>
+            ) : (
+              <div className="divide-y divide-[var(--border)]">
+                {sortedSaved.map((user) => (
+                  <div key={user.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-white/5 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-sm flex-shrink-0">{user.role === 'líder' ? '👑' : '👤'}</span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-[var(--text-primary)] truncate">{user.name}</p>
+                        <p className="text-[10px] text-[var(--text-muted)] truncate">
+                          {user.cpf}{user.device_model ? ` · ${user.device_model}` : ''}
+                        </p>
                       </div>
-                      <button
-                        onClick={() => handleRemoveSaved(user.id)}
-                        className="flex-shrink-0 text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors ml-2"
-                        title="Remover"
-                      >
-                        ✕
-                      </button>
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                    <button onClick={() => handleRemoveSaved(user.id)} className="flex-shrink-0 text-[var(--text-muted)] hover:text-red-400 text-xs transition-colors ml-1" title="Remover">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
