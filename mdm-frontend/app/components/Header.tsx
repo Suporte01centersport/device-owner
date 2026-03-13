@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import PersistenceStatus from './PersistenceStatus'
+import BootTest from './BootTest'
 import { playNotificationSound } from '../lib/notification-sound'
 
 interface HeaderProps {
@@ -296,8 +297,8 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
 
         {/* Right side */}
         <div className="flex items-center gap-3">
-          {/* Persistence status */}
-          <PersistenceStatus />
+          {/* Boot de Teste */}
+          <BootTest />
 
           {/* Connection status + Atualizar dispositivos */}
           <div className="flex items-center gap-2">

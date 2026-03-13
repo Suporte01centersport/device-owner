@@ -1006,10 +1006,14 @@ const server = http.createServer(async (req, res) => {
         req.on('data', chunk => body += chunk);
         req.on('end', () => {
             try {
-                const { filename, data } = JSON.parse(body);
+                const parsed = JSON.parse(body);
                 const pathMod = require('path');
                 const backupDir = pathMod.join(__dirname, '..', 'backups');
                 if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+                const now = new Date();
+                const ts = now.toISOString().replace(/[:.]/g, '-').replace('T', '_').substring(0, 19);
+                const filename = parsed.filename || `backup_${ts}.json`;
+                const data = parsed.data || parsed;
                 const filePath = pathMod.join(backupDir, filename);
                 fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
                 console.log(`💾 Backup salvo: ${filePath}`);
