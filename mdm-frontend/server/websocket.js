@@ -3224,18 +3224,24 @@ persistentDevices.set(deviceId, deviceData);
         console.log('📤 Notificações de mudança de nome enviadas aos clientes web');
     }
     
+    // Enviar senha, restrições e allowedApps apenas UMA VEZ por sessão de conexão
+    // Evita loop quando dispositivo envia múltiplos device_status na reconexão
+    if (!ws._configSentForDevice) {
+        ws._configSentForDevice = new Set();
+    }
+    const alreadySentConfig = ws._configSentForDevice.has(deviceId);
+
+    if (!alreadySentConfig) {
+        ws._configSentForDevice.add(deviceId);
+
     // Enviar senha de administrador se estiver definida
     if (globalAdminPassword) {
         const message = {
             type: 'set_admin_password',
             data: { password: globalAdminPassword }
         };
-        console.log('WebSocket readyState:', ws.readyState);
-        console.log('Mensagem a ser enviada:', message);
         ws.send(JSON.stringify(message));
-        console.log(`Senha de administrador enviada automaticamente para dispositivo ${deviceId}:`, message);
-    } else {
-        console.log(`Nenhuma senha de administrador definida para enviar ao dispositivo ${deviceId}`);
+        console.log(`Senha de administrador enviada automaticamente para dispositivo ${deviceId}`);
     }
 
     // ✅ AUTO-APLICAR RESTRIÇÕES salvas ao dispositivo que conectou/reconectou
@@ -3354,6 +3360,10 @@ persistentDevices.set(deviceId, deviceData);
         } catch (err) {
             log.warn('Erro ao buscar políticas de grupo na reconexão', { deviceId, error: err.message });
         }
+    }
+
+    } else {
+        console.log(`⏭️ Config já enviada para ${deviceId} nesta sessão, pulando re-envio`);
     }
 
     log.info(`Dispositivo conectado`, {

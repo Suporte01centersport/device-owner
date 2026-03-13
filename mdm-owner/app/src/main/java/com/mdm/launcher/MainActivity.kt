@@ -203,9 +203,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 "com.mdm.launcher.APPLY_DEVICE_POLICIES" -> {
                     applyDevicePolicies()
-                    runOnUiThread {
-                        Toast.makeText(this@MainActivity, "✅ Políticas aplicadas: bloqueio desativado, Settings bloqueado, Quick Settings restritos", Toast.LENGTH_LONG).show()
-                    }
+                    // Toast removido - evita loop visual na tela do dispositivo
                 }
             }
         }
@@ -2153,6 +2151,11 @@ class MainActivity : AppCompatActivity() {
 
                     saveData() // Salvar dados recebidos da web
 
+                    // ✅ CRÍTICO: Atualizar AppMonitor com a nova lista de apps permitidos
+                    // Sem isso, o AppMonitor mata apps recém-liberados porque usa lista antiga
+                    com.mdm.launcher.utils.AppMonitor.updateAllowedApps(this@MainActivity, allowedApps)
+                    Log.d(TAG, "✅ AppMonitor atualizado com ${allowedApps.size} apps permitidos")
+
                     // FORÇAR RECARGA dos apps instalados se lista estiver vazia ou desatualizada
                     if (installedApps.isEmpty()) {
                         Log.w(TAG, "⚠️ Lista de apps instalados está vazia! Recarregando...")
@@ -2163,7 +2166,6 @@ class MainActivity : AppCompatActivity() {
                                 lastAppUpdateTime = System.currentTimeMillis()
                                 Log.d(TAG, "✅ Apps instalados recarregados: ${installedApps.size}")
 
-                                markUserInteraction()
                                 updateAppsList()
 
                                 // Feedback visual apenas se não for reconexão E permissões mudaram
@@ -2177,7 +2179,6 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                     } else {
-                        markUserInteraction()
                         updateAppsList()
 
                         // Feedback visual apenas se não for reconexão E permissões mudaram

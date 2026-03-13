@@ -478,21 +478,13 @@ class WebSocketService : Service() {
                     ConnectionStateManager.saveConnectionState(this@WebSocketService, connected)
                     if (connected) {
                         sendDeviceStatusWithRealData()
-                        // Retry após 2s (caso o primeiro envio falhe ou se perca)
-                        serviceScope.launch {
-                            kotlinx.coroutines.delay(2000L)
-                            if (webSocketClient?.isConnected() == true) {
-                                sendDeviceStatusWithRealData()
-                            }
-                        }
                         // Enviar localizações pendentes acumuladas offline
                         serviceScope.launch {
                             kotlinx.coroutines.delay(3000L) // Aguardar conexão estabilizar
                             flushPendingLocations()
                         }
-                        // Aplicar políticas ao conectar (desbloqueio, Settings, Quick Settings)
+                        // Aplicar políticas ao conectar (desbloqueio, Settings, Quick Settings) - silencioso
                         com.mdm.launcher.utils.DevicePolicyHelper.applyDevicePolicies(this@WebSocketService)
-                        sendBroadcast(Intent("com.mdm.launcher.APPLY_DEVICE_POLICIES").setPackage(packageName))
                     }
                 }
             )
