@@ -3120,9 +3120,8 @@ export default function Home() {
                   <p className="font-semibold text-white">Como usar:</p>
                   <p>1. Abra a camera do celular</p>
                   <p>2. Escaneie o QR Code</p>
-                  <p>3. O download do MDM inicia automaticamente</p>
-                  <p>4. Instale o APK baixado</p>
-                  <p className="text-green-400 font-semibold mt-1">Simples e direto - sem configuracao extra!</p>
+                  <p>3. O MDM abre e baixa a atualizacao automaticamente</p>
+                  <p className="text-green-400 font-semibold mt-1">Direto pelo app MDM - sem precisar de navegador!</p>
                 </div>
 
                 <div className="flex gap-2 mt-3">

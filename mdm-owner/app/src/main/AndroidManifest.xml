@@ -115,6 +115,21 @@
             </intent-filter>
         </activity>
 
+        <!-- DownloadActivity - deep link mdmcenter://download para baixar MDM via QR -->
+        <activity
+            android:name=".DownloadActivity"
+            android:exported="true"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true"
+            android:noHistory="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mdmcenter" android:host="download" />
+            </intent-filter>
+        </activity>
+
         <!-- Device Admin Receiver -->
         <receiver
             android:name=".DeviceAdminReceiver"

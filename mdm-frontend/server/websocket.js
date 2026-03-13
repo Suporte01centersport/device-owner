@@ -1093,7 +1093,7 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // QR Code com URL de download do APK MDM (simples - só baixa o app)
+    // QR Code com deep link para download do APK MDM (via app MDM, sem Chrome)
     if (path === '/api/apk-qr-image' && req.method === 'GET') {
         (async () => {
             try {
@@ -1102,7 +1102,7 @@ const server = http.createServer(async (req, res) => {
                 const params = new url.URL(req.url, `http://${req.headers.host}`).searchParams;
                 const useLocal = params.get('use_local') === 'true';
 
-                let apkUrl;
+                let serverAddr;
                 if (useLocal) {
                     const interfaces = os.networkInterfaces();
                     let serverIp = 'localhost';
@@ -1115,10 +1115,17 @@ const server = http.createServer(async (req, res) => {
                         }
                         if (serverIp !== 'localhost') break;
                     }
-                    apkUrl = `http://${serverIp}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
+                    serverAddr = `${serverIp}:${process.env.WEBSOCKET_PORT || '3001'}`;
                 } else {
-                    apkUrl = await getApkUrlForAnyNetwork();
+                    const apkUrl = await getApkUrlForAnyNetwork();
+                    serverAddr = apkUrl.replace(/^https?:\/\//, '').replace(/\/apk\/mdm\.apk$/, '');
                 }
+                // Deep link que o app MDM intercepta - baixa e instala sem Chrome
+                const deepLink = `mdmcenter://download?server=${serverAddr}`;
+                // Fallback: URL HTTP direta para celulares sem MDM instalado
+                const httpUrl = `http://${serverAddr}/apk/mdm.apk`;
+                console.log(`📱 QR gerado: ${deepLink} (fallback: ${httpUrl})`);
+
                 // ✅ Ao gerar QR, liberar browser temporariamente em todos os devices
                 const tempMsg = JSON.stringify({
                     type: 'temp_allow_browser',
@@ -1133,7 +1140,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 if (tempSent > 0) console.log(`⏳ Browser liberado temporariamente em ${tempSent} dispositivo(s) para QR download`);
 
-                const pngBuffer = await QRCode.toBuffer(apkUrl, {
+                const pngBuffer = await QRCode.toBuffer(deepLink, {
                     type: 'png',
                     width: 400,
                     margin: 2,
