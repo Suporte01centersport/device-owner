@@ -1909,7 +1909,6 @@ window.onload = function() {
     if (path === '/api/devices/realtime' && req.method === 'GET') {
         // Endpoint para obter dados em tempo real dos dispositivos
         const devices = Array.from(persistentDevices.values())
-            .filter(device => !deletedDeviceIds.has(device.deviceId))
             .map(device => ({
             deviceId: device.deviceId,
             name: device.name,
@@ -1938,7 +1937,6 @@ window.onload = function() {
     if (path === '/api/devices/status' && req.method === 'GET') {
         // Endpoint para status dos dispositivos (fallback HTTP)
         const devices = Array.from(persistentDevices.values())
-            .filter(device => !deletedDeviceIds.has(device.deviceId))
             .map(device => ({
             ...device,
             // Garantir que todas as informações detalhadas estejam incluídas
@@ -3432,17 +3430,10 @@ async function handleDeviceStatus(ws, data) {
         console.error('❌ DeviceId inválido:', deviceId);
         return;
     }
-    // Se o dispositivo foi deletado, bloquear reconexão automática
+    // Se o dispositivo foi deletado anteriormente, aceitar reconexão normalmente
     if (deletedDeviceIds.has(deviceId)) {
-        console.log(`🚫 Dispositivo ${deviceId} foi deletado — bloqueando reconexão automática`);
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({
-                type: 'device_deleted_blocked',
-                message: 'Este dispositivo foi removido do sistema'
-            }));
-            ws.close(1000, 'Device was deleted');
-        }
-        return;
+        deletedDeviceIds.delete(deviceId);
+        console.log(`✅ Dispositivo ${deviceId} reconectando após deleção — aceito normalmente`);
     }
     
     // Marcar como dispositivo Android
@@ -4361,18 +4352,13 @@ async function handleWebClient(ws, data) {
     // Se um dispositivo está na memória (conectado), usar dados mais recentes mas preservar vínculo de usuário
     const devicesMap = new Map();
     
-    // Primeiro, adicionar todos os dispositivos do banco, exceto os marcados como deletados
-    const filteredDbDevices = dbDevices.filter(d => !deletedDeviceIds.has(d.deviceId));
-    filteredDbDevices.forEach(device => {
+    // Primeiro, adicionar todos os dispositivos do banco
+    dbDevices.forEach(device => {
         devicesMap.set(device.deviceId, device);
     });
-    
+
     // Depois, mesclar com dados em tempo real (se conectado)
     Array.from(persistentDevices.values()).forEach(liveDevice => {
-        // Ignorar dispositivos marcados como deletados até que reconectem
-        if (deletedDeviceIds.has(liveDevice.deviceId)) {
-            return;
-        }
         const existing = devicesMap.get(liveDevice.deviceId);
         
         if (existing) {
@@ -4513,17 +4499,9 @@ async function handleDeleteDevice(ws, data) {
             console.log(`🔌 Conexão WebSocket do dispositivo ${deviceId} encerrada`);
         }
 
-        // Remover das listas em memória
+        // Remover das listas em memória (sem bloquear reconexão futura)
         persistentDevices.delete(deviceId);
-        deletedDeviceIds.add(deviceId);
         connectedDevices.delete(deviceId);
-
-        // Persistir na tabela de dispositivos deletados para sobreviver reinícios
-        try {
-            await query(`INSERT INTO deleted_devices (device_id) VALUES ($1) ON CONFLICT (device_id) DO NOTHING`, [deviceId]);
-        } catch (e) {
-            console.error('❌ Falha ao persistir dispositivo deletado:', e.message);
-        }
 
         console.log(`🗑️ Dispositivo ${deviceId} removido permanentemente da memória e do banco de dados`);
 
