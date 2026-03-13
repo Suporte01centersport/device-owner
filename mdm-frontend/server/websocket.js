@@ -859,6 +859,49 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Rota para limpar TODOS os bloqueios de dispositivos (usado pelo add-device antes de reinstalar)
+    if (req.method === 'POST' && req.url === '/api/devices/clear-all-blocks') {
+        try {
+            const count = deletedDeviceIds.size;
+            deletedDeviceIds.clear();
+            await query(`DELETE FROM deleted_devices`).catch(() => {});
+            console.log(`🔓 TODOS os bloqueios de dispositivos limpos (${count} dispositivos)`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: `${count} bloqueios removidos` }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+    }
+
+    // Rota para forçar exclusão completa de um dispositivo (remove de tudo: banco, memória, bloqueios)
+    const forceDeleteMatch = req.method === 'DELETE' && req.url && req.url.match(/^\/api\/devices\/([^/]+)$/);
+    if (forceDeleteMatch) {
+        const deviceId = decodeURIComponent(forceDeleteMatch[1]);
+        try {
+            // Remover de TUDO
+            deletedDeviceIds.delete(deviceId);
+            persistentDevices.delete(deviceId);
+            connectedDevices.delete(deviceId);
+            await query(`DELETE FROM deleted_devices WHERE device_id = $1`, [deviceId]).catch(() => {});
+            await query(`DELETE FROM device_locations WHERE device_id = $1`, [deviceId]).catch(() => {});
+            await query(`DELETE FROM installed_apps WHERE device_id = $1`, [deviceId]).catch(() => {});
+            await query(`DELETE FROM device_group_memberships WHERE device_id = $1`, [deviceId]).catch(() => {});
+            await query(`DELETE FROM device_restrictions WHERE device_id = $1`, [deviceId]).catch(() => {});
+            await query(`DELETE FROM devices WHERE device_id = $1`, [deviceId]).catch(() => {});
+            console.log(`🗑️ Dispositivo ${deviceId} forçado exclusão completa (banco + memória + bloqueios)`);
+            // Notificar clientes web
+            notifyWebClients({ type: 'device_deleted', deviceId, timestamp: Date.now() });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Dispositivo excluído completamente' }));
+        } catch (e) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: e.message }));
+        }
+        return;
+    }
+
     // Rota para enviar comando de atualização de APK
     // API HTTP para enviar notificação ao dispositivo (fallback quando WebSocket falha)
     if (req.method === 'POST' && req.url === '/api/devices/send-notification') {

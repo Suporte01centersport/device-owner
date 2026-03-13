@@ -412,8 +412,52 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         Log.d(TAG, "📨 onNewIntent() chamado - processando novo intent sem recriar Activity")
         setIntent(intent)
+        // Handler para limpar TODAS as restrições (usado pelo add-device antes de reinstalar)
+        if (intent?.getStringExtra("action") == "clear_all_restrictions") {
+            clearAllRestrictionsForReinstall()
+            return
+        }
         handleInitialConfigIntent()
         handleNotificationIntent()
+    }
+
+    /**
+     * Limpa TODAS as restrições de Device Owner para permitir reinstalação via adb.
+     * Chamado pelo add-device antes de desinstalar o MDM.
+     */
+    private fun clearAllRestrictionsForReinstall() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            val admin = ComponentName(this, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(packageName)) return
+
+            Log.d(TAG, "🔓 Limpando TODAS as restrições para reinstalação...")
+            val restrictions = arrayOf(
+                android.os.UserManager.DISALLOW_INSTALL_APPS,
+                android.os.UserManager.DISALLOW_UNINSTALL_APPS,
+                android.os.UserManager.DISALLOW_USB_FILE_TRANSFER,
+                android.os.UserManager.DISALLOW_DEBUGGING_FEATURES,
+                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+                android.os.UserManager.DISALLOW_FACTORY_RESET,
+                android.os.UserManager.DISALLOW_ADD_USER,
+                android.os.UserManager.DISALLOW_CONFIG_WIFI,
+                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH
+            )
+            for (r in restrictions) {
+                try { dpm.clearUserRestriction(admin, r) } catch (_: Exception) {}
+            }
+            // Sair do Lock Task Mode
+            try { stopLockTask() } catch (_: Exception) {}
+            // Desabilitar Play Protect
+            try {
+                dpm.setGlobalSetting(admin, "package_verifier_enable", "0")
+                dpm.setGlobalSetting(admin, "verifier_verify_adb_installs", "0")
+            } catch (_: Exception) {}
+
+            Log.d(TAG, "✅ Todas as restrições limpas - pronto para reinstalação")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao limpar restrições: ${e.message}", e)
+        }
     }
     
     /**

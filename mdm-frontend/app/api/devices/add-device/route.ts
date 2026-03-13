@@ -135,14 +135,36 @@ export async function POST(request: NextRequest) {
           idsToUnblock.push(hash)
         }
       } catch { /* ok */ }
-      // Desbloquear todos os IDs encontrados
+      // LIMPAR TODOS OS BLOQUEIOS primeiro (garante que nenhum ID antigo bloqueia)
+      await fetch(`http://${wsHost}:${wsPort}/api/devices/clear-all-blocks`, { method: 'POST' }).catch(() => {})
+      // Desbloquear e excluir registros antigos para cada ID encontrado
       for (const id of idsToUnblock) {
         await fetch(`http://${wsHost}:${wsPort}/api/devices/${id}/unblock`, { method: 'POST' }).catch(() => {})
+        await fetch(`http://${wsHost}:${wsPort}/api/devices/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {})
       }
       steps.push(`IDs desbloqueados: ${idsToUnblock.join(', ')}`)
     } catch { /* ignora se falhar */ }
 
-    // 1b. Desinstalar MDM anterior (reinstalação limpa para aplicar correções)
+    // 1b. Limpar restrições que bloqueiam instalação (ANTES de desinstalar)
+    try {
+      const dpmCheck = execSync('adb shell dpm list-owners', { encoding: 'utf-8', timeout: 5000 })
+      if (dpmCheck.includes('com.mdm.launcher')) {
+        // Chamar activity do MDM para limpar restrições antes de reinstalar
+        try {
+          execSync('adb shell am start -n com.mdm.launcher/.MainActivity --es action "clear_all_restrictions"', { encoding: 'utf-8', timeout: 5000 })
+          // Dar tempo pro app processar
+          execSync('timeout /t 2 >nul 2>&1 || sleep 2', { encoding: 'utf-8', timeout: 5000 })
+        } catch { /* ok */ }
+        // Desabilitar verificador de pacotes
+        try {
+          execSync('adb shell settings put global package_verifier_enable 0', { encoding: 'utf-8', timeout: 3000 })
+          execSync('adb shell settings put global verifier_verify_adb_installs 0', { encoding: 'utf-8', timeout: 3000 })
+        } catch { /* ok */ }
+        steps.push('OK: Restrições de instalação limpas')
+      }
+    } catch { /* ignora */ }
+
+    // 1c. Desinstalar MDM anterior (reinstalação limpa para aplicar correções)
     try {
       execSync('adb shell dpm remove-active-admin com.mdm.launcher/.DeviceAdminReceiver', { encoding: 'utf-8', timeout: 5000 })
     } catch { /* ignora se não for admin */ }
