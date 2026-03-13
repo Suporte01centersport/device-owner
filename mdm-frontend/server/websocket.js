@@ -2587,14 +2587,9 @@ async function ensureDeletedDevicesSchema() {
             );
         `);
         console.log('✅ Schema de deleção verificado/criado');
-        // Carregar dispositivos deletados na memória
-        const result = await query(`SELECT device_id FROM deleted_devices`);
-        for (const row of result.rows) {
-            deletedDeviceIds.add(row.device_id);
-        }
-        if (result.rows.length > 0) {
-            console.log(`🚫 ${result.rows.length} dispositivos deletados carregados na memória`);
-        }
+        // Limpar tabela de deletados ao iniciar — dispositivos devem sempre poder reconectar após restart
+        await query(`DELETE FROM deleted_devices`).catch(() => {});
+        console.log('✅ Lista de dispositivos deletados limpa (restart limpo)');
     } catch (e) {
         console.error('❌ Falha ao garantir schema de deleção:', e.message);
     }
