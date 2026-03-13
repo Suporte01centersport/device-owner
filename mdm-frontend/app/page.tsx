@@ -2211,10 +2211,10 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-3">
-                      <div className="text-xs text-[var(--text-secondary)]">
-                        <span className="font-semibold text-[var(--text-primary)]">📋 Instruções:</span>
-                        <ul className="mt-1 list-disc list-inside space-y-1 text-[var(--text-secondary)]">
+                    <div className="bg-white border border-red-300 rounded-lg p-3">
+                      <div className="text-xs">
+                        <span className="font-bold text-red-600">📋 Instruções:</span>
+                        <ul className="mt-1 list-disc list-inside space-y-1 text-red-600 font-bold">
                           <li>A senha será salva no servidor e enviada para todos os dispositivos</li>
                           <li>Será necessária para alterar o nome do dispositivo</li>
                           <li>O líder usa esta senha (4 dígitos) para desbloquear o celular na tela de cadeado</li>
@@ -2224,8 +2224,8 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
-                {/* Modo Kiosk - Sempre Ativo */}
-                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                {/* Modo Kiosk - Sempre Ativo (enviado automaticamente) */}
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white" style={{display:'none'}}>
                   <h3 className="text-lg font-semibold text-white mb-4">Modo Kiosk</h3>
                   <div className="space-y-4">
                     <div className="flex items-center justify-between">

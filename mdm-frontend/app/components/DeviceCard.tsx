@@ -275,7 +275,6 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
 
       {/* NF e Data de Compra */}
       <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] space-y-2">
-        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Nota Fiscal / Compra</span>
         {!editingNf && (device.nfKey || device.purchaseDate) ? (
           <>
             {device.nfKey && (

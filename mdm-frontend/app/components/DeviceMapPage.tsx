@@ -536,7 +536,7 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
   }
 
   return (
-    <div className="relative flex-1 flex flex-col" style={{ height: 'calc(100vh - 64px)' }}>
+    <div className="relative flex-1 flex flex-col" style={{ height: 'calc(100vh - 64px)', maxHeight: 'calc(100vh - 64px)', overflow: 'hidden' }}>
       {/* Top: Map + Sidebar */}
       <div className="relative flex flex-1 min-h-0">
         {/* Map */}
@@ -656,37 +656,37 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
       </div>
 
       {/* Bottom: Legend bar */}
-      <div className="flex-shrink-0 bg-[var(--surface)] border-t border-[var(--border)] px-4 py-2.5">
-        <div className="flex items-center justify-between flex-wrap gap-x-5 gap-y-1">
-          <div className="flex items-center gap-4 text-[11px] text-[var(--text-secondary)]">
-            <span className="font-semibold text-[var(--text-primary)] text-xs">Legenda:</span>
+      <div className="flex-shrink-0 bg-[var(--surface)] border-t border-[var(--border)] px-6 py-3">
+        <div className="flex items-center justify-between flex-wrap gap-x-6 gap-y-2">
+          <div className="flex items-center gap-5 text-sm text-[var(--text-secondary)]">
+            <span className="font-bold text-[var(--text-primary)] text-sm">Legenda:</span>
             <span><span style={{color:'#f59e0b'}}>🏁</span> Início</span>
             <span><span style={{color:'#10b981'}}>📍</span> Atual</span>
             <span><span style={{color:'#3b82f6'}}>●</span> Passo</span>
             <span><span style={{color:'#3b82f6'}}>▲</span> Direção</span>
-            <span><span style={{color:'#8b5cf6'}}>⏸</span> <span className="text-purple-400">Parada</span></span>
+            <span><span style={{color:'#8b5cf6'}}>⏸</span> <span className="text-purple-400 font-medium">Parada</span></span>
           </div>
-          <div className="flex items-center gap-1 text-[10px] text-[var(--text-muted)]">
-            <span>Calor:</span>
-            <span className="inline-flex items-center gap-0.5">
-              <span className="w-3 h-2 rounded-sm inline-block" style={{background:'#3b82f6'}} />
+          <div className="flex items-center gap-2 text-sm text-[var(--text-secondary)]">
+            <span className="font-bold text-[var(--text-primary)]">Calor:</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="w-5 h-3 rounded-sm inline-block" style={{background:'#3b82f6'}} />
               <span>pouco</span>
             </span>
             <span>→</span>
-            <span className="inline-flex items-center gap-0.5">
-              <span className="w-3 h-2 rounded-sm inline-block" style={{background:'#10b981'}} />
+            <span className="inline-flex items-center gap-1">
+              <span className="w-5 h-3 rounded-sm inline-block" style={{background:'#10b981'}} />
             </span>
             <span>→</span>
-            <span className="inline-flex items-center gap-0.5">
-              <span className="w-3 h-2 rounded-sm inline-block" style={{background:'#f59e0b'}} />
+            <span className="inline-flex items-center gap-1">
+              <span className="w-5 h-3 rounded-sm inline-block" style={{background:'#f59e0b'}} />
             </span>
             <span>→</span>
-            <span className="inline-flex items-center gap-0.5">
-              <span className="w-3 h-2 rounded-sm inline-block" style={{background:'#ef4444'}} />
+            <span className="inline-flex items-center gap-1">
+              <span className="w-5 h-3 rounded-sm inline-block" style={{background:'#ef4444'}} />
             </span>
             <span>→</span>
-            <span className="inline-flex items-center gap-0.5">
-              <span className="w-3 h-2 rounded-sm inline-block" style={{background:'#7c3aed'}} />
+            <span className="inline-flex items-center gap-1">
+              <span className="w-5 h-3 rounded-sm inline-block" style={{background:'#7c3aed'}} />
               <span>muito</span>
             </span>
           </div>
