@@ -21,19 +21,27 @@ export async function DELETE(
     }
 
     // Transação: desvincular dispositivos e excluir usuário
+    // Aceita tanto UUID (id) quanto user_id customizado
     const result = await transaction(async (client: any) => {
+      // Descobrir o UUID real do usuário (pode ser passado como user_id ou UUID)
+      const findUser = await client.query(
+        `SELECT id FROM device_users WHERE id = $1 OR user_id = $1 LIMIT 1`,
+        [userId]
+      )
+      const realUuid = findUser.rows[0]?.id || userId
+
       // 1. Desvincular todos os dispositivos vinculados a este usuário
       const unlinked = await client.query(
         `UPDATE devices SET assigned_device_user_id = NULL, updated_at = NOW()
          WHERE assigned_device_user_id = $1
          RETURNING device_id`,
-        [userId]
+        [realUuid]
       )
 
       // 2. Excluir o usuário
       const deleted = await client.query(
         `DELETE FROM device_users WHERE id = $1 RETURNING id, user_id, name`,
-        [userId]
+        [realUuid]
       )
 
       return {

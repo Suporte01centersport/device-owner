@@ -1398,7 +1398,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                   value={messageText}
                   onChange={(e) => setMessageText(e.target.value)}
                   placeholder="Digite sua mensagem aqui..."
-                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
+                  className="w-full px-3 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none bg-[var(--bg-primary)] text-[var(--text-primary)] placeholder-[var(--text-muted)]"
                   rows={4}
                   maxLength={500}
                 />

@@ -1,6 +1,6 @@
 {
   "global": {
-    "lockScreen": true,
+    "lockScreen": false,
     "kioskMode": true,
     "statusBarDisabled": false,
     "wifiDisabled": false,

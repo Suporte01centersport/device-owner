@@ -206,8 +206,8 @@ export default function ConfigModal({ isOpen, onClose, onSave, asPage }: ConfigM
       showAlert('Selecione o tipo de líder.')
       return
     }
-    if (role === 'líder' && unlock_password.trim() && unlock_password.trim().length !== 4) {
-      showAlert('A senha do líder deve ter exatamente 4 dígitos.')
+    if (role === 'líder' && unlock_password.trim() && (unlock_password.trim().length < 1 || unlock_password.trim().length > 10)) {
+      showAlert('A senha do líder deve ter entre 1 e 10 caracteres.')
       return
     }
 
