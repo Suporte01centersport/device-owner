@@ -936,6 +936,15 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Content-Length', String(fileSize));
             res.setHeader('Accept-Ranges', 'bytes');
             const stream = fs.createReadStream(apkPath);
+            stream.on('error', (err) => {
+                log.error('Erro ao ler APK', { error: err.message });
+                if (!res.headersSent) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Erro ao ler arquivo APK' }));
+                } else {
+                    res.end();
+                }
+            });
             stream.pipe(res);
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
@@ -956,7 +965,9 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
             res.setHeader('Content-Disposition', 'attachment; filename="mdm-launcher.apk"');
             res.setHeader('Content-Length', String(stat.size));
-            fs.createReadStream(apkPath).pipe(res);
+            const s = fs.createReadStream(apkPath);
+            s.on('error', (err) => { log.error('Erro stream APK', { error: err.message }); if (!res.headersSent) res.writeHead(500); res.end(); });
+            s.pipe(res);
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'APK MDM não encontrado. Execute o build primeiro.' }));
@@ -976,7 +987,9 @@ const server = http.createServer(async (req, res) => {
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
             res.setHeader('Content-Disposition', 'attachment; filename="wms-app.apk"');
             res.setHeader('Content-Length', String(stat.size));
-            fs.createReadStream(apkPath).pipe(res);
+            const s2 = fs.createReadStream(apkPath);
+            s2.on('error', (err) => { log.error('Erro stream WMS', { error: err.message }); if (!res.headersSent) res.writeHead(500); res.end(); });
+            s2.pipe(res);
         } else {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'APK WMS não encontrado. Coloque o APK em wms-app/app/build/outputs/apk/' }));
