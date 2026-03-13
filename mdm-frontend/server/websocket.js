@@ -1074,6 +1074,25 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
+    // Liberar browser temporariamente em todos os dispositivos (para QR download)
+    if (path === '/api/temp-allow-browser' && req.method === 'POST') {
+        const tempMsg = JSON.stringify({
+            type: 'temp_allow_browser',
+            data: { durationMillis: 5 * 60 * 1000 },
+            timestamp: Date.now()
+        });
+        let sent = 0;
+        for (const [deviceId, deviceWs] of connectedDevices.entries()) {
+            if (deviceWs && deviceWs.readyState === WebSocket.OPEN && deviceWs.isDevice) {
+                try { deviceWs.send(tempMsg); sent++; } catch (e) {}
+            }
+        }
+        console.log(`⏳ temp_allow_browser enviado para ${sent} dispositivo(s)`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, deviceCount: sent }));
+        return;
+    }
+
     // QR Code com URL de download do APK MDM (simples - só baixa o app)
     if (path === '/api/apk-qr-image' && req.method === 'GET') {
         (async () => {
@@ -1100,6 +1119,20 @@ const server = http.createServer(async (req, res) => {
                 } else {
                     apkUrl = await getApkUrlForAnyNetwork();
                 }
+                // ✅ Ao gerar QR, liberar browser temporariamente em todos os devices
+                const tempMsg = JSON.stringify({
+                    type: 'temp_allow_browser',
+                    data: { durationMillis: 5 * 60 * 1000 },
+                    timestamp: Date.now()
+                });
+                let tempSent = 0;
+                for (const [devId, devWs] of connectedDevices.entries()) {
+                    if (devWs && devWs.readyState === WebSocket.OPEN && devWs.isDevice) {
+                        try { devWs.send(tempMsg); tempSent++; } catch (e) {}
+                    }
+                }
+                if (tempSent > 0) console.log(`⏳ Browser liberado temporariamente em ${tempSent} dispositivo(s) para QR download`);
+
                 const pngBuffer = await QRCode.toBuffer(apkUrl, {
                     type: 'png',
                     width: 400,

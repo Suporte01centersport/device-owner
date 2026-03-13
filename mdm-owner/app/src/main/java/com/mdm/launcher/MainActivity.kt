@@ -2191,6 +2191,29 @@ class MainActivity : AppCompatActivity() {
 
                     Log.d(TAG, "═══════════════════════════════════════════")
                 }
+                "temp_allow_browser" -> {
+                    Log.d(TAG, "⏳ === LIBERAÇÃO TEMPORÁRIA DE BROWSER ===")
+                    val data = jsonObject["data"] as? Map<*, *>
+                    val durationMillis = (data?.get("durationMillis") as? Number)?.toLong() ?: (5 * 60 * 1000L)
+
+                    // Pacotes de browser, download manager e instalador
+                    val browserPackages = listOf(
+                        "com.android.chrome",
+                        "com.google.android.browser",
+                        "com.android.browser",
+                        "com.sec.android.app.sbrowser",
+                        "com.coloros.browser",
+                        "com.heytap.browser",
+                        "com.android.providers.downloads",
+                        "com.android.providers.downloads.ui",
+                        "com.google.android.packageinstaller",
+                        "com.android.packageinstaller"
+                    )
+
+                    com.mdm.launcher.utils.AppMonitor.temporarilyAllowApps(browserPackages, durationMillis)
+                    Log.d(TAG, "✅ Browser liberado temporariamente por ${durationMillis / 1000}s")
+                    Log.d(TAG, "========================================")
+                }
                 "set_admin_password" -> {
                     Log.d(TAG, "🔐 === RECEBENDO SENHA DE ADMINISTRADOR ===")
                     Log.d(TAG, "Mensagem completa: $message")

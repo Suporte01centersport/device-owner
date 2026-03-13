@@ -58,6 +58,10 @@ object AppMonitor {
     // ✅ NOVO: Controle de estado do app para detectar entrada/saída
     private var appStates = mutableMapOf<String, Long>() // package -> timestamp da última entrada
     private const val APP_EXIT_TIMEOUT = 10000L // 10 segundos para considerar que saiu do app
+
+    // ✅ NOVO: Apps temporariamente permitidos (para QR code download/install)
+    private val temporaryAllowedApps = mutableMapOf<String, Long>() // package -> expiration timestamp
+    private const val TEMP_ALLOW_DEFAULT_DURATION = 5 * 60 * 1000L // 5 minutos padrão
     
     
     private val monitorRunnable = object : Runnable {
@@ -269,25 +273,66 @@ object AppMonitor {
         }
     }
 
+    /**
+     * Libera apps temporariamente (para download/instalação via QR code)
+     * Após a duração, os apps voltam a ser bloqueados automaticamente
+     */
+    fun temporarilyAllowApps(packages: List<String>, durationMillis: Long = TEMP_ALLOW_DEFAULT_DURATION) {
+        synchronized(appsLock) {
+            val expiration = System.currentTimeMillis() + durationMillis
+            for (pkg in packages) {
+                temporaryAllowedApps[pkg] = expiration
+            }
+            Log.d(TAG, "⏳ ${packages.size} apps temporariamente permitidos por ${durationMillis / 1000}s: $packages")
+        }
+        // Agendar limpeza automática
+        handler.postDelayed({
+            clearTemporaryAllowedApps()
+        }, durationMillis + 1000)
+    }
+
+    fun clearTemporaryAllowedApps() {
+        synchronized(appsLock) {
+            if (temporaryAllowedApps.isNotEmpty()) {
+                Log.d(TAG, "🔒 Limpando ${temporaryAllowedApps.size} permissões temporárias")
+                temporaryAllowedApps.clear()
+            }
+        }
+    }
+
     private fun isAppAllowed(packageName: String): Boolean {
         // Sempre permitir o próprio launcher MDM
         if (packageName == context?.packageName) {
             return true
         }
-        
-        // Se está em modo de bloqueio total (apenas 1 app: MDM), 
+
+        // ✅ Verificar apps temporariamente permitidos (QR download/install)
+        synchronized(appsLock) {
+            val expiration = temporaryAllowedApps[packageName]
+            if (expiration != null) {
+                if (System.currentTimeMillis() < expiration) {
+                    Log.d(TAG, "⏳ App temporariamente permitido: $packageName")
+                    return true
+                } else {
+                    temporaryAllowedApps.remove(packageName)
+                    Log.d(TAG, "⏰ Permissão temporária expirada para: $packageName")
+                }
+            }
+        }
+
+        // Se está em modo de bloqueio total (apenas 1 app: MDM),
         // verificar apenas a lista de permitidos
         if (allowedApps.size <= 1) {
             Log.d(TAG, "🚫 Modo bloqueio total: apenas ${allowedApps.size} app(s) permitido(s)")
             return allowedApps.contains(packageName)
         }
-        
+
         // Para modo normal, permitir apps do sistema críticos (para evitar boot loops ou travamentos)
         if (isSystemCriticalApp(packageName)) {
             Log.d(TAG, "✅ App do sistema crítico permitido: $packageName")
             return true
         }
-        
+
         val isAllowed = allowedApps.contains(packageName)
         Log.d(TAG, "🔍 App $packageName permitido: $isAllowed")
         return isAllowed

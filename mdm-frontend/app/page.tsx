@@ -1867,6 +1867,8 @@ export default function Home() {
                   onClick={() => {
                     setProvQrImageUrl(null)
                     setShowProvisioningQrModal(true)
+                    // Liberar browser temporariamente nos dispositivos para download
+                    fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
                   }}
                   title="Gerar QR Code para instalar MDM no celular"
                 >

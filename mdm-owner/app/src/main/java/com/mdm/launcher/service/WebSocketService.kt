@@ -554,6 +554,14 @@ class WebSocketService : Service() {
                         sendBroadcast(intent)
                     }
                 }
+                "temp_allow_browser" -> {
+                    // Liberar browser temporariamente para QR code download/install
+                    val intent = Intent("com.mdm.launcher.UPDATE_APP_PERMISSIONS")
+                    intent.setPackage(packageName)
+                    intent.putExtra("message", message)
+                    sendBroadcast(intent)
+                    Log.d(TAG, "⏳ temp_allow_browser encaminhado para MainActivity")
+                }
                 "show_notification" -> {
                     val dataMap = jsonObject["data"] as? Map<*, *> ?: jsonObject
                     val title = dataMap["title"] as? String ?: "MDM Center"
