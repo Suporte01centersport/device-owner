@@ -1093,7 +1093,46 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    // QR Code com deep link para download do APK MDM (via app MDM, sem Chrome)
+    // Página HTML que redireciona pro deep link e faz fallback pro download direto
+    if (path === '/mdm-install' && req.method === 'GET') {
+        const serverHost = req.headers.host || 'localhost:3001';
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MDM Center - Instalar</title>
+<style>body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#111;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+h2{margin:0 0 8px}p{color:#aaa;margin:4px 0}
+.btn{display:inline-block;margin-top:16px;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:bold}
+.btn:active{background:#1d4ed8}.small{font-size:12px;color:#666;margin-top:20px}</style>
+<script>
+// Tentar abrir deep link automaticamente (se MDM instalado)
+var deepLink = 'mdmcenter://download?server=${serverHost}';
+var apkUrl = 'http://${serverHost}/apk/mdm.apk';
+var opened = false;
+window.onload = function() {
+    // Tentar deep link
+    var iframe = document.createElement('iframe');
+    iframe.style.display = 'none';
+    iframe.src = deepLink;
+    document.body.appendChild(iframe);
+    // Se deep link não abrir em 1.5s, baixar APK direto
+    setTimeout(function() {
+        if (!document.hidden && !opened) {
+            window.location.href = apkUrl;
+        }
+    }, 1500);
+};
+document.addEventListener('visibilitychange', function() { if (document.hidden) opened = true; });
+</script></head><body>
+<h2>MDM Center</h2>
+<p>Baixando MDM automaticamente...</p>
+<a class="btn" href="http://${serverHost}/apk/mdm.apk">Baixar MDM</a>
+<p class="small">Se o download não iniciar, toque no botão acima</p>
+</body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+        res.end(html);
+        return;
+    }
+
+    // QR Code com URL HTTP que redireciona pro deep link ou baixa APK direto
     if (path === '/api/apk-qr-image' && req.method === 'GET') {
         (async () => {
             try {
@@ -1120,11 +1159,9 @@ const server = http.createServer(async (req, res) => {
                     const apkUrl = await getApkUrlForAnyNetwork();
                     serverAddr = apkUrl.replace(/^https?:\/\//, '').replace(/\/apk\/mdm\.apk$/, '');
                 }
-                // Deep link que o app MDM intercepta - baixa e instala sem Chrome
-                const deepLink = `mdmcenter://download?server=${serverAddr}`;
-                // Fallback: URL HTTP direta para celulares sem MDM instalado
-                const httpUrl = `http://${serverAddr}/apk/mdm.apk`;
-                console.log(`📱 QR gerado: ${deepLink} (fallback: ${httpUrl})`);
+                // URL HTTP que funciona com qualquer leitor de QR
+                const installUrl = `http://${serverAddr}/mdm-install`;
+                console.log(`📱 QR gerado: ${installUrl}`);
 
                 // ✅ Ao gerar QR, liberar browser temporariamente em todos os devices
                 const tempMsg = JSON.stringify({
@@ -1140,7 +1177,7 @@ const server = http.createServer(async (req, res) => {
                 }
                 if (tempSent > 0) console.log(`⏳ Browser liberado temporariamente em ${tempSent} dispositivo(s) para QR download`);
 
-                const pngBuffer = await QRCode.toBuffer(deepLink, {
+                const pngBuffer = await QRCode.toBuffer(installUrl, {
                     type: 'png',
                     width: 400,
                     margin: 2,
