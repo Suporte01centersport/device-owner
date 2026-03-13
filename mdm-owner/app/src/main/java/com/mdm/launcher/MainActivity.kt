@@ -3344,7 +3344,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Notificar servidor
-            sendWebSocketMessage(org.json.JSONObject().apply {
+            webSocketClient?.sendMessage(org.json.JSONObject().apply {
                 put("type", "device_reverted")
                 put("deviceId", com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@MainActivity))
                 put("timestamp", System.currentTimeMillis())
