@@ -1,7 +1,7 @@
 # MDM Center — Documentação Completa
 
 > Sistema de gerenciamento remoto de dispositivos Android (Mobile Device Management)
-> Última atualização: março 2026
+> Última atualização: 12 de março de 2026
 
 ---
 
@@ -13,13 +13,18 @@
    - [mdm-owner (App Android)](#mdm-owner-app-android)
    - [mdm-frontend (Painel Web + Servidor)](#mdm-frontend-painel-web--servidor)
 4. [Funcionalidades Implementadas](#funcionalidades-implementadas)
-5. [Configuração e Instalação](#configuração-e-instalação)
-6. [Como Compilar e Instalar o APK](#como-compilar-e-instalar-o-apk)
-7. [Variáveis de Ambiente](#variáveis-de-ambiente)
-8. [Funcionamento Multi-Rede](#funcionamento-multi-rede)
-9. [Fluxo de Comunicação](#fluxo-de-comunicação)
-10. [Arquivos Importantes](#arquivos-importantes)
-11. [Histórico de Mudanças](#histórico-de-mudanças)
+5. [QR Codes (Provisionamento e Download)](#qr-codes)
+6. [Login e Autenticação](#login-e-autenticação)
+7. [Mapa de Calor e Localização](#mapa-de-calor-e-localização)
+8. [Configuração e Instalação](#configuração-e-instalação)
+9. [Como Compilar e Instalar o APK](#como-compilar-e-instalar-o-apk)
+10. [Variáveis de Ambiente](#variáveis-de-ambiente)
+11. [Funcionamento Multi-Rede](#funcionamento-multi-rede)
+12. [Fluxo de Comunicação](#fluxo-de-comunicação)
+13. [Arquivos Importantes](#arquivos-importantes)
+14. [API Endpoints](#api-endpoints)
+15. [Banco de Dados](#banco-de-dados)
+16. [Histórico de Mudanças](#histórico-de-mudanças)
 
 ---
 
@@ -82,7 +87,8 @@ app/src/main/java/com/mdm/launcher/
 ├── LockScreenActivity.kt              # Tela de cadeado (Lock Task Mode)
 ├── SetupActivity.kt                   # Configuração inicial do dispositivo
 ├── UpdateProgressActivity.kt          # Barra de progresso durante atualização APK
-├── DeviceAdminReceiver.kt             # Receiver de Device Admin (remove PIN após autenticação)
+├── WipeActivity.kt                    # Recebe deep link mdmcenter://wipe e faz factory reset
+├── DeviceAdminReceiver.kt             # Receiver de Device Admin + onProfileProvisioningComplete
 ├── AppChangeReceiver.kt               # Detecta instalação/remoção de apps
 │
 ├── service/
@@ -148,13 +154,19 @@ mdm-frontend/
 │   │   └── device.ts                  # Interfaces TypeScript (Device, AppInfo, etc.)
 │   │
 │   ├── components/
-│   │   ├── DeviceCard.tsx             # Card de dispositivo (bateria, armazenamento, botões)
+│   │   ├── DeviceCard.tsx             # Card de dispositivo (NF, bateria, botões)
+│   │   ├── DeviceMapPage.tsx          # Mapa de calor com trajeto, passos e paradas
+│   │   ├── LoginPage.tsx              # Tela de login obrigatória (JWT)
+│   │   ├── HelpPage.tsx               # Página de ajuda/FAQ
 │   │   ├── AllowedAppsPage.tsx        # Gerenciar apps liberados por celular/grupo
 │   │   ├── SupportMessagesModal.tsx   # Modal de mensagens de suporte e controle
 │   │   ├── BulkUpdateModal.tsx        # Atualização em massa de APK
 │   │   ├── Sidebar.tsx                # Menu lateral de navegação
-│   │   ├── AppIcon.tsx                # Ícone de app (Play Store ou emoji fallback)
-│   │   ├── LocationMapModal.tsx       # Mapa de localização do dispositivo
+│   │   ├── GroupModal.tsx             # Gerenciamento de grupos com políticas
+│   │   ├── DeviceModal.tsx            # Detalhes e configuração do dispositivo
+│   │   ├── GeofencingPage.tsx         # Cercas geográficas
+│   │   ├── AuditLogsPage.tsx          # Logs de auditoria
+│   │   ├── OrganizationsPage.tsx      # Multi-tenancy (organizações)
 │   │   ├── UpdateAppModal.tsx         # Modal de atualização individual de APK
 │   │   └── ConfirmModal.tsx           # Modal de confirmação genérico
 │   │
@@ -259,12 +271,109 @@ mdm-frontend/
 
 | Funcionalidade | Descrição |
 |---------------|-----------|
-| **Device Owner** | App instalado como Device Owner via `adb dpm set-device-owner` |
+| **Device Owner** | App instalado como Device Owner via QR Code ou `adb dpm set-device-owner` |
+| **Kiosk sempre ativo** | Modo Kiosk ativado permanentemente — dispositivos restritos a apps permitidos |
 | **Lock Task Mode** | Tela de cadeado usa Lock Task Mode — botão Home/Back não funciona |
+| **Dispositivo sempre destravado** | Tela desbloqueada, abre direto no MDM Center |
 | **Remoção de PIN** | Ao instalar como Device Owner, o PIN/senha do celular é removido automaticamente |
 | **Quick Settings restrito** | Apenas: brilho, WiFi, Bluetooth, lanterna — sem edição |
 | **Bloqueio de configurações** | Settings bloqueado (exceto WiFi/Bluetooth para operadores) |
 | **Keyguard desabilitado** | Sem tela de desbloqueio padrão do Android |
+
+### Nota Fiscal / Inventário
+
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| **Chave de acesso NF** | Cadastrar chave da nota fiscal no card do dispositivo |
+| **Data de compra** | Registrar data de aquisição do celular |
+| **Bloqueio após salvar** | Dados da NF e data de compra ficam travados após o primeiro cadastro |
+| **Serial number** | Exibido automaticamente na seção de inventário do card |
+
+### Backup
+
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| **Backup automático** | Gera arquivo SQL e salva cópia no servidor com data |
+| **Pasta no servidor** | Backups salvos em `mdm-frontend/backups/` com timestamp |
+
+### Papel de Parede
+
+| Funcionalidade | Descrição |
+|---------------|-----------|
+| **Persistente no servidor** | Wallpaper salvo no banco (tabela `system_config`) e mantido até alteração manual |
+| **Aplicar em todos** | URL do wallpaper enviada via WebSocket para todos os dispositivos |
+
+---
+
+## QR Codes
+
+O sistema gera dois tipos de QR Code pelo painel web:
+
+### QR Code MDM (Download do APK)
+
+Gera QR com URL de download do APK (`/apk/mdm.apk`). O usuário escaneia com a camera e instala o app manualmente.
+
+- **Endpoint:** `GET /api/apk-qr-image`
+- **Uso:** Para celulares que já passaram pelo factory reset e têm WiFi configurada
+
+### QR Code Formatar (Wipe Remoto)
+
+Gera QR com deep link seguro (`mdmcenter://wipe?token=XXX&ts=TIMESTAMP`) que, quando escaneado pelo app MDM instalado, executa factory reset.
+
+- **Endpoint:** `GET /api/wipe-qr-image`
+- **Segurança:** HMAC-SHA256 com secret compartilhado, timestamp para evitar replay
+- **Android:** `WipeActivity.kt` valida o token e executa `wipeData()`
+
+### QR Code Provisionamento (Factory Reset + Device Owner automático)
+
+Para provisionar celular novo direto do factory reset:
+1. Factory reset no celular
+2. Tocar 6 vezes na tela de boas-vindas (abre scanner QR nativo do Android)
+3. QR contém: URL do APK, checksum SHA-256, WiFi, componente DeviceAdmin, server_url
+4. Android baixa o APK, instala e configura como Device Owner automaticamente
+
+- **Endpoint:** `GET /api/provisioning-qr-image?wifi_ssid=...&wifi_password=...`
+- **Checksum:** `GET /api/apk-checksum` (SHA-256 recalculado quando APK muda)
+
+---
+
+## Login e Autenticação
+
+O painel web exige login obrigatório antes de acessar qualquer funcionalidade.
+
+- **Tela de login:** `LoginPage.tsx` com campos usuário/senha
+- **Backend:** `POST /api/auth/login` valida credenciais e retorna JWT
+- **Validação no mount:** `GET /api/auth/me` verifica se o token salvo no localStorage ainda é válido
+- **Token inválido:** Redireciona para tela de login automaticamente
+- **Fallback offline:** Se servidor não responde, mantém sessão ativa
+
+---
+
+## Mapa de Calor e Localização
+
+O mapa (`DeviceMapPage.tsx`) usa Leaflet.js com camada de calor e trajeto detalhado.
+
+### Funcionalidades do mapa
+
+| Elemento | Descrição |
+|----------|-----------|
+| **Trajeto azul** | Polyline sólida conectando todos os pontos do histórico |
+| **Setas de direção (▲)** | Marcadores azuis indicando sentido do deslocamento |
+| **Marcador de início (🏁)** | Ponto amarelo onde o trajeto começou |
+| **Marcador atual (📍)** | Ponto verde com posição mais recente |
+| **Passos intermediários (●)** | Círculos azuis com popup "Passo X de Y" |
+| **Paradas (⏸)** | Marcadores roxos onde o dispositivo ficou parado (>3 registros, <30m) |
+| **Camada de calor** | Gradiente de cores: azul (pouco) → verde → amarelo → vermelho → roxo (muito) |
+
+### Layout
+
+- Mapa compacto sem scroll (`100vh - 160px`)
+- Sidebar fixa com lista de dispositivos e busca
+- Barra de legenda abaixo do mapa com todos os ícones e cores
+- Zoom nível 18 ao selecionar dispositivo (bem próximo)
+- Exportar para PDF com `html2canvas`
+
+---
 
 ### Multi-Rede (Internet)
 
@@ -556,9 +665,113 @@ Painel Web             WebSocket Server              Celular
 
 ---
 
+## API Endpoints
+
+### Autenticação
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| POST | `/api/auth/login` | Login com usuário/senha, retorna JWT |
+| GET | `/api/auth/me` | Valida token JWT |
+| POST | `/api/auth/users` | Criar usuário admin |
+| GET | `/api/auth/users` | Listar usuários admin |
+
+### Dispositivos
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/devices/realtime` | Status em tempo real de todos os dispositivos |
+| POST | `/api/devices/send-notification` | Enviar notificação para dispositivo |
+| POST | `/api/devices/send-restrictions` | Enviar restrições para dispositivo |
+| POST | `/api/devices/:id/update-info` | Atualizar NF/data de compra |
+| POST | `/api/update-app` | Enviar comando de atualização de APK |
+| POST | `/api/devices/format-device` | Factory reset remoto |
+
+### QR Codes
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/api/apk-qr-image` | QR Code PNG para download do APK |
+| GET | `/api/wipe-qr-image` | QR Code PNG para factory reset (deep link seguro) |
+| GET | `/api/provisioning-qr-image` | QR Code PNG para provisionamento Device Owner |
+| GET | `/api/apk-checksum` | SHA-256 do APK atual |
+| GET | `/api/provisioning-qr` | JSON de provisionamento Android |
+
+### Configuração
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET/POST | `/api/config/wallpaper` | Ler/salvar URL do papel de parede |
+| POST | `/api/backup` | Gerar e salvar backup do banco |
+| GET | `/api/websocket-url` | URL do WebSocket para clientes |
+| GET | `/api/connection/health` | Status de saúde do servidor |
+
+### APK
+| Método | Endpoint | Descrição |
+|--------|----------|-----------|
+| GET | `/apk/mdm.apk` | Download do APK (release ou debug) |
+| GET | `/api/apk-url` | URL pública do APK |
+| GET | `/api/download-wms` | Download do WMS APK |
+
+---
+
+## Banco de Dados
+
+**Motor:** PostgreSQL 14+
+
+### Tabelas Principais
+
+| Tabela | Descrição |
+|--------|-----------|
+| `devices` | Dispositivos gerenciados (60+ colunas: status, bateria, localização, NF, etc.) |
+| `device_locations` | Histórico de localização GPS |
+| `installed_apps` | Apps instalados em cada dispositivo |
+| `device_groups` | Grupos de dispositivos |
+| `device_group_memberships` | Vínculo dispositivo-grupo |
+| `device_restrictions` | Restrições por dispositivo |
+| `device_users` | Usuários vinculados aos dispositivos |
+| `admin_users` | Usuários do painel web |
+| `organizations` | Multi-tenancy |
+| `device_status_history` | Histórico de conexão/desconexão |
+| `app_access_history` | Histórico de uso de apps |
+| `alert_history` | Alertas por grupo/dispositivo |
+| `audit_logs` | Log de auditoria do sistema |
+| `system_config` | Configurações persistentes (wallpaper, etc.) |
+| `computers` | Computadores Windows (UEM) |
+| `computer_locations` | Localização de computadores |
+
+### Schema
+O schema completo está em `mdm-frontend/server/database/schema.sql` (20KB).
+As tabelas são criadas automaticamente na primeira execução do servidor.
+
+---
+
 ## Histórico de Mudanças
 
 ### Março 2026
+
+#### `a9b5f598` — fix: mapa zoom próximo, remover botão toggle sidebar, layout compacto
+- Mapa inicia zoom 15, seleciona dispositivo com zoom 18 (bem próximo)
+- Removido botão X de toggle da sidebar do mapa
+- Altura do mapa reduzida para caber sem scroll
+
+#### `973ace3f` — fix: remover título NF, esconder Kiosk, instruções vermelho/branco, legenda maior
+- DeviceCard: removido texto "NOTA FISCAL / COMPRA", só mostra "Cadastrar dados da NF"
+- Escondido bloco Modo Kiosk da UI (lógica mantida, sempre ativo)
+- Instruções da senha com balão branco e texto vermelho negrito
+- Legenda do mapa com texto maior e blocos de cor maiores
+
+#### `75f41a54` — feat: QR codes MDM/Formatar, mapa de calor, login obrigatório, NF no card
+- **QR Code MDM**: gera QR para download do APK (`/api/apk-qr-image`)
+- **QR Code Formatar**: gera QR com deep link HMAC-SHA256 para wipe (`/api/wipe-qr-image`)
+- **QR Provisionamento**: QR para factory reset → Device Owner automático
+- **Login obrigatório**: tela de login com JWT, validação no mount via `/api/auth/me`
+- **Mapa de calor**: trajeto azul, setas de direção, passos, paradas roxas (⏸)
+- **NF no card**: chave de acesso e data de compra, bloqueio após primeiro cadastro
+- **Kiosk sempre ativo**: removido toggle, badge "Sempre Ativo"
+- **Backup**: gera arquivo e salva cópia no servidor com data
+- **Wallpaper**: persiste no banco (system_config) até alteração manual
+- **Removidos**: Perfis de Configuração, Relatórios Agendados, Compliance, Password Policy
+
+#### `783e4413` — fix: impedir restrições de bloquear instalação APK
+- Restrições não bloqueiam mais instalação de APK via Device Owner
+- Eliminado loop de permissões
 
 #### `ac159205` — fix: corrige bugs reais do projeto
 - `globals.css`: remove `@keyframes fadeIn` duplicado
