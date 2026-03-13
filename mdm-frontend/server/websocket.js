@@ -1079,7 +1079,27 @@ const server = http.createServer(async (req, res) => {
         (async () => {
             try {
                 const QRCode = require('qrcode');
-                const apkUrl = await getApkUrlForAnyNetwork();
+                const url = require('url');
+                const params = new url.URL(req.url, `http://${req.headers.host}`).searchParams;
+                const useLocal = params.get('use_local') === 'true';
+
+                let apkUrl;
+                if (useLocal) {
+                    const interfaces = os.networkInterfaces();
+                    let serverIp = 'localhost';
+                    for (const name of Object.keys(interfaces)) {
+                        for (const iface of interfaces[name]) {
+                            if (iface.family === 'IPv4' && !iface.internal) {
+                                serverIp = iface.address;
+                                break;
+                            }
+                        }
+                        if (serverIp !== 'localhost') break;
+                    }
+                    apkUrl = `http://${serverIp}:${process.env.WEBSOCKET_PORT || '3001'}/apk/mdm.apk`;
+                } else {
+                    apkUrl = await getApkUrlForAnyNetwork();
+                }
                 const pngBuffer = await QRCode.toBuffer(apkUrl, {
                     type: 'png',
                     width: 400,
