@@ -96,10 +96,20 @@ export async function PUT(request: NextRequest) {
     }
     const organizationId = firstRow.id
 
+    // Garantir que colunas necessárias existem
+    try {
+      await query(`ALTER TABLE device_users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'operador'`)
+      await query(`ALTER TABLE device_users ADD COLUMN IF NOT EXISTS unlock_password VARCHAR(10)`)
+      await query(`ALTER TABLE device_users ADD COLUMN IF NOT EXISTS leader_type VARCHAR(50)`)
+      console.log('✅ Colunas role/unlock_password/leader_type garantidas')
+    } catch (e: any) {
+      console.error('❌ Erro ao criar colunas:', e?.message)
+    }
+
     // Verificar quais colunas existem
     const colCheck = await query(`
       SELECT column_name FROM information_schema.columns
-      WHERE table_name = 'device_users'
+      WHERE table_name = 'device_users' AND table_schema = 'public'
     `)
     const existingCols: Set<string> = new Set((colCheck.rows as any[]).map((r: any) => r.column_name))
     const hasRole = existingCols.has('role')
@@ -121,7 +131,9 @@ export async function PUT(request: NextRequest) {
         }
 
         const cleanCpf = (typeof cpf === 'string' ? cpf : String(cpf || '')).replace(/\D/g, '')
-        const userRole = (role === 'líder' || role === 'operador') ? role : 'operador'
+        // Normalizar role - aceita variantes com encoding quebrado: líder, lider, l?der, etc.
+        const roleStr = String(role || '').toLowerCase().replace(/[^a-z]/gi, '')
+        const userRole = (roleStr === 'lder' || roleStr === 'lider' || roleStr === 'lder' || roleStr.includes('lder') || roleStr.includes('lider')) ? 'líder' : 'operador'
         const pwd = (hasUnlockPassword && unlock_password && userRole === 'líder') ? String(unlock_password).trim().slice(0, 10) : null
         const model = (hasDeviceModel && device_model) ? String(device_model).trim() : null
         const serial = (hasDeviceSerial && device_serial_number) ? String(device_serial_number).trim() : null

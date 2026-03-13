@@ -25,7 +25,7 @@ export async function DELETE(
     const result = await transaction(async (client: any) => {
       // Descobrir o UUID real do usuário (pode ser passado como user_id ou UUID)
       const findUser = await client.query(
-        `SELECT id FROM device_users WHERE id = $1 OR user_id = $1 LIMIT 1`,
+        `SELECT id FROM device_users WHERE id::text = $1 OR user_id = $1 LIMIT 1`,
         [userId]
       )
       const realUuid = findUser.rows[0]?.id || userId
