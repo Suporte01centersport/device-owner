@@ -26,11 +26,11 @@ object LocationHistoryManager {
     private const val MAX_AGE_DAYS = 30 // Manter apenas 30 dias de histórico
     
     // Distâncias inteligentes baseadas no contexto
-    private const val MIN_DISTANCE_METERS = 25f // Distância mínima para salvar (25 metros)
-    private const val URBAN_DISTANCE_METERS = 50f // Área urbana (50 metros)
-    private const val SUBURBAN_DISTANCE_METERS = 100f // Área suburbana (100 metros)
-    private const val RURAL_DISTANCE_METERS = 200f // Área rural (200 metros)
-    private const val HIGHWAY_DISTANCE_METERS = 500f // Rodovia (500 metros)
+    private const val MIN_DISTANCE_METERS = 1f // Distância mínima para salvar (1 metro - cada passo)
+    private const val URBAN_DISTANCE_METERS = 10f // Área urbana (10 metros)
+    private const val SUBURBAN_DISTANCE_METERS = 50f // Área suburbana (50 metros)
+    private const val RURAL_DISTANCE_METERS = 100f // Área rural (100 metros)
+    private const val HIGHWAY_DISTANCE_METERS = 200f // Rodovia (200 metros)
     
     // Thresholds de velocidade para determinar contexto
     private const val WALKING_SPEED_KMH = 8f // < 8 km/h = caminhando

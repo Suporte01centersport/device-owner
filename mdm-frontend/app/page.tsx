@@ -105,6 +105,8 @@ export default function Home() {
   const [isConflictModalOpen, setIsConflictModalOpen] = useState(false)
   const [conflictInfo, setConflictInfo] = useState<any>(null)
   const [isAddingDevice, setIsAddingDevice] = useState(false)
+  const [showAddDeviceMenu, setShowAddDeviceMenu] = useState(false)
+  const [addDeviceProgress, setAddDeviceProgress] = useState<{ show: boolean; steps: string[]; status: 'loading' | 'success' | 'error'; message: string }>({ show: false, steps: [], status: 'loading', message: '' })
   const [isSearchingDevices, setIsSearchingDevices] = useState(false)
   const [justAddedDevice, setJustAddedDevice] = useState(false)
   const [showBackupConfirm, setShowBackupConfirm] = useState(false)
@@ -391,6 +393,14 @@ export default function Home() {
   const wsRef = useRef<WebSocket | null>(null)
   const [reconnectTrigger, setReconnectTrigger] = useState(0)
   useEffect(() => { wsRef.current = ws }, [ws])
+
+  // Fechar dropdown "Adicionar Dispositivo" ao clicar fora
+  useEffect(() => {
+    if (!showAddDeviceMenu) return
+    const handleClick = () => setShowAddDeviceMenu(false)
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [showAddDeviceMenu])
 
   // Manter ref do updateProgress sincronizada
   useEffect(() => { updateProgressRef.current = updateProgress }, [updateProgress])
@@ -1445,23 +1455,48 @@ export default function Home() {
 
   const handleAddDevice = useCallback(async () => {
     setIsAddingDevice(true)
+    const simulatedSteps = [
+      'Detectando dispositivo USB...',
+      'Desinstalando MDM anterior...',
+      'Verificando APK...',
+      'Instalando MDM no dispositivo...',
+      'Instalando WMS...',
+      'Configurando permissões...',
+      'Definindo Device Owner...',
+      'Configurando launcher padrão...',
+      'Abrindo MDM no dispositivo...'
+    ]
+    setAddDeviceProgress({ show: true, steps: [simulatedSteps[0]], status: 'loading', message: '' })
+
+    // Simular etapas enquanto aguarda resposta real
+    let stepIndex = 0
+    const interval = setInterval(() => {
+      stepIndex++
+      if (stepIndex < simulatedSteps.length) {
+        setAddDeviceProgress(prev => ({ ...prev, steps: simulatedSteps.slice(0, stepIndex + 1) }))
+      }
+    }, 3000)
+
     try {
       const res = await fetch('/api/devices/add-device', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ wmsVariant: 'pedidos' })
       })
+      clearInterval(interval)
       const data = await res.json()
+      const realSteps = (data.steps || []) as string[]
       if (data.success) {
+        setAddDeviceProgress({ show: true, steps: realSteps, status: 'success', message: 'Dispositivo configurado com sucesso!' })
         setJustAddedDevice(true)
         setTimeout(() => setJustAddedDevice(false), 45000)
-        showAlert('✅ Dispositivo configurado! Aguarde até 40 segundos – o celular aparecerá automaticamente.')
         pollForDevicesAfterAdd()
       } else {
-        showAlert('❌ Erro: ' + (data.error || 'Falha ao configurar'))
+        setAddDeviceProgress({ show: true, steps: realSteps, status: 'error', message: data.error || 'Falha ao configurar' })
       }
     } catch (e) {
-      showAlert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+      clearInterval(interval)
+      setAddDeviceProgress(prev => ({ ...prev, status: 'error', message: e instanceof Error ? e.message : 'Falha ao conectar' }))
     } finally {
       setIsAddingDevice(false)
     }
@@ -1488,36 +1523,34 @@ export default function Home() {
   }
 
   const executeDeleteDevice = useCallback(async (deviceId: string) => {
-    // Validar se deviceId é válido
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
-      console.error('DeviceId inválido para deleção:', deviceId)
-      showAlert('Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
+      showAlert('Erro: ID do dispositivo inválido.')
       return
     }
-    console.log('Enviando requisição de deleção:', deviceId)
 
+    // Tentar deletar via API (banco de dados)
     try {
-      // Usar API como método principal (confiável)
       const response = await fetch(`/api/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
       const result = await response.json()
-      if (result.success) {
-        updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
-        // Também notificar via WebSocket para outros clientes
-        sendMessage({
-          type: 'delete_device',
-          deviceId: deviceId,
-          timestamp: Date.now()
-        })
-        setIsModalOpen(false)
-        setSelectedDevice(null)
-        setToast({ message: 'Dispositivo deletado com sucesso', type: 'success' })
-      } else {
-        showAlert(`Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
+      if (!result.success) {
+        console.log('Dispositivo não encontrado no banco, deletando via WebSocket')
       }
     } catch (e) {
-      console.error('Erro ao deletar via API:', e)
-      showAlert('Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
+      console.log('API indisponível, deletando via WebSocket')
     }
+
+    // Sempre enviar via WebSocket (remove da memória do servidor)
+    sendMessage({
+      type: 'delete_device',
+      deviceId: deviceId,
+      timestamp: Date.now()
+    })
+
+    // Sempre remover da UI local
+    updateDevices(prev => prev.filter(d => d.deviceId !== deviceId))
+    setIsModalOpen(false)
+    setSelectedDevice(null)
+    setToast({ message: 'Dispositivo deletado com sucesso', type: 'success' })
   }, [sendMessage, updateDevices])
 
   const handleDeleteDevice = useCallback((deviceId: string) => {
@@ -1525,11 +1558,7 @@ export default function Home() {
       showAlert('Sem permissão para deletar dispositivos.')
       return
     }
-    setConfirmAction({
-      title: 'Deletar Dispositivo',
-      message: 'Esta ação é irreversível. O dispositivo será removido permanentemente. Digite CONFIRMAR para prosseguir.',
-      callback: () => executeDeleteDevice(deviceId)
-    })
+    executeDeleteDevice(deviceId)
   }, [currentUser?.role, executeDeleteDevice])
 
   const handleUpdateApp = useCallback((apkUrl: string, version: string, device?: Device) => {
@@ -1862,30 +1891,49 @@ export default function Home() {
                   <span>📥</span>
                   Atualização em Massa
                 </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    setProvQrImageUrl(null)
-                    setShowProvisioningQrModal(true)
-                    // Liberar browser temporariamente nos dispositivos para download
-                    fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
-                  }}
-                  title="Gerar QR Code para instalar MDM no celular"
-                >
-                  <span>📱</span>
-                  QR Code MDM
-                </button>
+                <div className="relative">
+                  <button
+                    className="btn btn-primary"
+                    onClick={(e) => { e.stopPropagation(); setShowAddDeviceMenu(prev => !prev) }}
+                    title="Adicionar novo dispositivo"
+                  >
+                    <span>➕</span>
+                    Adicionar Dispositivo
+                    <span className="ml-1 text-[10px]">▼</span>
+                  </button>
+                  {showAddDeviceMenu && (
+                    <div className="absolute top-full left-0 mt-1 bg-surface border border-white/20 rounded-lg shadow-xl z-50 min-w-[220px] overflow-hidden">
+                      <button
+                        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2 transition-colors"
+                        onClick={() => { setShowAddDeviceMenu(false); handleAddDevice() }}
+                        disabled={isAddingDevice}
+                      >
+                        <span>🔌</span>
+                        {isAddingDevice ? 'Instalando...' : 'Via USB (ADB)'}
+                      </button>
+                      <button
+                        className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/10 flex items-center gap-2 border-t border-white/10 transition-colors"
+                        onClick={() => {
+                          setShowAddDeviceMenu(false)
+                          setProvQrImageUrl(null)
+                          setShowProvisioningQrModal(true)
+                          fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
+                        }}
+                      >
+                        <span>📱</span>
+                        Via QR Code MDM
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {currentUser?.role !== 'viewer' && (
                   <button
                     className="btn btn-warning"
-                    onClick={() => {
-                      setShowWipeQrModal(true)
-                      fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
-                    }}
-                    title="Gerar QR Code para formatar celular remotamente"
+                    onClick={() => setShowWipeQrModal(true)}
+                    title="Formatar celular via USB"
                   >
                     <span>🔄</span>
-                    QR Formatar
+                    Formatar
                   </button>
                 )}
                 <button onClick={exportDevicesToExcel} className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700" disabled={filteredDevices.length === 0}>
@@ -1972,14 +2020,11 @@ export default function Home() {
                 {currentUser?.role !== 'viewer' && (
                   <button
                     className="btn btn-warning btn-lg mt-4"
-                    onClick={() => {
-                      setShowWipeQrModal(true)
-                      fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
-                    }}
-                    title="Gerar QR Code para formatar celular remotamente"
+                    onClick={() => setShowWipeQrModal(true)}
+                    title="Formatar celular via USB"
                   >
                     <span>🔄</span>
-                    QR Formatar
+                    Formatar
                   </button>
                 )}
               </div>
@@ -3034,130 +3079,183 @@ export default function Home() {
         </div>
       )}
 
-      {/* Modal QR Formatar */}
+      {/* Modal Formatar via USB */}
       {showWipeQrModal && (
         <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center">
-          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[460px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-white">QR Formatar - Factory Reset</h2>
-                <button onClick={() => { setShowWipeQrModal(false); setWipeQrImageUrl(null) }} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                <h2 className="text-lg font-bold text-white">Formatar via USB</h2>
+                <button onClick={() => setShowWipeQrModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
               </div>
-
-              <p className="text-sm text-gray-400 mb-4">
-                Gere um QR Code que ao ser escaneado pelo celular com MDM, executa factory reset imediato sem confirmacao.
-              </p>
 
               <div className="p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-400 text-xs mb-4">
-                <p className="font-bold">ATENCAO: Este QR apaga TODOS os dados do celular instantaneamente ao ser lido!</p>
-                <p className="mt-1">O token expira em 24 horas.</p>
+                <p className="font-bold">ATENCAO: Esta acao apaga TODOS os dados do celular!</p>
               </div>
 
+              <p className="text-xs text-gray-400 mb-4">Conecte o celular via cabo USB com depuracao USB ativada. Util quando o celular esta em boot loop ou sem rede.</p>
+
               <button
-                onClick={() => {
+                onClick={async () => {
                   const wsHost = window.location.hostname || 'localhost'
-                  setWipeQrImageUrl(`http://${wsHost}:3001/api/wipe-qr-image?_t=${Date.now()}`)
+                  try {
+                    const checkRes = await fetch(`http://${wsHost}:3001/api/usb-devices`)
+                    const checkData = await checkRes.json()
+                    if (!checkData.devices || checkData.devices.length === 0) {
+                      setToast({ message: 'Nenhum dispositivo USB detectado. Conecte o celular e ative depuracao USB.', type: 'error' })
+                      return
+                    }
+                    const deviceInfo = checkData.devices.map((d: { serial: string; model: string }) => `${d.model} (${d.serial})`).join(', ')
+                    if (!confirm(`Dispositivo(s) encontrado(s):\n${deviceInfo}\n\nTem certeza que deseja FORMATAR? Todos os dados serao apagados!`)) return
+
+                    const res = await fetch(`http://${wsHost}:3001/api/usb-wipe`, { method: 'POST' })
+                    const data = await res.json()
+                    if (data.success) {
+                      setToast({ message: data.message, type: 'success' })
+                    } else {
+                      setToast({ message: data.error || 'Falha ao formatar via USB', type: 'error' })
+                    }
+                  } catch (e) {
+                    setToast({ message: 'Erro ao conectar com servidor. Verifique se o backend esta rodando.', type: 'error' })
+                  }
                 }}
                 className="w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors mb-4"
               >
-                Gerar QR de Formatacao
+                Formatar via USB
               </button>
 
-              {wipeQrImageUrl && (
-                <div className="flex flex-col items-center">
-                  <div className="bg-white p-4 rounded-xl">
-                    <img src={wipeQrImageUrl} alt="QR Wipe" style={{ width: 280, height: 280 }} />
-                  </div>
+              <div className="p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-500 space-y-1">
+                <p className="font-semibold text-gray-400">Requisitos:</p>
+                <p>- Cabo USB conectado ao computador</p>
+                <p>- Depuracao USB ativada no celular</p>
+                <p>- ADB instalado no computador</p>
+              </div>
 
-                  <div className="mt-4 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
-                    <p className="font-semibold text-white">Como usar:</p>
-                    <p>1. Abra a camera ou leitor QR no celular com MDM</p>
-                    <p>2. Escaneie este QR Code</p>
-                    <p>3. O celular sera formatado instantaneamente</p>
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      const w = window.open('', '_blank', 'width=500,height=550,scrollbars=no,resizable=no')
-                      if (w) {
-                        w.document.write(`<html>
-<head><title>QR Formatar - MDM Center</title></head>
-<body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-  <h2 style="margin:0 0 4px 0;font-size:20px;color:#dc2626;">QR Factory Reset</h2>
-  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie para formatar o celular com MDM</p>
-  <img src="${wipeQrImageUrl}" width="350" height="350" style="border-radius:10px;" />
-  <p style="margin-top:12px;font-size:11px;color:#999;">Token valido por 24 horas</p>
-  <button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#dc2626;color:white;border-radius:8px;cursor:pointer;font-size:14px;">Imprimir</button>
-</body></html>`)
-                        w.document.close()
-                      }
-                    }}
-                    className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
-                  >
-                    Imprimir QR Code
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal QR Code - Instalar MDM */}
+      {/* Modal Progresso USB */}
+      {addDeviceProgress.show && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+          <div className="bg-[#1a1a2e] rounded-2xl p-6 w-full max-w-md mx-4 border border-white/10 shadow-2xl">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-white">
+                {addDeviceProgress.status === 'loading' ? 'Instalando via USB...' : addDeviceProgress.status === 'success' ? 'Instalado!' : 'Erro'}
+              </h2>
+              {addDeviceProgress.status !== 'loading' && (
+                <button onClick={() => setAddDeviceProgress(prev => ({ ...prev, show: false }))} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              )}
+            </div>
+            {addDeviceProgress.status === 'loading' && (
+              <div className="w-full bg-white/10 rounded-full h-2 mb-4 overflow-hidden">
+                <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: `${Math.min(95, (addDeviceProgress.steps.length / 9) * 100)}%`, transition: 'width 0.5s ease' }} />
+              </div>
+            )}
+            {addDeviceProgress.status === 'success' && (
+              <div className="w-full bg-green-500/20 rounded-full h-2 mb-4">
+                <div className="h-full bg-green-500 rounded-full w-full" />
+              </div>
+            )}
+            {addDeviceProgress.status === 'error' && (
+              <div className="w-full bg-red-500/20 rounded-full h-2 mb-4">
+                <div className="h-full bg-red-500 rounded-full w-full" />
+              </div>
+            )}
+            <div className="max-h-60 overflow-y-auto space-y-1 mb-3">
+              {addDeviceProgress.steps.map((step, i) => (
+                <div key={i} className={`text-xs flex items-start gap-2 ${step.startsWith('OK:') || step.startsWith('✅') ? 'text-green-400' : step.startsWith('ERRO:') || step.startsWith('❌') ? 'text-red-400' : step.startsWith('AVISO:') ? 'text-yellow-400' : 'text-white/70'}`}>
+                  <span className="mt-0.5 shrink-0">{step.startsWith('OK:') || step.startsWith('✅') ? '✅' : step.startsWith('ERRO:') || step.startsWith('❌') ? '❌' : step.startsWith('AVISO:') ? '⚠️' : i === addDeviceProgress.steps.length - 1 && addDeviceProgress.status === 'loading' ? '⏳' : '✔️'}</span>
+                  <span>{step}</span>
+                </div>
+              ))}
+            </div>
+            {addDeviceProgress.message && (
+              <p className={`text-sm font-medium ${addDeviceProgress.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>
+                {addDeviceProgress.status === 'success' ? '✅' : '❌'} {addDeviceProgress.message}
+              </p>
+            )}
+            {addDeviceProgress.status === 'success' && (
+              <p className="text-xs text-white/50 mt-2">O dispositivo aparecerá automaticamente na lista em alguns segundos.</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR Code MDM */}
       {showProvisioningQrModal && (
         <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
-          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[460px]" onClick={e => e.stopPropagation()}>
+          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[500px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-white">QR Code - Instalar MDM</h2>
-                <button onClick={() => setShowProvisioningQrModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                <h2 className="text-lg font-bold text-white">QR Code MDM - Device Owner</h2>
+                <button onClick={() => { setShowProvisioningQrModal(false); setProvQrImageUrl(null) }} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
               </div>
 
-              <div className="flex flex-col items-center">
-                <div className="bg-white p-4 rounded-xl">
-                  <img
-                    src={`http://${typeof window !== 'undefined' ? window.location.hostname : 'localhost'}:3001/api/apk-qr-image?use_local=true&_t=${Date.now()}`}
-                    alt="QR Code MDM"
-                    style={{ width: 300, height: 300 }}
-                  />
-                </div>
+              <div className="p-3 rounded-lg bg-green-900/30 border border-green-500/30 text-green-400 text-xs mb-4">
+                <p className="font-bold">Instala MDM + Device Owner automaticamente</p>
+                <p className="mt-1 text-green-300/70">Controle total. Play Protect nao interfere.</p>
+              </div>
 
-                <div className="mt-4 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
-                  <p className="font-semibold text-white">Como usar:</p>
-                  <p>1. Abra a camera do celular</p>
-                  <p>2. Escaneie o QR Code</p>
-                  <p>3. O MDM abre e baixa a atualizacao automaticamente</p>
-                  <p className="text-green-400 font-semibold mt-1">Direto pelo app MDM - sem precisar de navegador!</p>
-                </div>
-
-                <div className="flex gap-2 mt-3">
+              {/* WiFi config */}
+              {(!provQrImageUrl || provQrImageUrl === 'loading') && (
+                <div className="space-y-2 mb-4">
+                  <label className="text-xs text-gray-400 font-medium">WiFi para o celular conectar durante o setup</label>
+                  <input type="text" placeholder="Nome da rede WiFi (SSID)" id="prov-wifi-ssid"
+                    className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-white text-sm placeholder-gray-500 focus:border-green-500 focus:outline-none" />
+                  <input type="password" placeholder="Senha do WiFi" id="prov-wifi-password"
+                    className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-white text-sm placeholder-gray-500 focus:border-green-500 focus:outline-none" />
                   <button
                     onClick={() => {
-                      const w = window.open('', '_blank', 'width=500,height=550,scrollbars=no,resizable=no')
-                      if (w) {
-                        const qrUrl = `http://${window.location.hostname}:3001/api/apk-qr-image?use_local=true&_t=${Date.now()}`
-                        w.document.write(`<html>
-<head><title>QR Code - MDM Center</title></head>
-<body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-  <h2 style="margin:0 0 4px 0;font-size:20px;color:#1e293b;">MDM Center - Instalar MDM</h2>
-  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie com a camera do celular</p>
-  <img src="${qrUrl}" width="380" height="380" style="border-radius:10px;" />
-  <div style="margin-top:16px;font-size:12px;color:#555;text-align:left;max-width:380px;line-height:1.6;">
-    <p><b>1.</b> Abra a camera do celular</p>
-    <p><b>2.</b> Escaneie o QR Code</p>
-    <p><b>3.</b> Baixe e instale o APK</p>
-  </div>
-  <button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#2563eb;color:white;border-radius:8px;cursor:pointer;font-size:14px;">Imprimir</button>
-</body></html>`)
-                        w.document.close()
-                      }
+                      const ssid = (document.getElementById('prov-wifi-ssid') as HTMLInputElement)?.value || ''
+                      const password = (document.getElementById('prov-wifi-password') as HTMLInputElement)?.value || ''
+                      if (!ssid) { setToast({ message: 'Informe o nome da rede WiFi!', type: 'error' }); return }
+                      const wsHost = window.location.hostname || 'localhost'
+                      const params = new URLSearchParams({ wifi_ssid: ssid, wifi_password: password, wifi_security: 'WPA', use_local: 'true' })
+                      setProvQrImageUrl(`http://${wsHost}:3001/api/provisioning-qr-image?${params.toString()}&_t=${Date.now()}`)
                     }}
-                    className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                    className="w-full px-4 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
                   >
-                    Imprimir
+                    Gerar QR Code
                   </button>
                 </div>
-              </div>
+              )}
+
+              {/* QR gerado */}
+              {provQrImageUrl && provQrImageUrl !== 'loading' && (
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-4 rounded-xl">
+                    <img src={provQrImageUrl} alt="QR Device Owner" style={{ width: 300, height: 300 }} />
+                  </div>
+                  <div className="mt-3 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
+                    <p className="font-semibold text-white">Como usar:</p>
+                    <p>1. Factory reset no celular</p>
+                    <p>2. Na tela de boas-vindas, <span className="text-yellow-400 font-bold">toque 6 vezes rapido</span></p>
+                    <p>3. O leitor QR abre - escaneie este codigo</p>
+                    <p>4. Pronto! MDM instala e configura sozinho</p>
+                  </div>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => {
+                        const w = window.open('', '_blank', 'width=500,height=600')
+                        if (w) {
+                          w.document.write(`<html><head><title>QR Device Owner</title></head><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;font-family:Arial,sans-serif;background:#fff;"><h2 style="margin:0 0 8px 0;">MDM Center - Device Owner</h2><p style="color:#666;margin:0 0 16px 0;font-size:13px;">6 toques na tela de boas-vindas</p><img src="${provQrImageUrl}" width="380" height="380" style="border-radius:10px;"/><div style="margin-top:12px;font-size:12px;color:#555;line-height:1.8;"><b>1.</b> Factory reset | <b>2.</b> 6 toques | <b>3.</b> Escaneie</div><button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#16a34a;color:white;border-radius:8px;cursor:pointer;">Imprimir</button></body></html>`)
+                          w.document.close()
+                        }
+                      }}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                    >
+                      Imprimir
+                    </button>
+                    <button onClick={() => setProvQrImageUrl(null)}
+                      className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 text-sm rounded-lg transition-colors"
+                    >
+                      Outro WiFi
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>

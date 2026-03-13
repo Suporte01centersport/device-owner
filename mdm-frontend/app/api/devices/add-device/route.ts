@@ -59,7 +59,10 @@ export async function POST(request: NextRequest) {
     } catch { /* usa default */ }
 
     const projectRoot = path.resolve(process.cwd(), '..')
-    const mdmApkPath = path.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+    // Priorizar APK release (tem IP público configurado)
+    const releaseApkPath = path.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk')
+    const debugApkPath = path.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk')
+    const mdmApkPath = fs.existsSync(releaseApkPath) ? releaseApkPath : debugApkPath
     const downloadsDir = process.env.USERPROFILE || process.env.HOME || ''
     const wmsFileName = WMS_APK_MAP[wmsVariant] || WMS_APK_MAP.pedidos
     const wmsApkPath = path.join(downloadsDir, 'Downloads', wmsFileName)
@@ -105,15 +108,38 @@ export async function POST(request: NextRequest) {
 
     steps.push('Dispositivo detectado')
 
-    // 1a. Obter Android ID e desbloquear caso tenha sido deletado anteriormente
+    // 1a. Obter TODOS os possíveis IDs do dispositivo e desbloquear
+    const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
+    const wsPort = process.env.WEBSOCKET_PORT || '3001'
+    const idsToUnblock: string[] = []
     try {
+      // Android ID
       const androidId = execSync('adb shell settings get secure android_id', { encoding: 'utf-8', timeout: 5000 }).trim()
-      if (androidId && androidId !== 'null') {
-        const wsHost = process.env.WEBSOCKET_HOST || 'localhost'
-        const wsPort = process.env.WEBSOCKET_PORT || '3001'
-        await fetch(`http://${wsHost}:${wsPort}/api/devices/${androidId}/unblock`, { method: 'POST' }).catch(() => {})
-        steps.push(`Android ID: ${androidId} — desbloqueado se necessário`)
+      if (androidId && androidId !== 'null') idsToUnblock.push(androidId)
+      // DeviceId salvo pelo app (SharedPreferences)
+      try {
+        const savedId = execSync('adb shell "run-as com.mdm.launcher cat /data/data/com.mdm.launcher/shared_prefs/mdm_device_identity.xml 2>/dev/null"', { encoding: 'utf-8', timeout: 5000 })
+        const match = savedId.match(/<string name="device_id">([^<]+)<\/string>/)
+        if (match?.[1] && match[1] !== 'null') idsToUnblock.push(match[1])
+      } catch { /* ok - app pode não estar instalado */ }
+      // Serial-based ID (como DeviceIdManager.generateHardwareBasedId)
+      try {
+        const serial = execSync('adb shell getprop ro.serialno', { encoding: 'utf-8', timeout: 5000 }).trim()
+        if (serial && serial !== 'unknown') {
+          const board = execSync('adb shell getprop ro.product.board', { encoding: 'utf-8', timeout: 5000 }).trim()
+          const brand = execSync('adb shell getprop ro.product.brand', { encoding: 'utf-8', timeout: 5000 }).trim()
+          const device = execSync('adb shell getprop ro.product.device', { encoding: 'utf-8', timeout: 5000 }).trim()
+          const combined = `${serial}_${board}_${brand}_${device}`
+          const crypto = require('crypto')
+          const hash = crypto.createHash('sha256').update(combined).digest('hex').substring(0, 32)
+          idsToUnblock.push(hash)
+        }
+      } catch { /* ok */ }
+      // Desbloquear todos os IDs encontrados
+      for (const id of idsToUnblock) {
+        await fetch(`http://${wsHost}:${wsPort}/api/devices/${id}/unblock`, { method: 'POST' }).catch(() => {})
       }
+      steps.push(`IDs desbloqueados: ${idsToUnblock.join(', ')}`)
     } catch { /* ignora se falhar */ }
 
     // 1b. Desinstalar MDM anterior (reinstalação limpa para aplicar correções)
@@ -127,18 +153,19 @@ export async function POST(request: NextRequest) {
       steps.push('MDM não estava instalado (ok)')
     }
 
-    // 2. Build MDM se não existir
+    // 2. Build MDM se não existir (prioriza release)
     if (!fs.existsSync(mdmApkPath)) {
       const mdmDir = path.join(projectRoot, 'mdm-owner')
       const gradlew = path.join(mdmDir, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew')
+      const buildVariant = mdmApkPath === releaseApkPath ? 'assembleRelease' : 'assembleDebug'
       const buildCmd = process.platform === 'win32'
-        ? `cd /d "${mdmDir}" && "${gradlew}" assembleDebug -q`
-        : `cd "${mdmDir}" && ./gradlew assembleDebug -q`
-      if (!runCmd(buildCmd, 'Build MDM')) {
+        ? `cd /d "${mdmDir}" && "${gradlew}" ${buildVariant} -q`
+        : `cd "${mdmDir}" && ./gradlew ${buildVariant} -q`
+      if (!runCmd(buildCmd, `Build MDM (${buildVariant})`)) {
         return NextResponse.json({ success: false, error: errors.join('; '), steps }, { status: 500 })
       }
     } else {
-      steps.push('APK MDM já existe')
+      steps.push(`APK MDM já existe (${mdmApkPath === releaseApkPath ? 'release' : 'debug'})`)
     }
 
     // 3. Instalar MDM
@@ -156,12 +183,37 @@ export async function POST(request: NextRequest) {
 
     // 5. Permissões
     runCmd('adb shell pm grant com.mdm.launcher android.permission.WRITE_SECURE_SETTINGS', 'WRITE_SECURE_SETTINGS')
-    runCmd('adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver', 'Definir Device Owner')
-    runCmd('adb shell appops set com.mdm.launcher PACKAGE_USAGE_STATS allow', 'PACKAGE_USAGE_STATS (AppMonitor)')
+
+    // Device Owner - verificar se já está setado antes de tentar
+    try {
+      const dpmList = execSync('adb shell dpm list-owners', { encoding: 'utf-8', timeout: 5000 })
+      if (dpmList.includes('com.mdm.launcher')) {
+        steps.push('OK: Device Owner já configurado')
+      } else {
+        runCmd('adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver', 'Definir Device Owner')
+      }
+    } catch {
+      runCmd('adb shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver', 'Definir Device Owner')
+    }
+
+    // USAGE_STATS - tentar ambas sintaxes (varia por versão Android)
+    try {
+      execSync('adb shell appops set com.mdm.launcher android:get_usage_stats allow', { encoding: 'utf-8', timeout: 5000 })
+      steps.push('OK: USAGE_STATS (AppMonitor)')
+    } catch {
+      try {
+        execSync('adb shell cmd appops set com.mdm.launcher USAGE_STATS allow', { encoding: 'utf-8', timeout: 5000 })
+        steps.push('OK: USAGE_STATS via cmd')
+      } catch {
+        steps.push('AVISO: USAGE_STATS - será concedido manualmente')
+      }
+    }
+
     runCmd('adb shell settings put secure lockscreen.disabled 1', 'Desabilitar bloqueio de tela')
-    runCmd('adb shell pm grant com.centersporti.wmsmobile android.permission.READ_EXTERNAL_STORAGE', 'Permissão WMS')
-    runCmd('adb shell pm grant com.centersporti.wmsmobile android.permission.WRITE_EXTERNAL_STORAGE', 'Permissão WMS')
-    runCmd('adb shell appops set com.centersporti.wmsmobile SYSTEM_ALERT_WINDOW allow', 'SYSTEM_ALERT_WINDOW')
+    // WMS permissions (ignorar se WMS não instalado)
+    try { execSync('adb shell pm grant com.centersporti.wmsmobile android.permission.READ_EXTERNAL_STORAGE', { encoding: 'utf-8', timeout: 5000 }) } catch { /* ok */ }
+    try { execSync('adb shell pm grant com.centersporti.wmsmobile android.permission.WRITE_EXTERNAL_STORAGE', { encoding: 'utf-8', timeout: 5000 }) } catch { /* ok */ }
+    try { execSync('adb shell appops set com.centersporti.wmsmobile SYSTEM_ALERT_WINDOW allow', { encoding: 'utf-8', timeout: 5000 }) } catch { /* ok */ }
 
     // 6. Aplicar modo kiosk via API
     try {
@@ -191,7 +243,6 @@ export async function POST(request: NextRequest) {
 
     // 8. Abrir MDM com config inicial de kiosk + URL do servidor (celular conecta ao PC na mesma rede)
     const serverIp = getLocalServerIp()
-    const wsPort = process.env.WEBSOCKET_PORT || '3001'
     const serverUrl = `ws://${serverIp}:${wsPort}`
     runCmd(
       `adb shell am start -n com.mdm.launcher/.MainActivity --es initial_allowed_apps "com.centersporti.wmsmobile" --es server_url "${serverUrl}"`,

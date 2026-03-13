@@ -17,6 +17,7 @@ import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.ActivityCompat
 import androidx.core.app.NotificationCompat
@@ -34,14 +35,15 @@ class LocationService : Service(), LocationListener {
         private const val TAG = "LocationService"
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "location_service_channel"
-        private const val LOCATION_UPDATE_INTERVAL = 10000L // 10 segundos - sincronizado com MainActivity
-        private const val LOCATION_UPDATE_DISTANCE = 1f // 1 metro - máxima precisão
+        private const val LOCATION_UPDATE_INTERVAL = 5000L // 5 segundos - atualização rápida para mapa de calor
+        private const val LOCATION_UPDATE_DISTANCE = 1f // 1 metro - cada passo
     }
-    
+
     private lateinit var locationManager: LocationManager
     private var webSocketClient: WebSocketClient? = null
     private var serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var isLocationUpdatesActive = false
+    private var wakeLock: PowerManager.WakeLock? = null
     
     override fun onCreate() {
         super.onCreate()
@@ -53,6 +55,13 @@ class LocationService : Service(), LocationListener {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.d(TAG, "LocationService iniciado")
         startForeground(NOTIFICATION_ID, createNotification())
+        // WakeLock para manter GPS ativo com tela apagada
+        if (wakeLock == null) {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "mdm:location_service")
+            wakeLock?.acquire()
+            Log.d(TAG, "WakeLock adquirido - GPS funciona com tela apagada")
+        }
         startLocationUpdates()
         return START_STICKY
     }
@@ -64,6 +73,13 @@ class LocationService : Service(), LocationListener {
         Log.d(TAG, "LocationService destruído")
         stopLocationUpdates()
         serviceScope.cancel()
+        try {
+            wakeLock?.let {
+                if (it.isHeld) it.release()
+                Log.d(TAG, "WakeLock liberado")
+            }
+        } catch (_: Exception) {}
+        wakeLock = null
     }
     
     private fun createNotificationChannel() {

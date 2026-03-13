@@ -278,7 +278,47 @@ async function getApkUrlForAnyNetwork() {
     return apkUrl;
 }
 
-/** URL do WebSocket para clientes conectarem (celular e web na mesma rede WiFi) */
+/**
+ * Retorna o caminho do APK preferido para provisioning.
+ * Prioridade: RELEASE > public/apk/mdm.apk > DEBUG
+ * IMPORTANTE: mesma ordem usada no endpoint /apk/mdm.apk e no cálculo de checksum
+ */
+function getPreferredApkPath() {
+    const pathMod = require('path');
+    const projectRoot = pathMod.resolve(__dirname, '..', '..');
+    const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+    const publicApkPath = pathMod.join(__dirname, '..', 'public', 'apk', 'mdm.apk');
+    const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+    if (fs.existsSync(releasePath)) return { path: releasePath, type: 'release' };
+    if (fs.existsSync(publicApkPath)) return { path: publicApkPath, type: 'public' };
+    if (fs.existsSync(debugPath)) return { path: debugPath, type: 'debug' };
+    return null;
+}
+
+/**
+ * Calcula o checksum do certificado de assinatura do APK (SHA-256 em base64url).
+ * Android Enterprise provisioning exige o hash do CERTIFICADO, não do arquivo.
+ */
+function getApkSigningChecksum(apkPath) {
+    try {
+        const { execSync } = require('child_process');
+        const apksignerJar = 'C:/Users/admin/AppData/Local/Android/Sdk/build-tools/33.0.0/lib/apksigner.jar';
+        const certOutput = execSync(`java -jar "${apksignerJar}" verify --print-certs "${apkPath}"`, { timeout: 15000 }).toString();
+        const sha256Match = certOutput.match(/SHA-256 digest:\s*([a-f0-9]+)/);
+        if (sha256Match && sha256Match[1]) {
+            const checksum = Buffer.from(sha256Match[1], 'hex').toString('base64url');
+            console.log(`✅ Checksum do certificado APK: ${checksum}`);
+            return checksum;
+        }
+    } catch (e) {
+        console.error('⚠️ Erro ao extrair checksum via apksigner:', e.message);
+    }
+    // Fallback: hash do arquivo inteiro (pode não funcionar para provisioning)
+    console.warn('⚠️ Usando fallback: hash do arquivo APK (pode falhar no provisioning)');
+    const fileBuffer = fs.readFileSync(apkPath);
+    return crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+}
+
 async function getWebSocketUrlForClients() {
     const port = process.env.WEBSOCKET_PORT || '3001';
     const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL;
@@ -921,13 +961,62 @@ const server = http.createServer(async (req, res) => {
         return;
     }
     
+    // Pagina de instalacao do MDM (abre no navegador do celular ao escanear QR)
+    if (path === '/install' && req.method === 'GET') {
+        const wsPort = process.env.WEBSOCKET_PORT || '3001';
+        const host = req.headers.host || `localhost:${wsPort}`;
+        const apkUrl = `http://${host}/apk/mdm.apk`;
+        const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MDM Center - Instalar</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px; }
+  .card { background: #1e293b; border-radius: 16px; padding: 32px; max-width: 400px; width: 100%; text-align: center; box-shadow: 0 25px 50px rgba(0,0,0,0.5); }
+  h1 { font-size: 24px; margin-bottom: 8px; }
+  .sub { color: #94a3b8; font-size: 14px; margin-bottom: 24px; }
+  .btn { display: block; width: 100%; padding: 16px; background: #2563eb; color: white; border: none; border-radius: 12px; font-size: 18px; font-weight: 600; cursor: pointer; text-decoration: none; margin-bottom: 16px; }
+  .btn:active { background: #1d4ed8; }
+  .steps { text-align: left; font-size: 13px; color: #94a3b8; line-height: 2; }
+  .steps b { color: #e2e8f0; }
+  .warn { background: #422006; border: 1px solid #854d0e; border-radius: 8px; padding: 12px; font-size: 12px; color: #fbbf24; margin-top: 16px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>MDM Center</h1>
+  <p class="sub">Gerenciamento de Dispositivos</p>
+  <a href="${apkUrl}" class="btn" id="downloadBtn">Baixar e Instalar MDM</a>
+  <div class="steps">
+    <p><b>1.</b> Toque no botao acima para baixar</p>
+    <p><b>2.</b> Abra o arquivo baixado (notificacao)</p>
+    <p><b>3.</b> Permita instalar de fontes desconhecidas</p>
+    <p><b>4.</b> Instale e abra o app</p>
+  </div>
+  <div class="warn">
+    Se o Play Protect bloquear, toque em "Instalar mesmo assim" ou "Mais detalhes" > "Instalar mesmo assim"
+  </div>
+</div>
+</body>
+</html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+        return;
+    }
+
     // Servir APK do MDM para download via WiFi (dispositivos na mesma rede)
+    // IMPORTANTE: priorizar RELEASE (não-debuggable, signing correto) para provisioning funcionar
     if (path === '/apk/mdm.apk' && req.method === 'GET') {
         const pathMod = require('path');
         const projectRoot = pathMod.resolve(__dirname, '..', '..');
-        const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
         const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-        const apkPath = fs.existsSync(debugPath) ? debugPath : (fs.existsSync(releasePath) ? releasePath : debugPath);
+        const publicApkPath = pathMod.join(__dirname, '..', 'public', 'apk', 'mdm.apk');
+        const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(publicApkPath) ? publicApkPath : (fs.existsSync(debugPath) ? debugPath : releasePath));
+        console.log(`📦 Servindo APK: ${apkPath} (exists: ${fs.existsSync(apkPath)})`);
         if (fs.existsSync(apkPath)) {
             const stat = fs.statSync(apkPath);
             const fileSize = stat.size;
@@ -955,12 +1044,9 @@ const server = http.createServer(async (req, res) => {
     
     // Alias /api/download-apk → serve o mesmo APK de /apk/mdm.apk
     if (path === '/api/download-apk' && req.method === 'GET') {
-        const pathMod = require('path');
-        const projectRoot = pathMod.resolve(__dirname, '..', '..');
-        const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-        const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-        const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
-        if (apkPath) {
+        const apkInfo = getPreferredApkPath();
+        const apkPath = apkInfo ? apkInfo.path : null;
+        if (apkPath && fs.existsSync(apkPath)) {
             const stat = fs.statSync(apkPath);
             res.setHeader('Content-Type', 'application/vnd.android.package-archive');
             res.setHeader('Content-Disposition', 'attachment; filename="mdm-launcher.apk"');
@@ -1280,24 +1366,284 @@ window.onload = function() {
         return;
     }
 
+    // Configurar Device Owner via ADB (USB)
+    if (path === '/api/usb-set-device-owner' && req.method === 'POST') {
+        const { exec } = require('child_process');
+
+        exec('adb devices', { timeout: 5000 }, (err, stdout) => {
+            if (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'ADB não encontrado.' }));
+                return;
+            }
+
+            const lines = stdout.trim().split('\n').filter(l => l.includes('\tdevice'));
+            if (lines.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Nenhum dispositivo USB conectado.' }));
+                return;
+            }
+
+            const deviceSerial = lines[0].split('\t')[0];
+            console.log(`🔌 Configurando Device Owner via USB: ${deviceSerial}`);
+
+            // Passo 1: Remover contas do dispositivo (necessário para set-device-owner)
+            exec(`adb -s ${deviceSerial} shell pm list accounts`, { timeout: 5000 }, (err1, accounts) => {
+                // Passo 2: Desabilitar Play Protect
+                exec(`adb -s ${deviceSerial} shell settings put global package_verifier_enable 0`, { timeout: 5000 }, () => {
+                    exec(`adb -s ${deviceSerial} shell settings put global verifier_verify_adb_installs 0`, { timeout: 5000 }, () => {
+                        // Passo 3: Verificar se o app está instalado
+                        exec(`adb -s ${deviceSerial} shell pm list packages | grep com.mdm.launcher`, { timeout: 5000 }, (err2, pkgOut) => {
+                            if (!pkgOut || !pkgOut.includes('com.mdm.launcher')) {
+                                // App não instalado, instalar primeiro
+                                const pathMod = require('path');
+                                const apkPath = pathMod.resolve(__dirname, '..', 'public', 'apk', 'mdm.apk');
+                                console.log(`📦 Instalando APK: ${apkPath}`);
+                                exec(`adb -s ${deviceSerial} install -r "${apkPath}"`, { timeout: 120000 }, (errInstall, installOut, installErr) => {
+                                    if (errInstall || (installErr && installErr.includes('Failure'))) {
+                                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                                        res.end(JSON.stringify({ success: false, error: `Falha ao instalar APK: ${installErr || errInstall?.message}` }));
+                                        return;
+                                    }
+                                    console.log(`✅ APK instalado: ${installOut}`);
+                                    // Agora configurar Device Owner
+                                    setDeviceOwner(deviceSerial, res);
+                                });
+                                return;
+                            }
+                            // App já instalado, configurar Device Owner
+                            setDeviceOwner(deviceSerial, res);
+                        });
+                    });
+                });
+            });
+        });
+
+        function setDeviceOwner(serial, response) {
+            const { exec } = require('child_process');
+            exec(`adb -s ${serial} shell dpm set-device-owner com.mdm.launcher/.DeviceAdminReceiver`, { timeout: 15000 }, (err, stdout, stderr) => {
+                const output = (stdout || '') + (stderr || '');
+                if (output.includes('Success') || output.includes('Active admin component has already been set')) {
+                    console.log(`✅ Device Owner configurado: ${output.trim()}`);
+                    // Reiniciar o app para aplicar políticas
+                    exec(`adb -s ${serial} shell am force-stop com.mdm.launcher`, { timeout: 5000 }, () => {
+                        exec(`adb -s ${serial} shell monkey -p com.mdm.launcher -c android.intent.category.LAUNCHER 1`, { timeout: 5000 }, () => {
+                            response.writeHead(200, { 'Content-Type': 'application/json' });
+                            response.end(JSON.stringify({
+                                success: true,
+                                message: 'Device Owner configurado com sucesso! O MDM agora tem controle total do dispositivo.'
+                            }));
+                        });
+                    });
+                } else if (output.includes('already several accounts') || output.includes('already has an account')) {
+                    response.writeHead(400, { 'Content-Type': 'application/json' });
+                    response.end(JSON.stringify({
+                        success: false,
+                        error: 'O celular tem contas Google cadastradas. Remova todas as contas em Configurações > Contas antes de configurar Device Owner.'
+                    }));
+                } else if (output.includes('already set')) {
+                    response.writeHead(200, { 'Content-Type': 'application/json' });
+                    response.end(JSON.stringify({ success: true, message: 'Device Owner já estava configurado!' }));
+                } else {
+                    console.error(`❌ Erro ao configurar Device Owner: ${output}`);
+                    response.writeHead(500, { 'Content-Type': 'application/json' });
+                    response.end(JSON.stringify({ success: false, error: `Erro: ${output.trim() || 'Falha desconhecida'}` }));
+                }
+            });
+        }
+        return;
+    }
+
+    // Instalar APK via ADB (USB)
+    if (path === '/api/usb-install' && req.method === 'POST') {
+        const { exec } = require('child_process');
+        const pathMod = require('path');
+
+        exec('adb devices', { timeout: 5000 }, (err, stdout) => {
+            if (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'ADB não encontrado.' }));
+                return;
+            }
+            const lines = stdout.trim().split('\n').filter(l => l.includes('\tdevice'));
+            if (lines.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Nenhum dispositivo USB conectado.' }));
+                return;
+            }
+            const serial = lines[0].split('\t')[0];
+            const apkPath = pathMod.resolve(__dirname, '..', 'public', 'apk', 'mdm.apk');
+
+            // Desabilitar Play Protect antes de instalar
+            exec(`adb -s ${serial} shell settings put global package_verifier_enable 0`, { timeout: 5000 }, () => {
+                exec(`adb -s ${serial} install -r "${apkPath}"`, { timeout: 120000 }, (errInstall, installOut, installErr) => {
+                    if (errInstall || (installErr && installErr.includes('Failure'))) {
+                        res.writeHead(500, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: false, error: `Falha: ${installErr || errInstall?.message}` }));
+                        return;
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'APK instalado com sucesso!' }));
+                });
+            });
+        });
+        return;
+    }
+
+    // Factory reset via ADB (USB)
+    if (path === '/api/usb-wipe' && req.method === 'POST') {
+        const { exec } = require('child_process');
+
+        // Verificar se tem dispositivo ADB conectado
+        exec('adb devices', { timeout: 5000 }, (err, stdout, stderr) => {
+            if (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'ADB não encontrado. Instale Android SDK Platform Tools.' }));
+                return;
+            }
+
+            const lines = stdout.trim().split('\n').filter(l => l.includes('\tdevice'));
+            if (lines.length === 0) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Nenhum dispositivo USB conectado. Conecte o celular via USB com depuração USB ativada.' }));
+                return;
+            }
+
+            const deviceSerial = lines[0].split('\t')[0];
+            console.log(`🔌 Formatando dispositivo via USB: ${deviceSerial}`);
+
+            // Tentar factory reset via Device Owner primeiro, depois recovery
+            exec(`adb -s ${deviceSerial} shell am broadcast -a android.intent.action.FACTORY_RESET -p android`, { timeout: 10000 }, (err2, stdout2, stderr2) => {
+                // Fallback: tentar via device policy manager
+                exec(`adb -s ${deviceSerial} shell dpm wipe-data`, { timeout: 10000 }, (err3, stdout3, stderr3) => {
+                    if (!err3 && !stderr3.includes('Error')) {
+                        console.log(`✅ Factory reset via DPM executado: ${stdout3}`);
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, message: 'Factory reset executado via USB (DPM). O celular será formatado.' }));
+                        return;
+                    }
+
+                    // Último fallback: reboot recovery
+                    exec(`adb -s ${deviceSerial} reboot recovery`, { timeout: 10000 }, (err4) => {
+                        if (err4) {
+                            res.writeHead(500, { 'Content-Type': 'application/json' });
+                            res.end(JSON.stringify({ success: false, error: 'Falha ao formatar via USB. Tente manualmente: adb reboot recovery' }));
+                            return;
+                        }
+                        res.writeHead(200, { 'Content-Type': 'application/json' });
+                        res.end(JSON.stringify({ success: true, message: 'Celular reiniciando no modo Recovery. Selecione "Wipe data/factory reset" no menu.' }));
+                    });
+                });
+            });
+        });
+        return;
+    }
+
+    // Verificar dispositivos ADB conectados
+    if (path === '/api/usb-devices' && req.method === 'GET') {
+        const { exec } = require('child_process');
+        exec('adb devices -l', { timeout: 5000 }, (err, stdout) => {
+            if (err) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, devices: [], error: 'ADB não disponível' }));
+                return;
+            }
+            const lines = stdout.trim().split('\n').slice(1).filter(l => l.includes('device'));
+            const devices = lines.map(l => {
+                const parts = l.trim().split(/\s+/);
+                const serial = parts[0];
+                const model = (l.match(/model:(\S+)/) || [])[1] || 'Desconhecido';
+                return { serial, model };
+            });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, devices }));
+        });
+        return;
+    }
+
+    // QR Code simples - URL de download do APK (funciona escaneando pela camera)
+    if (path === '/api/install-qr-image' && req.method === 'GET') {
+        (async () => {
+            try {
+                const QRCode = require('qrcode');
+                // Usar IP local na mesma rede WiFi
+                const interfaces = os.networkInterfaces();
+                let serverIp = 'localhost';
+                for (const name of Object.keys(interfaces)) {
+                    for (const iface of interfaces[name]) {
+                        if (iface.family === 'IPv4' && !iface.internal) {
+                            serverIp = iface.address;
+                            break;
+                        }
+                    }
+                    if (serverIp !== 'localhost') break;
+                }
+                const wsPort = process.env.WEBSOCKET_PORT || '3001';
+                const downloadUrl = `http://${serverIp}:${wsPort}/install`;
+                console.log(`📱 QR Install simples: ${downloadUrl}`);
+
+                const pngBuffer = await QRCode.toBuffer(downloadUrl, {
+                    type: 'png',
+                    width: 400,
+                    margin: 2,
+                    errorCorrectionLevel: 'H'
+                });
+
+                res.writeHead(200, {
+                    'Content-Type': 'image/png',
+                    'Content-Length': pngBuffer.length,
+                    'Cache-Control': 'no-cache'
+                });
+                res.end(pngBuffer);
+            } catch (err) {
+                console.error('Erro ao gerar QR install:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // Diagnóstico de provisioning - mostra qual APK está sendo usado, checksum, URL
+    if (path === '/api/provisioning-debug' && req.method === 'GET') {
+        (async () => {
+            try {
+                const apkInfo = getPreferredApkPath();
+                const apkUrl = await getApkUrlForAnyNetwork();
+                const checksum = apkInfo ? getApkSigningChecksum(apkInfo.path) : null;
+                const apkSize = apkInfo && fs.existsSync(apkInfo.path) ? fs.statSync(apkInfo.path).size : null;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({
+                    apk: apkInfo ? { path: apkInfo.path, type: apkInfo.type, size: apkSize } : null,
+                    checksum,
+                    apkDownloadUrl: apkUrl,
+                    env: {
+                        MDM_PUBLIC_URL: process.env.MDM_PUBLIC_URL || '(not set)',
+                        WEBSOCKET_PUBLIC_URL: process.env.WEBSOCKET_PUBLIC_URL || '(not set)',
+                        WEBSOCKET_PORT: process.env.WEBSOCKET_PORT || '3001'
+                    }
+                }, null, 2));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: err.message }));
+            }
+        })();
+        return;
+    }
+
     // Checksum SHA-256 do APK (necessário para QR provisioning Android)
     if (path === '/api/apk-checksum' && req.method === 'GET') {
         (async () => {
             try {
-                const pathMod = require('path');
-                const projectRoot = pathMod.resolve(__dirname, '..', '..');
-                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
-                if (!apkPath) {
+                const apkInfo = getPreferredApkPath();
+                if (!apkInfo) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'APK não encontrado' }));
                     return;
                 }
-                const fileBuffer = fs.readFileSync(apkPath);
-                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+                const checksum = getApkSigningChecksum(apkInfo.path);
                 res.writeHead(200, { 'Content-Type': 'application/json' });
-                res.end(JSON.stringify({ success: true, checksum, algorithm: 'SHA-256', apkPath: apkPath.includes('release') ? 'release' : 'debug' }));
+                res.end(JSON.stringify({ success: true, checksum, algorithm: 'SHA-256 (signing cert)', apkPath: apkPath.includes('release') ? 'release' : 'debug' }));
             } catch (err) {
                 console.error('Erro ao calcular checksum:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
@@ -1317,20 +1663,16 @@ window.onload = function() {
                 const wifiPassword = params.get('wifi_password') || '';
                 const wifiSecurity = params.get('wifi_security') || 'WPA';
 
-                // Obter URL do APK e checksum
+                // Obter URL do APK e checksum (usa mesma lógica do endpoint /apk/mdm.apk)
                 const apkUrl = await getApkUrlForAnyNetwork();
-                const pathMod = require('path');
-                const projectRoot = pathMod.resolve(__dirname, '..', '..');
-                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
-                if (!apkPath) {
+                const apkInfo = getPreferredApkPath();
+                if (!apkInfo) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'APK não encontrado para gerar checksum' }));
                     return;
                 }
-                const fileBuffer = fs.readFileSync(apkPath);
-                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+                console.log(`📋 Provisioning QR: usando APK ${apkInfo.type} em ${apkInfo.path}`);
+                const checksum = getApkSigningChecksum(apkInfo.path);
 
                 // Montar URL WebSocket (converter http→ws)
                 const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL || `http://localhost:${PORT}`;
@@ -1399,18 +1741,14 @@ window.onload = function() {
                 } else {
                     apkUrl = await getApkUrlForAnyNetwork();
                 }
-                const pathMod = require('path');
-                const projectRoot = pathMod.resolve(__dirname, '..', '..');
-                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
-                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
-                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
-                if (!apkPath) {
+                const apkInfo = getPreferredApkPath();
+                if (!apkInfo) {
                     res.writeHead(404, { 'Content-Type': 'application/json' });
                     res.end(JSON.stringify({ success: false, error: 'APK não encontrado' }));
                     return;
                 }
-                const fileBuffer = fs.readFileSync(apkPath);
-                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+                console.log(`📋 Provisioning QR Image: usando APK ${apkInfo.type} em ${apkInfo.path}`);
+                const checksum = getApkSigningChecksum(apkInfo.path);
 
                 let wsUrl;
                 if (useLocal) {
@@ -2175,7 +2513,7 @@ window.onload = function() {
 const wss = new WebSocket.Server({
     server: server, // Usar o mesmo servidor HTTP
     perMessageDeflate: false, // Desabilitar compressão para melhor performance
-    maxPayload: 1024 * 1024, // 1MB max payload
+    maxPayload: 16 * 1024 * 1024, // 16MB max payload (device_status com installedApps pode ser grande)
     handshakeTimeout: 10000, // 10 segundos timeout
     keepAlive: true,
     keepAliveInitialDelay: 30000 // 30 segundos

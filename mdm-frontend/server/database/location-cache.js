@@ -40,8 +40,8 @@ class LocationCache {
         // Verificar tempo desde última localização salva
         const timeDiff = Date.now() - new Date(cached.created_at).getTime();
 
-        // Salvar apenas se mudou mais de 50 metros ou passou mais de 5 minutos
-        return distance > 50 || timeDiff > 5 * 60 * 1000;
+        // Salvar a cada 1 metro (cada passo) ou 30 segundos parado
+        return distance > 1 || timeDiff > 30 * 1000;
     }
 
     updateAfterSave(deviceId, latitude, longitude) {

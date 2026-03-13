@@ -30,6 +30,7 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
   const stationaryMarkersRef = useRef<any[]>([])
 
   const onlineCount = useMemo(() => devices.filter(d => d.status === 'online').length, [devices])
+  const lastLocationRef = useRef<Map<string, { lat: number; lng: number }>>(new Map())
 
   const filteredDevices = useMemo(() => {
     if (!searchQuery.trim()) return devices
@@ -158,6 +159,83 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
       }
     })
   }, [devices, isMapLoaded])
+
+  // Real-time heat map update: when selected device location changes via WebSocket, append point
+  useEffect(() => {
+    if (!selectedDeviceId || !mapInstanceRef.current || !window.L) return
+
+    const device = devices.find(d => d.deviceId === selectedDeviceId)
+    if (!device?.latitude || !device?.longitude) return
+
+    const lastLoc = lastLocationRef.current.get(selectedDeviceId)
+    const newLat = device.latitude
+    const newLng = device.longitude
+
+    // Skip if location hasn't changed
+    if (lastLoc && Math.abs(lastLoc.lat - newLat) < 0.000001 && Math.abs(lastLoc.lng - newLng) < 0.000001) return
+
+    lastLocationRef.current.set(selectedDeviceId, { lat: newLat, lng: newLng })
+
+    // Skip on first render (initial click triggers fetchLocationHistory)
+    if (!lastLoc) return
+
+    const map = mapInstanceRef.current
+    const newPoint: [number, number] = [newLat, newLng]
+
+    // 1. Append to trajectory polyline
+    if (polylineRef.current) {
+      const latlngs = polylineRef.current.getLatLngs()
+      latlngs.push(window.L.latLng(newLat, newLng))
+      polylineRef.current.setLatLngs(latlngs)
+
+      // Add direction arrow from previous point
+      if (latlngs.length >= 2) {
+        const prev = latlngs[latlngs.length - 2]
+        const angle = Math.atan2(newLng - prev.lng, newLat - prev.lat) * (180 / Math.PI)
+        const arrowIcon = window.L.divIcon({
+          html: `<div style="transform:rotate(${90 - angle}deg);color:#3b82f6;font-size:16px;font-weight:bold;text-shadow:0 0 3px rgba(0,0,0,0.5);">▲</div>`,
+          className: '',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8]
+        })
+        const arrowMarker = window.L.marker(newPoint, { icon: arrowIcon, interactive: false }).addTo(map)
+        historyMarkersRef.current.push(arrowMarker)
+      }
+
+      // Add step marker
+      const time = new Date().toLocaleString('pt-BR')
+      const circle = window.L.circleMarker(newPoint, {
+        radius: 4,
+        color: '#3b82f6',
+        fillColor: '#93c5fd',
+        fillOpacity: 0.9,
+        weight: 2
+      }).addTo(map)
+      circle.bindPopup(`<div style="color:#000"><strong>Passo ${latlngs.length}</strong><br/>${time}</div>`)
+      historyMarkersRef.current.push(circle)
+    }
+
+    // 2. Update heat layer with new point
+    if (heatLayerRef.current) {
+      const currentData = heatLayerRef.current._latlngs || []
+      currentData.push([newLat, newLng, 0.8])
+      heatLayerRef.current.setLatLngs(currentData)
+    } else if (window.L.heatLayer) {
+      // Create heat layer if it doesn't exist yet
+      const heat = window.L.heatLayer([[newLat, newLng, 1.0]], {
+        radius: 25,
+        blur: 15,
+        maxZoom: 19,
+        max: 1.0,
+        gradient: { 0.1: '#3b82f6', 0.3: '#06b6d4', 0.5: '#10b981', 0.7: '#f59e0b', 0.85: '#ef4444', 1.0: '#7c3aed' }
+      }).addTo(map)
+      heatLayerRef.current = heat
+    }
+
+    // 3. Add to locationHistory state
+    setLocationHistory(prev => [...prev, { latitude: newLat, longitude: newLng, created_at: new Date().toISOString() }])
+
+  }, [devices, selectedDeviceId])
 
   // Cleanup
   useEffect(() => {
@@ -377,6 +455,15 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
     }
   }, [clearHistoryFromMap])
 
+  // Auto-refresh: re-fetch full history every 15s while a device is selected
+  useEffect(() => {
+    if (!selectedDeviceId) return
+    const interval = setInterval(() => {
+      fetchLocationHistory(selectedDeviceId)
+    }, 15000)
+    return () => clearInterval(interval)
+  }, [selectedDeviceId, fetchLocationHistory])
+
   const exportHeatMapReport = useCallback(async (deviceId: string) => {
     if (!mapInstanceRef.current || !mapRef.current) return
 
@@ -509,6 +596,8 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
 
     // Fetch and show location history
     setSelectedDeviceId(device.deviceId)
+    // Initialize lastLocationRef so real-time updates start from current position
+    lastLocationRef.current.set(device.deviceId, { lat: device.latitude!, lng: device.longitude! })
     fetchLocationHistory(device.deviceId)
   }, [fetchLocationHistory])
 
@@ -574,6 +663,7 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
                   setSelectedDeviceId(null)
                   clearHistoryFromMap()
                   setLocationHistory([])
+                  lastLocationRef.current.clear()
                 }}
                 className="mt-2 w-full px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-medium transition-colors"
               >

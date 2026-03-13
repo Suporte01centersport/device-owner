@@ -73,6 +73,7 @@ object DevicePolicyHelper {
             if (!dpm.isDeviceOwnerApp(context.packageName)) return
             dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_WIFI)
             dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
+            dpm.clearUserRestriction(componentName, android.os.UserManager.DISALLOW_BLUETOOTH)
             // NÃO desocultar Settings - os tiles de WiFi/BT funcionam sem o app Settings visível
             // Manter Settings oculto para impedir acesso via engrenagem na barra de notificações
             Log.d(TAG, "WiFi e Bluetooth liberados (Settings permanece oculto)")
@@ -87,8 +88,20 @@ object DevicePolicyHelper {
                 Log.w(TAG, "Não é Device Owner - políticas não aplicadas")
                 return false
             }
-            // PRIMEIRO: Habilitar barra de status ANTES de tudo
-            showStatusBar(context)
+            // Verificar se há restrição salva de barra de status
+            val savedPrefs = context.getSharedPreferences("mdm_restrictions", Context.MODE_PRIVATE)
+            val savedJson = savedPrefs.getString("saved_restrictions", null)
+            val statusBarSaved = if (savedJson != null) {
+                try { org.json.JSONObject(savedJson).optBoolean("statusBarDisabled", false) } catch (_: Exception) { false }
+            } else false
+
+            if (statusBarSaved) {
+                // Respeitar política do servidor - manter barra bloqueada
+                hideStatusBar(context)
+                Log.d(TAG, "Barra de status BLOQUEADA (política do servidor)")
+            } else {
+                showStatusBar(context)
+            }
             liberateWifiBluetooth(context)
             disableLockScreen(context)
             setScreenTimeout(context, SCREEN_TIMEOUT_MS)
@@ -594,15 +607,34 @@ object DevicePolicyHelper {
             // Screen capture
             try { dpm.setScreenCaptureDisabled(adminComponent, restrictions.screenCaptureDisabled) } catch (_: Exception) {}
 
-            // Status bar
+            // Status bar + Lock Task features
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 try { dpm.setStatusBarDisabled(adminComponent, restrictions.statusBarDisabled) } catch (_: Exception) {}
             }
+            // Ajustar Lock Task features conforme política da barra de status
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                try {
+                    if (restrictions.statusBarDisabled) {
+                        // Barra bloqueada: remover notificações (Quick Settings) mas manter info e home
+                        val features = DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
+                            DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        dpm.setLockTaskFeatures(adminComponent, features)
+                        Log.d(TAG, "Lock Task: barra bloqueada (sem Quick Settings)")
+                    } else {
+                        // Barra liberada: permitir Quick Settings (WiFi/BT)
+                        val features = DevicePolicyManager.LOCK_TASK_FEATURE_SYSTEM_INFO or
+                            DevicePolicyManager.LOCK_TASK_FEATURE_NOTIFICATIONS or
+                            DevicePolicyManager.LOCK_TASK_FEATURE_HOME
+                        dpm.setLockTaskFeatures(adminComponent, features)
+                        Log.d(TAG, "Lock Task: barra liberada (com Quick Settings)")
+                    }
+                } catch (_: Exception) {}
+            }
 
             // UserManager restrictions mapping
-            setRestriction(android.os.UserManager.DISALLOW_CONFIG_WIFI, restrictions.wifiDisabled)
-            setRestriction(android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH, restrictions.bluetoothDisabled)
-            // Sempre limpar DISALLOW_BLUETOOTH - o filtro de pareamento é feito pelo BluetoothPairingReceiver
+            // WiFi e Bluetooth SEMPRE liberados na barra de status (quick settings)
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_WIFI, false)
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH, false)
             setRestriction(android.os.UserManager.DISALLOW_BLUETOOTH, false)
             setRestriction(android.os.UserManager.DISALLOW_INSTALL_APPS, restrictions.installAppsDisabled)
             setRestriction(android.os.UserManager.DISALLOW_UNINSTALL_APPS, restrictions.uninstallAppsDisabled)
