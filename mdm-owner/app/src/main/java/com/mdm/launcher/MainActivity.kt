@@ -307,7 +307,11 @@ class MainActivity : AppCompatActivity() {
         // Lockdown imediato ao instalar MDM como Device Owner (parar downloads, matar apps, aplicar restrições)
         if (intent?.getBooleanExtra(DeviceAdminReceiver.EXTRA_DO_LOCKDOWN, false) == true) {
             intent?.removeExtra(DeviceAdminReceiver.EXTRA_DO_LOCKDOWN)
-            com.mdm.launcher.utils.DevicePolicyHelper.performLockdownOnInstall(this)
+            try {
+                com.mdm.launcher.utils.DevicePolicyHelper.performLockdownOnInstall(this)
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro no lockdown inicial: ${e.message}", e)
+            }
         }
         
         // Garantir status bar habilitada ao iniciar
@@ -1320,7 +1324,7 @@ class MainActivity : AppCompatActivity() {
     private fun initializeAllFeatures() {
         // Inicializar todas as funcionalidades após permissões concedidas
         initializeLocationTracking()
-        
+
         // Garantir status bar habilitada ao inicializar
         try {
             com.mdm.launcher.utils.DevicePolicyHelper.showStatusBar(this)
@@ -1328,11 +1332,40 @@ class MainActivity : AppCompatActivity() {
         } catch (e: Exception) {
             Log.d(TAG, "Erro ao habilitar status bar: ${e.message}")
         }
-        
+
         // ✅ NOVO: Garantir que Settings está habilitado
         reenableSettingsIfHidden()
-        
+
+        // ✅ Desabilitar Play Protect para evitar bloqueio de instalação de APKs
+        disablePlayProtect()
+
         Log.d(TAG, "Todas as permissões concedidas - funcionalidades inicializadas")
+    }
+
+    /**
+     * Desabilita Google Play Protect (verificação de pacotes) quando é Device Owner.
+     * Evita que o Play Protect bloqueie instalação/atualização do próprio MDM.
+     */
+    private fun disablePlayProtect() {
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+            val adminComponent = ComponentName(this, DeviceAdminReceiver::class.java)
+
+            if (dpm.isDeviceOwnerApp(packageName)) {
+                // Desabilitar verificador de pacotes (Play Protect)
+                dpm.setGlobalSetting(adminComponent, "package_verifier_enable", "0")
+                dpm.setGlobalSetting(adminComponent, "verifier_verify_adb_installs", "0")
+                dpm.setGlobalSetting(adminComponent, "upload_apk_enable", "0")
+                // Ativar depuração USB e opções de desenvolvedor
+                dpm.setGlobalSetting(adminComponent, "adb_enabled", "1")
+                dpm.setGlobalSetting(adminComponent, "development_settings_enabled", "1")
+                Log.d(TAG, "✅ Play Protect desabilitado + Depuração USB ativada via Device Owner")
+            } else {
+                Log.d(TAG, "Não é Device Owner - Play Protect não pode ser desabilitado")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Não foi possível desabilitar Play Protect: ${e.message}")
+        }
     }
     
     private fun checkRealmeOptimizations() {

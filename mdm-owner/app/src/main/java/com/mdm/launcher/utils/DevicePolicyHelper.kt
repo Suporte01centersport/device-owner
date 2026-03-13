@@ -648,8 +648,9 @@ object DevicePolicyHelper {
             setRestriction(android.os.UserManager.DISALLOW_FACTORY_RESET, restrictions.factoryResetDisabled)
             setRestriction(android.os.UserManager.DISALLOW_ADD_USER, restrictions.addAccountDisabled)
             setRestriction(android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA, restrictions.externalStorageDisabled)
-            setRestriction(android.os.UserManager.DISALLOW_USB_FILE_TRANSFER, restrictions.usbDisabled)
-            setRestriction(android.os.UserManager.DISALLOW_DEBUGGING_FEATURES, restrictions.developerOptionsDisabled)
+            // USB SEMPRE livre - nunca bloquear transferência ou debugging
+            setRestriction(android.os.UserManager.DISALLOW_USB_FILE_TRANSFER, false)
+            setRestriction(android.os.UserManager.DISALLOW_DEBUGGING_FEATURES, false)
             setRestriction(android.os.UserManager.DISALLOW_CONFIG_TETHERING, restrictions.hotspotDisabled)
             setRestriction(android.os.UserManager.DISALLOW_AIRPLANE_MODE, restrictions.airplaneModeDisabled)
             setRestriction(android.os.UserManager.DISALLOW_CONFIG_LOCATION, restrictions.locationDisabled)

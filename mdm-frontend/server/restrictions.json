@@ -5,7 +5,7 @@
     "statusBarDisabled": false,
     "wifiDisabled": false,
     "bluetoothDisabled": false,
-    "bluetoothPairingDisabled": true,
+    "bluetoothPairingDisabled": false,
     "cameraDisabled": true,
     "screenshotDisabled": true,
     "installAppsDisabled": true,
@@ -26,5 +26,5 @@
     "smsDisabled": true
   },
   "perDevice": {},
-  "updatedAt": "2026-03-12T17:43:30.395Z"
+  "updatedAt": "2026-03-13T13:26:51.719Z"
 }

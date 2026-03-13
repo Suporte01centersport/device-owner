@@ -66,13 +66,10 @@ object ApkInstaller {
 
             val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
             val componentName = ComponentName(context, DeviceAdminReceiver::class.java)
+            val isDeviceOwner = dpm.isDeviceOwnerApp(context.packageName)
 
-            if (!dpm.isDeviceOwnerApp(context.packageName)) {
-                val error = "App não é Device Owner. Instalação silenciosa requer Device Owner."
-                Log.e(TAG, error)
-                showToast(context, error)
-                onComplete?.invoke(false, error)
-                return@withContext
+            if (!isDeviceOwner) {
+                Log.w(TAG, "App não é Device Owner - usando instalação manual (intent)")
             }
 
             onProgress?.invoke(10)
@@ -146,21 +143,46 @@ object ApkInstaller {
             }
 
             onProgress?.invoke(85)
-            val installError = installApk(context, tempFile!!, dpm, componentName)
 
-            if (installError == null) {
-                onProgress?.invoke(100)
-                Log.d(TAG, "APK enviado ao PackageInstaller com sucesso!")
-                showToast(context, "Instalação em andamento...")
-                onComplete?.invoke(true, null)
-                // Agendar limpeza do arquivo após 60s (dar tempo ao PackageInstaller)
-                kotlinx.coroutines.delay(60000)
-                try { tempFile?.delete() } catch (_: Exception) {}
+            if (isDeviceOwner) {
+                // Instalação silenciosa via Device Owner
+                val installError = installApk(context, tempFile!!, dpm, componentName)
+                if (installError == null) {
+                    onProgress?.invoke(100)
+                    Log.d(TAG, "APK enviado ao PackageInstaller com sucesso!")
+                    showToast(context, "Instalação em andamento...")
+                    onComplete?.invoke(true, null)
+                    kotlinx.coroutines.delay(60000)
+                    try { tempFile?.delete() } catch (_: Exception) {}
+                } else {
+                    Log.e(TAG, installError)
+                    showToast(context, installError)
+                    onComplete?.invoke(false, installError)
+                    try { tempFile?.delete() } catch (_: Exception) {}
+                }
             } else {
-                Log.e(TAG, installError)
-                showToast(context, installError)
-                onComplete?.invoke(false, installError)
-                try { tempFile?.delete() } catch (_: Exception) {}
+                // Instalação manual via intent (sem Device Owner)
+                try {
+                    val apkUri = androidx.core.content.FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.provider",
+                        tempFile!!
+                    )
+                    val intent = Intent(Intent.ACTION_VIEW).apply {
+                        setDataAndType(apkUri, "application/vnd.android.package-archive")
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    }
+                    context.startActivity(intent)
+                    onProgress?.invoke(100)
+                    Log.d(TAG, "Intent de instalação manual aberto")
+                    showToast(context, "Abrindo instalador...")
+                    onComplete?.invoke(true, null)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Erro ao abrir instalador manual: ${e.message}", e)
+                    showToast(context, "Erro ao abrir instalador: ${e.message}")
+                    onComplete?.invoke(false, e.message)
+                    try { tempFile?.delete() } catch (_: Exception) {}
+                }
             }
 
         } catch (e: Exception) {

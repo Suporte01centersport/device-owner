@@ -49,9 +49,7 @@ object AppUpdater {
             val isDeviceOwner = dpm.isDeviceOwnerApp(context.packageName)
             
             if (!isDeviceOwner) {
-                Log.e(TAG, "App não é Device Owner - não pode instalar automaticamente")
-                onComplete?.invoke(false, "App não é Device Owner")
-                return
+                Log.w(TAG, "App não é Device Owner - usando instalação manual via ApkInstaller")
             }
             
             // Criar diretório de download se não existir

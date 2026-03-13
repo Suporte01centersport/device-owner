@@ -899,33 +899,17 @@ class WebSocketService : Service() {
                                 // Apply all restrictions via centralized helper
                                 com.mdm.launcher.utils.DevicePolicyHelper.applyRemoteRestrictions(this, restrictions)
 
-                                // USB-specific: ADB toggle and SharedPreferences state
-                                if (restrictions.usbDisabled) {
-                                    try {
-                                        Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 0)
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Nao foi possivel desabilitar ADB: ${e.message}")
-                                    }
-                                    getSharedPreferences("mdm_launcher", MODE_PRIVATE)
-                                        .edit()
-                                        .putBoolean("usb_blocked", true)
-                                        .putBoolean("usb_temp_unlocked", false)
-                                        .apply()
-                                } else {
-                                    if (!restrictions.developerOptionsDisabled) {
-                                        dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
-                                    }
-                                    try {
-                                        Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 1)
-                                    } catch (e: Exception) {
-                                        Log.w(TAG, "Nao foi possivel reabilitar ADB: ${e.message}")
-                                    }
-                                    getSharedPreferences("mdm_launcher", MODE_PRIVATE)
-                                        .edit()
-                                        .putBoolean("usb_blocked", false)
-                                        .putBoolean("usb_temp_unlocked", false)
-                                        .apply()
-                                }
+                                // USB sempre livre - limpar qualquer bloqueio anterior
+                                dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
+                                dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
+                                try {
+                                    Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 1)
+                                } catch (_: Exception) {}
+                                getSharedPreferences("mdm_launcher", MODE_PRIVATE)
+                                    .edit()
+                                    .putBoolean("usb_blocked", false)
+                                    .putBoolean("usb_temp_unlocked", false)
+                                    .apply()
 
                                 // APK update override: keep install apps unblocked
                                 if (isUpdatingApk) {
