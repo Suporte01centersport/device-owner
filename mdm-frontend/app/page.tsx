@@ -1878,7 +1878,10 @@ export default function Home() {
                 {currentUser?.role !== 'viewer' && (
                   <button
                     className="btn btn-warning"
-                    onClick={() => setShowWipeQrModal(true)}
+                    onClick={() => {
+                      setShowWipeQrModal(true)
+                      fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
+                    }}
                     title="Gerar QR Code para formatar celular remotamente"
                   >
                     <span>🔄</span>
@@ -1969,7 +1972,10 @@ export default function Home() {
                 {currentUser?.role !== 'viewer' && (
                   <button
                     className="btn btn-warning btn-lg mt-4"
-                    onClick={() => setShowWipeQrModal(true)}
+                    onClick={() => {
+                      setShowWipeQrModal(true)
+                      fetch(`http://${window.location.hostname}:3001/api/temp-allow-browser`, { method: 'POST' }).catch(() => {})
+                    }}
                     title="Gerar QR Code para formatar celular remotamente"
                   >
                     <span>🔄</span>

@@ -1198,7 +1198,35 @@ document.addEventListener('visibilitychange', function() { if (document.hidden) 
         return;
     }
 
-    // QR Code para factory reset remoto via deep link (mdmcenter://wipe)
+    // Página HTML que redireciona pro deep link de factory reset
+    if (path === '/mdm-wipe' && req.method === 'GET') {
+        const parsedWipeUrl = url.parse(req.url, true);
+        const token = parsedWipeUrl.query.token || '';
+        const ts = parsedWipeUrl.query.ts || '';
+        const deepLink = `mdmcenter://wipe?token=${token}&ts=${ts}`;
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MDM Center - Factory Reset</title>
+<style>body{margin:0;padding:20px;font-family:Arial,sans-serif;background:#111;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+h2{margin:0 0 8px;color:#ef4444}p{color:#aaa;margin:4px 0}
+.btn{display:inline-block;margin-top:16px;padding:14px 32px;background:#dc2626;color:#fff;text-decoration:none;border-radius:12px;font-size:16px;font-weight:bold}
+.btn:active{background:#b91c1c}.small{font-size:12px;color:#666;margin-top:20px}</style>
+<script>
+window.onload = function() {
+    // Abrir deep link automaticamente
+    window.location.href = '${deepLink}';
+};
+</script></head><body>
+<h2>Factory Reset</h2>
+<p>Executando factory reset...</p>
+<a class="btn" href="${deepLink}">Formatar Agora</a>
+<p class="small">Se nao executar automaticamente, toque no botao acima</p>
+</body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-cache' });
+        res.end(html);
+        return;
+    }
+
+    // QR Code para factory reset remoto via página de redirect
     if (path === '/api/wipe-qr-image' && req.method === 'GET') {
         (async () => {
             try {
@@ -1206,7 +1234,29 @@ document.addEventListener('visibilitychange', function() { if (document.hidden) 
                 const WIPE_SECRET = 'MDM_CENTER_WIPE_2026';
                 const ts = Date.now().toString();
                 const hmac = crypto.createHmac('sha256', WIPE_SECRET).update(ts).digest('hex');
-                const wipeUrl = `mdmcenter://wipe?token=${hmac}&ts=${ts}`;
+                // URL HTTP que redireciona pro deep link
+                const interfaces = os.networkInterfaces();
+                let serverIp = 'localhost';
+                for (const name of Object.keys(interfaces)) {
+                    for (const iface of interfaces[name]) {
+                        if (iface.family === 'IPv4' && !iface.internal) {
+                            serverIp = iface.address;
+                            break;
+                        }
+                    }
+                    if (serverIp !== 'localhost') break;
+                }
+                const wsPort = process.env.WEBSOCKET_PORT || '3001';
+                const wipeUrl = `http://${serverIp}:${wsPort}/mdm-wipe?token=${hmac}&ts=${ts}`;
+                console.log(`📱 QR Wipe gerado: ${wipeUrl}`);
+
+                // Liberar browser temporariamente
+                const tempMsg = JSON.stringify({ type: 'temp_allow_browser', data: { durationMillis: 2 * 60 * 1000 }, timestamp: Date.now() });
+                for (const [devId, devWs] of connectedDevices.entries()) {
+                    if (devWs && devWs.readyState === WebSocket.OPEN && devWs.isDevice) {
+                        try { devWs.send(tempMsg); } catch (e) {}
+                    }
+                }
 
                 const pngBuffer = await QRCode.toBuffer(wipeUrl, {
                     type: 'png',
