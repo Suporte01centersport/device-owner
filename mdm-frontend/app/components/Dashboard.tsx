@@ -23,6 +23,16 @@ interface Device {
   lastSeen: number
   restrictions: any
   assignedUserName?: string | null
+  model?: string
+  manufacturer?: string
+  androidVersion?: string
+  osType?: string
+  deviceType?: 'mobile' | 'computer'
+  assignedUser?: { name?: string } | null
+  assignedDeviceUserId?: string | null
+  wifiDataUsage?: number
+  mobileDataUsage?: number
+  dataUsage?: number
 }
 
 interface Computer {
@@ -62,6 +72,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
   const [globalMessageOpen, setGlobalMessageOpen] = useState(false)
   const [globalMessageText, setGlobalMessageText] = useState('')
   const [globalMessageSending, setGlobalMessageSending] = useState(false)
+  const [globalMessageTarget, setGlobalMessageTarget] = useState<'all' | 'online'>('all')
   const [backupStatus, setBackupStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle')
 
   useEffect(() => {
@@ -381,51 +392,29 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [devices])
 
-  const handleExportCSV = async () => {
-    try {
-      const response = await fetch('/api/devices/export')
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-      } else {
-        // Fallback: gerar CSV local
-        const csvHeader = 'ID,Nome,Status,Bateria,Device Owner,Profile Owner,Último Acesso,Usuário\n'
-        const csvRows = devices.map(d => [
-          d.deviceId,
-          `"${(d.name || '').replace(/"/g, '""')}"`,
-          d.status,
-          d.batteryLevel,
-          d.isDeviceOwner ? 'Sim' : 'Não',
-          d.isProfileOwner ? 'Sim' : 'Não',
-          d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D',
-          `"${(d.assignedUserName || 'N/A').replace(/"/g, '""')}"`
-        ].join(','))
-        const csvContent = csvHeader + csvRows.join('\n')
-        const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-      }
-    } catch {
-      // Fallback local
-      const csvHeader = 'ID,Nome,Status,Bateria\n'
-      const csvRows = devices.map(d => `${d.deviceId},"${d.name || ''}",${d.status},${d.batteryLevel}`)
-      const blob = new Blob(['\ufeff' + csvHeader + csvRows.join('\n')], { type: 'text/csv;charset=utf-8' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-    }
+  const handleExportCSV = () => {
+    const csvHeader = 'ID,Nome,Modelo,Fabricante,SO,Status,Bateria %,Device Owner,Profile Owner,Último Acesso,Usuário\n'
+    const csvRows = devices.map(d => [
+      d.deviceId,
+      `"${(d.name || '').replace(/"/g, '""')}"`,
+      `"${(d.model || '-').replace(/"/g, '""')}"`,
+      `"${(d.manufacturer || '-').replace(/"/g, '""')}"`,
+      d.androidVersion ? `Android ${d.androidVersion}` : (d.osType || '-'),
+      d.status === 'online' ? 'Online' : 'Offline',
+      d.batteryLevel ?? '-',
+      d.isDeviceOwner ? 'Sim' : 'Não',
+      d.isProfileOwner ? 'Sim' : 'Não',
+      d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D',
+      `"${(d.assignedUserName || d.assignedUser?.name || 'N/A').replace(/"/g, '""')}"`
+    ].join(','))
+    const csvContent = csvHeader + csvRows.join('\n')
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `inventario-mdm-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   const handleBackupConfig = async () => {
@@ -447,13 +436,18 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     if (!globalMessageText.trim()) return
     setGlobalMessageSending(true)
     try {
+      // Send via REST API
       await fetch('/api/devices/notify-all', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: globalMessageText })
+        body: JSON.stringify({ message: globalMessageText, target: globalMessageTarget })
       })
+      // Also send via WebSocket for real-time delivery
+      onMessage?.({ type: 'send_mass_notification', message: globalMessageText, target: globalMessageTarget, timestamp: Date.now() })
+      const targetLabel = globalMessageTarget === 'all' ? 'todos os dispositivos' : 'dispositivos online'
       setGlobalMessageText('')
       setGlobalMessageOpen(false)
+      setGlobalMessageTarget('all')
     } catch {
       console.error('Erro ao enviar mensagem global')
     } finally {
@@ -549,6 +543,45 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     }
   }, [combinedDevices])
 
+  // Top Dispositivos Problemáticos
+  const problemDevices = useMemo(() => {
+    return devices
+      .map(d => {
+        const issues: { label: string; severity: 'critical' | 'warning' }[] = []
+        if ((d.batteryLevel ?? 100) < 20) issues.push({ label: 'Bateria baixa', severity: d.batteryLevel < 10 ? 'critical' : 'warning' })
+        const lastSeenMs = Date.now() - (d.lastSeen || Date.now())
+        if (d.status !== 'online' && lastSeenMs > 86400000) issues.push({ label: 'Offline >24h', severity: 'critical' })
+        if (!d.assignedUserName && !d.assignedUser?.name && !d.assignedDeviceUserId) issues.push({ label: 'Sem usuário', severity: 'warning' })
+        return { ...d, issues }
+      })
+      .filter(d => d.issues.length > 0)
+      .sort((a, b) => b.issues.length - a.issues.length)
+      .slice(0, 5)
+  }, [devices])
+
+  // Distribuição de Bateria (4 faixas)
+  const batteryDistribution = useMemo(() => {
+    const critical = combinedDevices.filter(d => d.batteryLevel >= 0 && d.batteryLevel < 20).length
+    const low = combinedDevices.filter(d => d.batteryLevel >= 20 && d.batteryLevel < 50).length
+    const good = combinedDevices.filter(d => d.batteryLevel >= 50 && d.batteryLevel < 80).length
+    const full = combinedDevices.filter(d => d.batteryLevel >= 80).length
+    const total = combinedDevices.length || 1
+    return { critical, low, good, full, total }
+  }, [combinedDevices])
+
+  // Uso de Dados - helper para formatar bytes
+  const formatBytes = (bytes: number): string => {
+    if (bytes <= 0) return '0 B'
+    const units = ['B', 'KB', 'MB', 'GB', 'TB']
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    const val = bytes / Math.pow(1024, i)
+    return `${val.toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+  }
+
+  const hasAnyDataUsage = useMemo(() => {
+    return devices.some(d => d.wifiDataUsage != null || d.mobileDataUsage != null || d.dataUsage != null)
+  }, [devices])
+
   const stats = [
     {
       title: 'Dispositivos Totais',
@@ -598,7 +631,12 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     }) => {
       if (!opts.lastSeen) return null
 
-      const timeDiff = now - opts.lastSeen
+      const lastSeenMs = typeof opts.lastSeen === 'string' ? new Date(opts.lastSeen).getTime() : opts.lastSeen
+      if (!lastSeenMs || isNaN(lastSeenMs)) return null
+
+      const timeDiff = now - lastSeenMs
+      if (isNaN(timeDiff) || timeDiff < 0) return null
+
       const minutes = Math.floor(timeDiff / 60000)
       const hours = Math.floor(timeDiff / 3600000)
 
@@ -640,7 +678,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
         time: timeText,
         type,
         icon: opts.icon,
-        timestamp: opts.lastSeen
+        timestamp: lastSeenMs
       }
     }
 
@@ -721,6 +759,56 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
     }
   }, [])
 
+
+  // Skeleton loader while data is being fetched
+  if (devices.length === 0 && !isClient) {
+    return (
+      <div className="p-6 space-y-6 animate-pulse">
+        {/* Header skeleton */}
+        <div className="flex justify-between items-center">
+          <div>
+            <div className="h-8 w-48 bg-[var(--surface)] rounded-lg mb-2" />
+            <div className="h-4 w-72 bg-[var(--surface)] rounded-lg" />
+          </div>
+          <div className="text-right">
+            <div className="h-4 w-40 bg-[var(--surface)] rounded-lg mb-2" />
+            <div className="h-6 w-24 bg-[var(--surface)] rounded-lg" />
+          </div>
+        </div>
+        {/* Stats skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="bg-[var(--surface)] rounded-2xl p-6 h-32">
+              <div className="flex items-center justify-between">
+                <div className="space-y-3 flex-1">
+                  <div className="h-4 w-24 bg-[var(--border)] rounded" />
+                  <div className="h-8 w-16 bg-[var(--border)] rounded" />
+                </div>
+                <div className="w-12 h-12 bg-[var(--border)] rounded-xl" />
+              </div>
+            </div>
+          ))}
+        </div>
+        {/* Chart skeleton */}
+        <div className="bg-[var(--surface)] rounded-2xl p-6 h-72">
+          <div className="h-5 w-48 bg-[var(--border)] rounded mb-4" />
+          <div className="h-full w-full bg-[var(--border)] rounded-xl opacity-30" />
+        </div>
+        {/* Actions skeleton */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {[1, 2].map((i) => (
+            <div key={i} className="bg-[var(--surface)] rounded-2xl p-6 h-48">
+              <div className="h-5 w-32 bg-[var(--border)] rounded mb-4" />
+              <div className="space-y-3">
+                <div className="h-10 w-full bg-[var(--border)] rounded-lg" />
+                <div className="h-10 w-full bg-[var(--border)] rounded-lg" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -1012,25 +1100,69 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
               <span>📱</span>
               Provisionar Dispositivo
             </button>
-            <button 
+            <button
               className="btn btn-secondary hover:scale-105 transition-transform duration-200"
               onClick={() => {
-                const csvHeader = 'ID,Nome,Status,Bateria %,Última Atividade\n'
-                const csvRows = combinedDevices.map(d => [
-                  d.deviceId,
-                  `"${(d.name || '').replace(/"/g, '""')}"`,
-                  d.status,
-                  d.batteryLevel,
-                  d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D'
-                ].join(','))
-                const csvContent = csvHeader + csvRows.join('\n') + `\n\nResumo: ${combinedDevices.length} dispositivos, ${onlineDevices} online, ${totalComputers} computadores, ${onlineComputers} online. Bateria média: ${avgBattery}%`
-                const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `relatorio-mdm-${new Date().toISOString().slice(0, 10)}.csv`
-                a.click()
-                URL.revokeObjectURL(url)
+                const now = new Date().toLocaleString('pt-BR')
+                const deviceRows = combinedDevices.map(d => `
+                  <tr>
+                    <td>${d.name || d.deviceId}</td>
+                    <td>${(d as any).model || '-'}</td>
+                    <td>${(d as any).androidVersion ? 'Android ' + (d as any).androidVersion : ((d as any).osType || '-')}</td>
+                    <td><span class="${d.status === 'online' ? 'badge-green' : 'badge-red'}">${d.status === 'online' ? 'Online' : 'Offline'}</span></td>
+                    <td>${d.batteryLevel ?? '-'}%</td>
+                    <td>${d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : 'N/D'}</td>
+                    <td>${d.assignedUserName || (d as any).assignedUser?.name || '-'}</td>
+                  </tr>
+                `).join('')
+                const win = window.open('', '_blank')
+                if (!win) return
+                win.document.write(`
+                  <html><head><title>Relatório MDM - ${new Date().toISOString().slice(0, 10)}</title>
+                  <style>
+                    body { font-family: Arial, sans-serif; padding: 30px; color: #333; max-width: 1100px; margin: 0 auto; }
+                    h1 { color: #1f2937; border-bottom: 2px solid #3b82f6; padding-bottom: 10px; }
+                    h2 { color: #374151; margin-top: 30px; }
+                    .summary { display: flex; gap: 20px; margin: 20px 0; flex-wrap: wrap; }
+                    .summary-card { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px 24px; min-width: 160px; }
+                    .summary-card .value { font-size: 28px; font-weight: bold; color: #1f2937; }
+                    .summary-card .label { font-size: 13px; color: #6b7280; margin-top: 4px; }
+                    table { width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 13px; }
+                    th, td { border: 1px solid #e5e7eb; padding: 8px 12px; text-align: left; }
+                    th { background: #f3f4f6; font-weight: 600; }
+                    tr:nth-child(even) { background: #f9fafb; }
+                    .badge-green { background: #d1fae5; color: #065f46; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+                    .badge-red { background: #fee2e2; color: #991b1b; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+                    .footer { margin-top: 40px; font-size: 11px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 10px; }
+                    @media print { body { padding: 10px; } }
+                  </style></head><body>
+                  <h1>Relatório Geral MDM Center</h1>
+                  <p>Gerado em: ${now}</p>
+
+                  <h2>Resumo</h2>
+                  <div class="summary">
+                    <div class="summary-card"><div class="value">${combinedDevices.length}</div><div class="label">Total de Dispositivos</div></div>
+                    <div class="summary-card"><div class="value" style="color:#10b981">${onlineDevices}</div><div class="label">Online</div></div>
+                    <div class="summary-card"><div class="value" style="color:#ef4444">${combinedDevices.length - onlineDevices}</div><div class="label">Offline</div></div>
+                    <div class="summary-card"><div class="value">${totalComputers}</div><div class="label">Computadores</div></div>
+                    <div class="summary-card"><div class="value">${onlineComputers}</div><div class="label">Computadores Online</div></div>
+                    <div class="summary-card"><div class="value">${avgBattery}%</div><div class="label">Bateria Média</div></div>
+                    <div class="summary-card"><div class="value">${batteryAlerts}</div><div class="label">Alertas de Bateria (&lt;20%)</div></div>
+                  </div>
+
+                  <h2>Dispositivos</h2>
+                  <table>
+                    <thead>
+                      <tr><th>Nome</th><th>Modelo</th><th>SO</th><th>Status</th><th>Bateria</th><th>Último Acesso</th><th>Usuário</th></tr>
+                    </thead>
+                    <tbody>${deviceRows}</tbody>
+                  </table>
+
+                  <div class="footer">MDM Center - Relatório gerado automaticamente em ${now}</div>
+                  </body></html>
+                `)
+                win.document.close()
+                setTimeout(() => win.print(), 500)
               }}
             >
               <span>📊</span>
@@ -1237,7 +1369,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
 
         {/* Battery Distribution Bar Chart */}
         <div className="card p-6">
-          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Distribuicao de Bateria</h3>
+          <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Distribuição de Bateria</h3>
           <div className="space-y-5 mt-6">
             <div>
               <div className="flex justify-between mb-1">
@@ -1314,14 +1446,14 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
 
       {/* Quick Actions Panel (Enhanced) */}
       <div className="card p-6">
-        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Acoes Rapidas Avancadas</h3>
+        <h3 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Ações Rápidas Avançadas</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           <button
             className="btn btn-secondary hover:scale-105 transition-transform duration-200 flex items-center gap-2"
             onClick={handleExportCSV}
           >
             <span>📥</span>
-            Exportar Inventario CSV
+            Exportar Inventário CSV
           </button>
           <button
             className={`btn hover:scale-105 transition-transform duration-200 flex items-center gap-2 ${
@@ -1335,7 +1467,7 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
             <span>{backupStatus === 'success' ? '✅' : backupStatus === 'error' ? '❌' : backupStatus === 'loading' ? '⏳' : '💾'}</span>
             {backupStatus === 'success' ? 'Backup Concluido!' :
              backupStatus === 'error' ? 'Erro no Backup' :
-             backupStatus === 'loading' ? 'Fazendo Backup...' : 'Backup Configuracoes'}
+             backupStatus === 'loading' ? 'Fazendo Backup...' : 'Backup Configurações'}
           </button>
           <button
             className={`btn ${globalMessageOpen ? 'btn-primary' : 'btn-secondary'} hover:scale-105 transition-transform duration-200 flex items-center gap-2`}
@@ -1350,8 +1482,23 @@ export default function Dashboard({ devices, isConnected, onMessage, onViewChang
         {globalMessageOpen && (
           <div className="mt-4 p-4 bg-[var(--surface-elevated)] rounded-lg border border-[var(--border)] animate-fade-in">
             <label className="block text-sm font-medium text-[var(--text-primary)] mb-2">
-              Mensagem para todos os dispositivos:
+              Enviar mensagem para:
             </label>
+            <div className="flex gap-2 mb-3">
+              {([['all', 'Todos os dispositivos'], ['online', 'Apenas online']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setGlobalMessageTarget(val)}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                    globalMessageTarget === val
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-[var(--surface)] text-[var(--text-secondary)] border border-[var(--border)] hover:bg-[var(--surface-elevated)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
             <textarea
               className="w-full p-3 rounded-lg bg-[var(--surface)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] resize-none focus:outline-none focus:border-[var(--primary)] transition-colors"
               rows={3}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import Dashboard from './components/Dashboard'
@@ -19,6 +19,13 @@ import AllowedAppsPage from './components/AllowedAppsPage'
 import AlertsPage from './components/AlertsPage'
 import ScheduledCommandsPage from './components/ScheduledCommandsPage'
 import CompliancePage from './components/CompliancePage'
+import UnifiedLogsPage from './components/UnifiedLogsPage'
+import DeviceMapPage from './components/DeviceMapPage'
+import GeofencingPage from './components/GeofencingPage'
+import OrganizationsPage from './components/OrganizationsPage'
+import HelpPage from './components/HelpPage'
+import LoginPage from './components/LoginPage'
+import AboutPage from './components/AboutPage'
 import { Device, AppInfo } from './types/device'
 import { usePersistence } from './lib/persistence'
 import { showAlert, showConfirm } from './lib/dialog'
@@ -27,6 +34,52 @@ import { playNotificationSound } from './lib/notification-sound'
 // Interfaces Device e AppInfo importadas de './types/device'
 
 export default function Home() {
+  // Auth state
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{username: string, name: string, role: string} | null>(null)
+
+  // Check for existing auth token on mount - validate against server
+  useEffect(() => {
+    const token = localStorage.getItem('mdm_auth_token')
+    if (!token) return
+    const wsHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+    fetch(`http://${wsHost}:3001/api/auth/me`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.success && data.user) {
+          setIsAuthenticated(true)
+          setCurrentUser(data.user)
+          localStorage.setItem('mdm_user', JSON.stringify(data.user))
+        } else {
+          // Token inválido ou expirado - forçar login
+          localStorage.removeItem('mdm_auth_token')
+          localStorage.removeItem('mdm_user')
+          setIsAuthenticated(false)
+        }
+      })
+      .catch(() => {
+        // Servidor indisponível - aceitar token local temporariamente
+        setIsAuthenticated(true)
+        try {
+          const savedUser = localStorage.getItem('mdm_user')
+          if (savedUser) setCurrentUser(JSON.parse(savedUser))
+        } catch {}
+      })
+  }, [])
+
+  const handleLogin = (user?: {username: string, name: string, role: string}) => {
+    setIsAuthenticated(true)
+    if (user) setCurrentUser(user)
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('mdm_auth_token')
+    localStorage.removeItem('mdm_user')
+    setIsAuthenticated(false)
+  }
+
   // Usar hook de persistência
   const {
     devices,
@@ -61,7 +114,27 @@ export default function Home() {
   const [showFormatConfirm, setShowFormatConfirm] = useState(false)
   const [isFormattingDevice, setIsFormattingDevice] = useState(false)
   const [showSetPasswordConfirm, setShowSetPasswordConfirm] = useState(false)
+
+  // Confirmation modal for dangerous actions
+  const [confirmAction, setConfirmAction] = useState<{title: string, message: string, callback: () => void} | null>(null)
+  const [confirmInput, setConfirmInput] = useState('')
+
+  // Toast notifications
+  const [toast, setToast] = useState<{message: string, type: 'success' | 'error'} | null>(null)
+
   const [alarmError, setAlarmError] = useState<{ deviceId: string } | null>(null)
+  const [showInstallApkModal, setShowInstallApkModal] = useState(false)
+  const [installApkDeviceId, setInstallApkDeviceId] = useState<string | null>(null)
+  const [installApkUrl, setInstallApkUrl] = useState('')
+  const [isInstallingApk, setIsInstallingApk] = useState(false)
+  const [showProvisioningQrModal, setShowProvisioningQrModal] = useState(false)
+  const [provWifiSsid, setProvWifiSsid] = useState('')
+  const [provWifiPassword, setProvWifiPassword] = useState('')
+  const [provWifiSecurity, setProvWifiSecurity] = useState('WPA')
+  const [provQrImageUrl, setProvQrImageUrl] = useState<string | null>(null)
+  const [provQrLoading, setProvQrLoading] = useState(false)
+  const [showWipeQrModal, setShowWipeQrModal] = useState(false)
+  const [wipeQrImageUrl, setWipeQrImageUrl] = useState<string | null>(null)
   const [updateProgress, setUpdateProgress] = useState<{ deviceId: string; deviceName: string; progress: number; status: string; startTime: number; startProgress: number; lastProgressTime: number } | null>(null)
   const updateAlertShownRef = useRef(false)
   const updateProgressRef = useRef(updateProgress)
@@ -69,8 +142,222 @@ export default function Home() {
   const [settingsHeartbeat, setSettingsHeartbeat] = useState('30')
   const [settingsAutoUpdate, setSettingsAutoUpdate] = useState(true)
   const [settingsLocationTracking, setSettingsLocationTracking] = useState(true)
+  const [kioskEnabled, setKioskEnabled] = useState(false)
+  const [kioskApps, setKioskApps] = useState<string[]>([])
+  const [wallpaperUrl, setWallpaperUrl] = useState('')
+  const [wallpaperPreview, setWallpaperPreview] = useState('')
+  const [passwordPolicy, setPasswordPolicy] = useState({ minLength: '4', type: 'pin', changeDays: '0', maxAttempts: '10' })
+  const [scheduledReports, setScheduledReports] = useState({ enabled: false, frequency: 'weekly', types: { devices: true, apps: false, alerts: true, compliance: false }, email: '' })
+  const [lastBackupFile, setLastBackupFile] = useState<string | null>(typeof window !== 'undefined' ? localStorage.getItem('mdm_last_backup_file') : null)
   const settingsLoadedRef = useRef(false)
-  
+
+  // Configuration profiles
+  const defaultProfiles = [
+    { id: 'operador', name: 'Operador', description: 'Perfil restritivo para operadores de campo', icon: '👷', restrictions: { camera: false, bluetooth: false, developerOptions: false, installApps: false, statusBar: false }, apps: ['com.mdm.launcher', 'com.wms.mobile'] },
+    { id: 'lider', name: 'Líder', description: 'Perfil com mais permissões para líderes', icon: '👔', restrictions: { camera: true, bluetooth: true, developerOptions: false, installApps: false, statusBar: true }, apps: ['com.mdm.launcher', 'com.wms.mobile', 'com.whatsapp', 'com.google.android.apps.maps'] },
+    { id: 'externo', name: 'Externo', description: 'Perfil para dispositivos de uso externo', icon: '🌐', restrictions: { camera: true, bluetooth: true, developerOptions: false, installApps: true, statusBar: true }, apps: [] }
+  ]
+  const [profiles, setProfiles] = useState(defaultProfiles)
+  const [applyingProfile, setApplyingProfile] = useState<string | null>(null)
+  const [profileTargetDevice, setProfileTargetDevice] = useState('')
+
+  // Admin users management
+  const [adminUsers, setAdminUsers] = useState<any[]>([])
+  const [newAdminUser, setNewAdminUser] = useState({ username: '', password: '', name: '' })
+  const [isAddingAdminUser, setIsAddingAdminUser] = useState(false)
+
+  const loadAdminUsers = useCallback(async () => {
+    const token = localStorage.getItem('mdm_auth_token')
+    if (!token) return
+    try {
+      const res = await fetch('/api/auth/users', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.success) setAdminUsers(data.users)
+    } catch (e) {
+      console.error('Erro ao carregar usuários admin:', e)
+    }
+  }, [])
+
+  const handleAddAdminUser = async () => {
+    if (!newAdminUser.username || !newAdminUser.password || !newAdminUser.name) {
+      await showAlert('Preencha todos os campos.')
+      return
+    }
+    setIsAddingAdminUser(true)
+    const token = localStorage.getItem('mdm_auth_token')
+    try {
+      const res = await fetch('/api/auth/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ ...newAdminUser, role: 'admin' })
+      })
+      const data = await res.json()
+      if (data.success) {
+        setNewAdminUser({ username: '', password: '', name: '' })
+        loadAdminUsers()
+      } else {
+        await showAlert(data.error || 'Erro ao criar usuário.')
+      }
+    } catch (e) {
+      await showAlert('Erro ao conectar com o servidor.')
+    }
+    setIsAddingAdminUser(false)
+  }
+
+  const handleDeleteAdminUser = async (userId: number, userName: string) => {
+    const confirmed = await showConfirm(`Deseja realmente deletar o usuário "${userName}"?`)
+    if (!confirmed) return
+    const token = localStorage.getItem('mdm_auth_token')
+    try {
+      const res = await fetch(`/api/auth/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (data.success) {
+        loadAdminUsers()
+      } else {
+        await showAlert(data.error || 'Erro ao deletar usuário.')
+      }
+    } catch (e) {
+      await showAlert('Erro ao conectar com o servidor.')
+    }
+  }
+
+  // Device list search, filter, sort, pagination
+  const [deviceSearch, setDeviceSearch] = useState('')
+  const [deviceFilter, setDeviceFilter] = useState<'all' | 'online' | 'offline'>('all')
+  const [deviceSort, setDeviceSort] = useState('name-asc')
+  const [devicePage, setDevicePage] = useState(1)
+  const DEVICES_PER_PAGE = 12
+
+  const filteredDevices = useMemo(() => {
+    let result = [...devices]
+    // search filter
+    if (deviceSearch) {
+      const s = deviceSearch.toLowerCase()
+      result = result.filter(d =>
+        d.name?.toLowerCase().includes(s) ||
+        d.model?.toLowerCase().includes(s) ||
+        d.deviceId?.toLowerCase().includes(s)
+      )
+    }
+    // status filter
+    if (deviceFilter === 'online') result = result.filter(d => d.status === 'online')
+    if (deviceFilter === 'offline') result = result.filter(d => d.status !== 'online')
+    // sort
+    result.sort((a, b) => {
+      switch (deviceSort) {
+        case 'name-asc':
+          return (a.name || '').localeCompare(b.name || '')
+        case 'name-desc':
+          return (b.name || '').localeCompare(a.name || '')
+        case 'status':
+          return (a.status === 'online' ? 0 : 1) - (b.status === 'online' ? 0 : 1)
+        case 'battery':
+          return (b.batteryLevel ?? 0) - (a.batteryLevel ?? 0)
+        default:
+          return 0
+      }
+    })
+    return result
+  }, [devices, deviceSearch, deviceFilter, deviceSort])
+
+  const totalDevicePages = Math.max(1, Math.ceil(filteredDevices.length / DEVICES_PER_PAGE))
+  const safePage = Math.min(devicePage, totalDevicePages)
+  const paginatedDevices = filteredDevices.slice((safePage - 1) * DEVICES_PER_PAGE, safePage * DEVICES_PER_PAGE)
+
+  // Reset page when filters change
+  useEffect(() => {
+    setDevicePage(1)
+  }, [deviceSearch, deviceFilter, deviceSort])
+
+  // Export devices to Excel (CSV)
+  const exportDevicesToExcel = () => {
+    const headers = ['Nome', 'Modelo', 'Status', 'Bateria', 'Usuário', 'Última Conexão', 'Latitude', 'Longitude']
+    const csvRows = filteredDevices.map((d: Device) => [
+      d.name || d.model || 'Sem nome',
+      d.model || '-',
+      d.status === 'online' ? 'Online' : 'Offline',
+      d.batteryLevel ? `${d.batteryLevel}%` : '-',
+      d.assignedUser?.name || d.assignedUserName || 'Não atribuído',
+      d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : '-',
+      d.latitude ? String(d.latitude) : '-',
+      d.longitude ? String(d.longitude) : '-'
+    ])
+    let csv = '\uFEFF'
+    csv += headers.join(';') + '\n'
+    csvRows.forEach((row: string[]) => { csv += row.join(';') + '\n' })
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `dispositivos-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // Export devices to PDF (print)
+  const exportDevicesToPDF = () => {
+    const pw = window.open('', '_blank')
+    if (!pw) return
+    const tableRows = filteredDevices.map((d: Device) => `
+      <tr>
+        <td>${d.name || d.model || 'Sem nome'}</td>
+        <td>${d.model || '-'}</td>
+        <td style="color:${d.status === 'online' ? '#16a34a' : '#dc2626'};font-weight:600;">${d.status === 'online' ? 'Online' : 'Offline'}</td>
+        <td>${d.batteryLevel ? d.batteryLevel + '%' : '-'}</td>
+        <td>${d.assignedUser?.name || d.assignedUserName || 'N/A'}</td>
+        <td>${d.lastSeen ? new Date(d.lastSeen).toLocaleString('pt-BR') : '-'}</td>
+        <td style="font-size:11px;">${d.latitude ? `${d.latitude.toFixed(5)}, ${d.longitude?.toFixed(5)}` : '-'}</td>
+      </tr>
+    `).join('')
+    pw.document.write(`
+      <html>
+      <head>
+        <title>Relatório de Dispositivos - MDM Center</title>
+        <style>
+          @page { size: landscape; margin: 15mm; }
+          body { font-family: Arial, Helvetica, sans-serif; padding: 30px; color: #222; }
+          h1 { font-size: 26px; color: #1e293b; margin: 0 0 6px 0; }
+          .meta { color: #555; font-size: 14px; margin-bottom: 20px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #1e293b; color: #fff; font-size: 14px; font-weight: 600; padding: 12px 14px; text-align: left; }
+          td { border-bottom: 1px solid #e2e8f0; padding: 10px 14px; font-size: 13px; white-space: nowrap; }
+          tr:nth-child(even) { background: #f8fafc; }
+          tr:hover { background: #f1f5f9; }
+          .footer { margin-top: 24px; font-size: 11px; color: #94a3b8; text-align: center; }
+          .tip { margin-top: 16px; padding: 10px; background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 6px; font-size: 12px; color: #0369a1; }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Dispositivos — MDM Center</h1>
+        <div class="meta">Gerado em: ${new Date().toLocaleString('pt-BR')} &nbsp;|&nbsp; Total: ${filteredDevices.length} dispositivos</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Modelo</th>
+              <th>Status</th>
+              <th>Bateria</th>
+              <th>Usuário</th>
+              <th>Última Conexão</th>
+              <th>Localização</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="tip">Para relatório individual com mapa de calor, acesse o Mapa, selecione o dispositivo e clique em "Exportar PDF com Mapa de Calor".</div>
+        <div class="footer">MDM Center — Relatório gerado automaticamente</div>
+      </body>
+      </html>
+    `)
+    pw.document.close()
+    pw.print()
+  }
+
   // Carregar contagem de usuários
   useEffect(() => {
     const loadUsersCount = async () => {
@@ -134,6 +421,13 @@ export default function Home() {
   const [currentView, setCurrentView] = useState('dashboard')
   const [showPassword, setShowPassword] = useState<boolean>(false)
 
+  // Auto-dismiss toast
+  useEffect(() => {
+    if (toast) {
+      const timer = setTimeout(() => setToast(null), 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [toast])
 
   // Solicitar permissão de notificação
   useEffect(() => {
@@ -154,11 +448,42 @@ export default function Home() {
           if (s.autoUpdateStatus != null) setSettingsAutoUpdate(s.autoUpdateStatus)
           if (s.locationTracking != null) setSettingsLocationTracking(s.locationTracking)
         }
+        const kioskSaved = localStorage.getItem('mdm_kiosk_config')
+        if (kioskSaved) {
+          const k = JSON.parse(kioskSaved)
+          if (k.enabled != null) setKioskEnabled(k.enabled)
+          if (Array.isArray(k.apps)) setKioskApps(k.apps)
+        }
+        // Carregar wallpaper do servidor (persistente) ou localStorage
+        const wpSaved = localStorage.getItem('mdm_wallpaper_url')
+        if (wpSaved) {
+          setWallpaperUrl(wpSaved)
+          setWallpaperPreview(wpSaved)
+        }
+        ;(async () => {
+          try {
+            const wsHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+            const wpRes = await fetch(`http://${wsHost}:3001/api/config/wallpaper`)
+            const wpData = await wpRes.json()
+            if (wpData.success && wpData.url) {
+              setWallpaperUrl(wpData.url)
+              setWallpaperPreview(wpData.url)
+              localStorage.setItem('mdm_wallpaper_url', wpData.url)
+            }
+          } catch {}
+        })()
+        const ppSaved = localStorage.getItem('mdm_password_policy')
+        if (ppSaved) setPasswordPolicy(JSON.parse(ppSaved))
+        const srSaved = localStorage.getItem('mdm_scheduled_reports')
+        if (srSaved) setScheduledReports(JSON.parse(srSaved))
+        const prSaved = localStorage.getItem('mdm_profiles')
+        if (prSaved) setProfiles(JSON.parse(prSaved))
         settingsLoadedRef.current = true
       } catch (_) {}
     }
     if (currentView !== 'settings') settingsLoadedRef.current = false
-  }, [currentView])
+    if (currentView === 'settings') loadAdminUsers()
+  }, [currentView, loadAdminUsers])
 
   // WebSocket connection
   useEffect(() => {
@@ -510,11 +835,35 @@ export default function Home() {
         break
       case 'device_disconnected':
         console.log('Dispositivo desconectado:', message.deviceId, message.reason)
-        updateDevices(prevDevices => 
+        {
+          const disconnectedDev = devices.find(d => d.deviceId === message.deviceId)
+          const devName = disconnectedDev?.name || disconnectedDev?.model || message.deviceId
+          // Desktop notification
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('MDM - Dispositivo Offline', {
+              body: `${devName} ficou offline`,
+              icon: '/logo.png',
+              tag: `offline-${message.deviceId}`
+            })
+          }
+          // Alert sound
+          try {
+            const ctx = new AudioContext()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.value = 440
+            gain.gain.value = 0.1
+            osc.start()
+            osc.stop(ctx.currentTime + 0.2)
+          } catch (_) {}
+        }
+        updateDevices(prevDevices =>
           prevDevices.map(device => {
             if (device.deviceId === message.deviceId) {
-              return { 
-                ...device, 
+              return {
+                ...device,
                 status: 'offline',
                 lastSeen: message.timestamp || Date.now()
               }
@@ -977,7 +1326,7 @@ export default function Home() {
       a.download = `mdm-backup-${new Date().toISOString().slice(0, 10)}.json`
       a.click()
       URL.revokeObjectURL(url)
-      showAlert('✅ Backup baixado com sucesso!')
+      setToast({ message: 'Backup baixado com sucesso!', type: 'success' })
     } catch (e) {
       console.error('Erro no backup:', e)
       showAlert('❌ Erro ao gerar backup. Verifique se o servidor está conectado ao banco.')
@@ -1004,22 +1353,30 @@ export default function Home() {
     }
   }
 
-  const handleFormatDevice = async () => {
-    setShowFormatConfirm(false)
+  const executeFormatDevice = async () => {
     setIsFormattingDevice(true)
     try {
       const res = await fetch('/api/devices/format-device', { method: 'POST' })
       const data = await res.json()
       if (data.success) {
-        showAlert('✅ ' + (data.message || 'Celular reiniciando no modo recovery. Use as teclas de volume para navegar e Power para confirmar. Selecione "Wipe data/factory reset".'))
+        setToast({ message: data.message || 'Celular reiniciando no modo recovery.', type: 'success' })
       } else {
-        showAlert('❌ ' + (data.error || 'Falha ao formatar'))
+        showAlert(data.error || 'Falha ao formatar')
       }
     } catch (e) {
-      showAlert('❌ Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
+      showAlert('Erro: ' + (e instanceof Error ? e.message : 'Falha ao conectar'))
     } finally {
       setIsFormattingDevice(false)
     }
+  }
+
+  const handleFormatDevice = () => {
+    setShowFormatConfirm(false)
+    setConfirmAction({
+      title: 'Formatar Dispositivo',
+      message: 'Todos os dados serão apagados permanentemente. Esta ação é irreversível. Digite CONFIRMAR para prosseguir.',
+      callback: executeFormatDevice
+    })
   }
 
   const handleClearCache = async () => {
@@ -1029,7 +1386,7 @@ export default function Home() {
       const res = await fetch(`http://${wsHost}:3001/api/server/clear-cache`, { method: 'POST' })
       const data = await res.json()
       if (res.ok && data.success) {
-        showAlert('✅ Cache limpo com sucesso!')
+        setToast({ message: 'Cache limpo com sucesso!', type: 'success' })
       } else {
         throw new Error(data.error || 'Falha ao limpar cache')
       }
@@ -1130,14 +1487,14 @@ export default function Home() {
     setSelectedDevice(null)
   }
 
-  const handleDeleteDevice = useCallback(async (deviceId: string) => {
+  const executeDeleteDevice = useCallback(async (deviceId: string) => {
     // Validar se deviceId é válido
     if (!deviceId || deviceId === 'null' || deviceId === 'undefined') {
-      console.error('❌ DeviceId inválido para deleção:', deviceId)
-      showAlert('❌ Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
+      console.error('DeviceId inválido para deleção:', deviceId)
+      showAlert('Erro: ID do dispositivo inválido. Não é possível deletar este dispositivo.')
       return
     }
-    console.log('🗑️ Enviando requisição de deleção:', deviceId)
+    console.log('Enviando requisição de deleção:', deviceId)
 
     try {
       // Usar API como método principal (confiável)
@@ -1153,15 +1510,27 @@ export default function Home() {
         })
         setIsModalOpen(false)
         setSelectedDevice(null)
-        console.log('✅ Dispositivo deletado')
+        setToast({ message: 'Dispositivo deletado com sucesso', type: 'success' })
       } else {
-        showAlert(`❌ Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
+        showAlert(`Erro ao deletar: ${result.error || result.detail || 'Erro desconhecido'}`)
       }
     } catch (e) {
       console.error('Erro ao deletar via API:', e)
-      showAlert('❌ Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
+      showAlert('Erro ao deletar dispositivo. Verifique se o servidor está rodando.')
     }
   }, [sendMessage, updateDevices])
+
+  const handleDeleteDevice = useCallback((deviceId: string) => {
+    if (currentUser?.role === 'viewer') {
+      showAlert('Sem permissão para deletar dispositivos.')
+      return
+    }
+    setConfirmAction({
+      title: 'Deletar Dispositivo',
+      message: 'Esta ação é irreversível. O dispositivo será removido permanentemente. Digite CONFIRMAR para prosseguir.',
+      callback: () => executeDeleteDevice(deviceId)
+    })
+  }, [currentUser?.role, executeDeleteDevice])
 
   const handleUpdateApp = useCallback((apkUrl: string, version: string, device?: Device) => {
     const dev = device || updateDevice
@@ -1465,8 +1834,17 @@ export default function Home() {
         return <AlertsPage />
       case 'scheduled':
         return <ScheduledCommandsPage />
-      case 'compliance':
-        return <CompliancePage />
+      // compliance removido
+      case 'map':
+        return <DeviceMapPage devices={devices} />
+      case 'geofencing':
+        return <GeofencingPage devices={devices} sendMessage={sendMessage} />
+      case 'audit-logs':
+        return <UnifiedLogsPage devices={devices} sendMessage={sendMessage} />
+      case 'organizations':
+        return <OrganizationsPage />
+      case 'help':
+        return <HelpPage />
       case 'devices':
         return (
           <div className="p-6">
@@ -1476,15 +1854,7 @@ export default function Home() {
                 <p className="text-white mt-1">Gerencie todos os dispositivos conectados</p>
               </div>
               <div className="flex gap-3">
-                <button 
-                  className="btn btn-primary"
-                  onClick={handleAddDevice}
-                  disabled={isAddingDevice}
-                >
-                  <span>{isAddingDevice ? '⏳' : '📱'}</span>
-                  {isAddingDevice ? 'Instalando...' : 'Adicionar Dispositivo'}
-                </button>
-                <button 
+                <button
                   className="btn btn-secondary"
                   onClick={() => setIsBulkUpdateModalOpen(true)}
                   disabled={devices.length === 0}
@@ -1492,17 +1862,81 @@ export default function Home() {
                   <span>📥</span>
                   Atualização em Massa
                 </button>
-                <button 
-                  className="btn btn-warning"
-                  onClick={() => setShowFormatConfirm(true)}
-                  disabled={isFormattingDevice}
-                  title="Formata o celular conectado via USB (factory reset). Use quando o dispositivo está em boot loop."
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setProvQrImageUrl(null)
+                    setShowProvisioningQrModal(true)
+                  }}
+                  title="Gerar QR Code para instalar MDM no celular"
                 >
-                  <span>{isFormattingDevice ? '⏳' : '🔄'}</span>
-                  {isFormattingDevice ? 'Formatando...' : 'Formatar Celular'}
+                  <span>📱</span>
+                  QR Code MDM
+                </button>
+                {currentUser?.role !== 'viewer' && (
+                  <button
+                    className="btn btn-warning"
+                    onClick={() => setShowWipeQrModal(true)}
+                    title="Gerar QR Code para formatar celular remotamente"
+                  >
+                    <span>🔄</span>
+                    QR Formatar
+                  </button>
+                )}
+                <button onClick={exportDevicesToExcel} className="px-3 py-1.5 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700" disabled={filteredDevices.length === 0}>
+                  Exportar Excel
+                </button>
+                <button onClick={exportDevicesToPDF} className="px-3 py-1.5 text-xs bg-red-600 text-white rounded-lg hover:bg-red-700" disabled={filteredDevices.length === 0}>
+                  Exportar PDF
                 </button>
               </div>
             </div>
+
+            {/* Search, Filter, Sort Bar */}
+            {devices.length > 0 && (
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
+                {/* Search */}
+                <div className="relative flex-1">
+                  <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                  <input
+                    type="text"
+                    placeholder="Buscar dispositivos..."
+                    value={deviceSearch}
+                    onChange={e => setDeviceSearch(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 bg-surface border border-white/10 rounded-lg text-white placeholder-white/40 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                  />
+                </div>
+                {/* Filter buttons */}
+                <div className="flex gap-1 bg-surface border border-white/10 rounded-lg p-1">
+                  {([['all', 'Todos'], ['online', 'Online'], ['offline', 'Offline']] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      onClick={() => setDeviceFilter(value)}
+                      className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                        deviceFilter === value
+                          ? 'bg-primary text-white'
+                          : 'text-white/60 hover:text-white hover:bg-white/5'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {/* Sort dropdown */}
+                <select
+                  value={deviceSort}
+                  onChange={e => setDeviceSort(e.target.value)}
+                  className="px-3 py-2 bg-surface border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary cursor-pointer"
+                >
+                  <option value="name-asc">Nome A-Z</option>
+                  <option value="name-desc">Nome Z-A</option>
+                  <option value="status">Status</option>
+                  <option value="battery">Bateria</option>
+                </select>
+              </div>
+            )}
 
             {devices.length === 0 ? (
               <div className="text-center py-12">
@@ -1530,43 +1964,83 @@ export default function Home() {
                     {isSearchingDevices ? '⏳ Buscando...' : '🔄 Buscar dispositivos novamente'}
                   </button>
                 )}
-                <button 
-                  className="btn btn-primary btn-lg"
-                  onClick={handleAddDevice}
-                  disabled={isAddingDevice}
-                >
-                  <span>{isAddingDevice ? '⏳' : '📱'}</span>
-                  {isAddingDevice ? 'Instalando MDM e WMS...' : 'Adicionar Dispositivo'}
-                </button>
-                <button 
-                  className="btn btn-warning btn-lg mt-4"
-                  onClick={() => setShowFormatConfirm(true)}
-                  disabled={isFormattingDevice}
-                  title="Formata o celular via USB (factory reset). Use quando está em boot loop."
-                >
-                  <span>{isFormattingDevice ? '⏳' : '🔄'}</span>
-                  {isFormattingDevice ? 'Formatando...' : 'Formatar Celular (recovery)'}
-                </button>
+                {currentUser?.role !== 'viewer' && (
+                  <button
+                    className="btn btn-warning btn-lg mt-4"
+                    onClick={() => setShowWipeQrModal(true)}
+                    title="Gerar QR Code para formatar celular remotamente"
+                  >
+                    <span>🔄</span>
+                    QR Formatar
+                  </button>
+                )}
               </div>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {devices.map((device) => (
-                  <DeviceCard
-                    key={device.deviceId}
-                    device={device}
-                    onClick={() => handleDeviceClick(device)}
-                    onDelete={() => handleDeleteDevice(device.deviceId)}
-                    onSupport={() => handleSupportClick(device)}
-                    onUpdate={() => {
-                      setUpdateDevice(device)
-                      setIsUpdateModalOpen(true)
-                    }}
-                    onLigar={() => sendMessage({ type: 'wake_device', deviceId: device.deviceId, timestamp: Date.now() })}
-                    onDesligar={() => sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })}
-                    onSupportCountUpdate={supportCountUpdateTrigger}
-                  />
-                ))}
-              </div>
+              <>
+                {paginatedDevices.length === 0 ? (
+                  <div className="text-center py-12">
+                    <p className="text-white/60">Nenhum dispositivo encontrado para os filtros selecionados.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedDevices.map((device) => (
+                      <DeviceCard
+                        key={device.deviceId}
+                        device={device}
+                        onClick={() => handleDeviceClick(device)}
+                        onDelete={() => handleDeleteDevice(device.deviceId)}
+                        onSupport={() => handleSupportClick(device)}
+                        onUpdate={() => {
+                          setUpdateDevice(device)
+                          setIsUpdateModalOpen(true)
+                        }}
+                        onLigar={() => sendMessage({ type: 'wake_device', deviceId: device.deviceId, timestamp: Date.now() })}
+                        onDesligar={() => sendMessage({ type: 'reboot_device', deviceId: device.deviceId, timestamp: Date.now() })}
+                        onRevert={() => sendMessage({ type: 'revert_device', deviceId: device.deviceId, timestamp: Date.now() })}
+                        onSupportCountUpdate={supportCountUpdateTrigger}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                {/* Pagination */}
+                {filteredDevices.length > DEVICES_PER_PAGE && (
+                  <div className="flex flex-col sm:flex-row items-center justify-between mt-6 gap-3">
+                    <span className="text-sm text-white/60">
+                      Mostrando {(safePage - 1) * DEVICES_PER_PAGE + 1}-{Math.min(safePage * DEVICES_PER_PAGE, filteredDevices.length)} de {filteredDevices.length} dispositivos
+                    </span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => setDevicePage(p => Math.max(1, p - 1))}
+                        disabled={safePage <= 1}
+                        className="px-3 py-1.5 rounded-md text-sm font-medium bg-surface border border-white/10 text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Anterior
+                      </button>
+                      {Array.from({ length: totalDevicePages }, (_, i) => i + 1).map(page => (
+                        <button
+                          key={page}
+                          onClick={() => setDevicePage(page)}
+                          className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${
+                            page === safePage
+                              ? 'bg-primary text-white'
+                              : 'bg-surface border border-white/10 text-white/60 hover:text-white hover:bg-white/5'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setDevicePage(p => Math.min(totalDevicePages, p + 1))}
+                        disabled={safePage >= totalDevicePages}
+                        className="px-3 py-1.5 rounded-md text-sm font-medium bg-surface border border-white/10 text-white/60 hover:text-white hover:bg-white/5 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                      >
+                        Próximo
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         )
@@ -1679,9 +2153,6 @@ export default function Home() {
                             <div className="text-lg font-mono text-white">
                                 {currentAdminPassword ? (showPassword ? currentAdminPassword : '••••••••') : 'Não definida'}
                             </div>
-                            <div className="text-xs text-white/80 mt-1">
-                                Debug: {currentAdminPassword ? `Tamanho: ${currentAdminPassword.length}` : 'Vazia'}
-                            </div>
                         </div>
                         {currentAdminPassword && (
                             <button
@@ -1740,10 +2211,10 @@ export default function Home() {
                         Limpar
                       </button>
                     </div>
-                    <div className="bg-[var(--surface)] border border-white/30 rounded-lg p-3">
-                      <div className="text-xs font-bold text-red-600">
-                        <span className="font-bold text-red-600">📋 Instruções:</span>
-                        <ul className="mt-1 list-disc list-inside space-y-1 font-bold text-red-600">
+                    <div className="bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg p-3">
+                      <div className="text-xs text-[var(--text-secondary)]">
+                        <span className="font-semibold text-[var(--text-primary)]">📋 Instruções:</span>
+                        <ul className="mt-1 list-disc list-inside space-y-1 text-[var(--text-secondary)]">
                           <li>A senha será salva no servidor e enviada para todos os dispositivos</li>
                           <li>Será necessária para alterar o nome do dispositivo</li>
                           <li>O líder usa esta senha (4 dígitos) para desbloquear o celular na tela de cadeado</li>
@@ -1753,6 +2224,240 @@ export default function Home() {
                     </div>
                   </div>
                 </div>
+                {/* Modo Kiosk - Sempre Ativo */}
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Modo Kiosk</h3>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-white">Modo Kiosk</div>
+                        <div className="text-xs text-white/80">Dispositivos restritos a apenas apps permitidos</div>
+                      </div>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-semibold rounded-full border border-green-500/30">Sempre Ativo</span>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        Adicionar App Permitido (nome do pacote)
+                      </label>
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          id="kioskAppInput"
+                          placeholder="com.example.app"
+                          className="flex-1 px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              const input = e.target as HTMLInputElement
+                              const pkg = input.value.trim()
+                              if (pkg && !kioskApps.includes(pkg)) {
+                                setKioskApps([...kioskApps, pkg])
+                                input.value = ''
+                              }
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            const input = document.getElementById('kioskAppInput') as HTMLInputElement
+                            const pkg = input?.value.trim()
+                            if (pkg && !kioskApps.includes(pkg)) {
+                              setKioskApps([...kioskApps, pkg])
+                              input.value = ''
+                            }
+                          }}
+                          className="btn btn-secondary !text-white border-white/30"
+                        >
+                          Adicionar
+                        </button>
+                      </div>
+                    </div>
+
+                    {kioskApps.length > 0 && (
+                      <div>
+                        <div className="text-sm font-medium text-white mb-2">Apps Permitidos:</div>
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                          {kioskApps.map((app, idx) => (
+                            <div key={idx} className="flex items-center justify-between bg-[var(--surface)]/20 px-3 py-1.5 rounded-lg">
+                              <span className="text-sm font-mono text-white">{app}</span>
+                              <button
+                                onClick={() => setKioskApps(kioskApps.filter((_, i) => i !== idx))}
+                                className="text-red-400 hover:text-red-300 text-sm ml-2"
+                                title="Remover"
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        const config = { enabled: true, apps: kioskApps }
+                        localStorage.setItem('mdm_kiosk_config', JSON.stringify(config))
+                        sendMessage({
+                          type: 'set_kiosk_mode',
+                          enabled: true,
+                          allowedApps: kioskApps,
+                          timestamp: Date.now()
+                        })
+                        showAlert('Configuração de Kiosk aplicada!')
+                      }}
+                      className="btn btn-primary w-full text-white"
+                    >
+                      <span>📱</span>
+                      Aplicar Kiosk
+                    </button>
+                  </div>
+                </div>
+
+                {/* Papel de Parede */}
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Papel de Parede</h3>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-white mb-2">
+                        URL da Imagem
+                      </label>
+                      <input
+                        type="text"
+                        value={wallpaperUrl}
+                        onChange={(e) => setWallpaperUrl(e.target.value)}
+                        placeholder="https://exemplo.com/wallpaper.jpg"
+                        className="w-full px-4 py-2 border border-[var(--border)] rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                      />
+                    </div>
+
+                    {wallpaperUrl && (
+                      <div>
+                        <div className="text-sm font-medium text-white mb-2">Preview:</div>
+                        <div className="border border-white/20 rounded-lg overflow-hidden inline-block">
+                          <img
+                            src={wallpaperUrl}
+                            alt="Wallpaper preview"
+                            className="max-w-[200px] max-h-[120px] object-cover"
+                            onLoad={() => setWallpaperPreview(wallpaperUrl)}
+                            onError={() => setWallpaperPreview('')}
+                          />
+                        </div>
+                        {!wallpaperPreview && wallpaperUrl && (
+                          <p className="text-xs text-red-400 mt-1">Não foi possível carregar a imagem</p>
+                        )}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={async () => {
+                        if (!wallpaperUrl.trim()) {
+                          showAlert('Insira uma URL de imagem válida.')
+                          return
+                        }
+                        localStorage.setItem('mdm_wallpaper_url', wallpaperUrl)
+                        // Salvar no servidor para persistência
+                        try {
+                          const wsHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+                          await fetch(`http://${wsHost}:3001/api/config/wallpaper`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: wallpaperUrl })
+                          })
+                        } catch {}
+                        sendMessage({
+                          type: 'set_wallpaper',
+                          url: wallpaperUrl,
+                          timestamp: Date.now()
+                        })
+                        showAlert('Papel de parede salvo e aplicado! Não mudará até você alterar.')
+                      }}
+                      className="btn btn-primary w-full text-white"
+                    >
+                      <span>🖼️</span>
+                      Salvar e Aplicar
+                    </button>
+                  </div>
+                </div>
+
+                {/* Info: Dispositivos sem senha */}
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Tela do Dispositivo</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-white">Bloqueio de tela</div>
+                        <div className="text-xs text-white/80">Dispositivos não possuem senha de bloqueio</div>
+                      </div>
+                      <span className="px-3 py-1 bg-green-500/20 text-green-400 text-xs font-semibold rounded-full border border-green-500/30">Destravado</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-white">App inicial</div>
+                        <div className="text-xs text-white/80">Ao ligar, o dispositivo abre direto no MDM Center</div>
+                      </div>
+                      <span className="px-3 py-1 bg-blue-500/20 text-blue-400 text-xs font-semibold rounded-full border border-blue-500/30">MDM</span>
+                    </div>
+                    <div className="px-3 py-2 bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg text-xs text-[var(--text-secondary)]">
+                      O dispositivo inicia sempre no MDM Center. A partir dele o usuário pode abrir os apps permitidos pelo Modo Kiosk.
+                    </div>
+                  </div>
+                </div>
+
+                {/* Backup */}
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Backup</h3>
+                  <div className="space-y-4">
+                    <p className="text-sm text-white/70">Gera um backup completo das configurações e salva uma cópia no servidor automaticamente.</p>
+                    {lastBackupFile && (
+                      <div className="px-3 py-2 bg-green-500/10 border border-green-500/30 rounded-lg text-xs text-green-400">
+                        Último backup: <span className="font-mono">{lastBackupFile}</span>
+                      </div>
+                    )}
+                    <button
+                      onClick={async () => {
+                        const backup: Record<string, any> = {}
+                        for (let i = 0; i < localStorage.length; i++) {
+                          const key = localStorage.key(i)
+                          if (key && key.startsWith('mdm_')) {
+                            try { backup[key] = JSON.parse(localStorage.getItem(key)!) } catch { backup[key] = localStorage.getItem(key) }
+                          }
+                        }
+                        const now = new Date()
+                        const dateStr = now.toISOString().replace(/[:.]/g, '-').slice(0, 19)
+                        const filename = `mdm-backup-${dateStr}.json`
+                        const jsonStr = JSON.stringify(backup, null, 2)
+
+                        // Salvar cópia no servidor
+                        try {
+                          const wsHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost'
+                          await fetch(`http://${wsHost}:3001/api/backup`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ filename, data: backup })
+                          })
+                        } catch {}
+
+                        // Download local
+                        const blob = new Blob([jsonStr], { type: 'application/json' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = filename
+                        a.click()
+                        URL.revokeObjectURL(url)
+
+                        setLastBackupFile(filename)
+                        localStorage.setItem('mdm_last_backup_file', filename)
+                        showAlert(`Backup gerado: ${filename}\nCópia salva no servidor.`)
+                      }}
+                      className="btn btn-primary w-full text-white"
+                    >
+                      <span>💾</span>
+                      Gerar Backup
+                    </button>
+                  </div>
+                </div>
+                {/* Perfis de Configuração removido - configurações são aplicadas globalmente */}
               </div>
 
               {/* Sidebar de Informações - texto branco */}
@@ -1806,23 +2511,86 @@ export default function Home() {
                     </button>
                   </div>
                 </div>
+
+                <div className="card p-6 bg-[var(--surface)]/10 border border-white/20 text-white">
+                  <h3 className="text-lg font-semibold text-white mb-4">Usuários do Sistema</h3>
+                  <div className="space-y-3">
+                    {adminUsers.map((user) => (
+                      <div key={user.id} className="flex items-center justify-between p-2 rounded-lg bg-[var(--surface)]/20 border border-white/10">
+                        <div>
+                          <p className="text-sm font-medium text-white">{user.name}</p>
+                          <p className="text-xs text-white/60">{user.username} - {user.role}</p>
+                        </div>
+                        <button
+                          onClick={() => handleDeleteAdminUser(user.id, user.name)}
+                          className="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-500/10 transition-colors"
+                          title="Deletar usuário"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                    {adminUsers.length === 0 && (
+                      <p className="text-xs text-white/50 text-center py-2">Nenhum usuário encontrado</p>
+                    )}
+                    <div className="border-t border-white/10 pt-3 mt-3 space-y-2">
+                      <input
+                        type="text"
+                        placeholder="Usuário"
+                        value={newAdminUser.username}
+                        onChange={(e) => setNewAdminUser({ ...newAdminUser, username: e.target.value })}
+                        className="w-full px-3 py-1.5 text-sm border border-white/20 rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Nome completo"
+                        value={newAdminUser.name}
+                        onChange={(e) => setNewAdminUser({ ...newAdminUser, name: e.target.value })}
+                        className="w-full px-3 py-1.5 text-sm border border-white/20 rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                      />
+                      <input
+                        type="password"
+                        placeholder="Senha"
+                        value={newAdminUser.password}
+                        onChange={(e) => setNewAdminUser({ ...newAdminUser, password: e.target.value })}
+                        className="w-full px-3 py-1.5 text-sm border border-white/20 rounded-lg bg-[var(--surface-elevated)] text-[var(--text-primary)] placeholder:text-[var(--text-muted)]"
+                      />
+                      <button
+                        onClick={handleAddAdminUser}
+                        disabled={isAddingAdminUser}
+                        className="btn w-full !bg-[var(--primary)] !text-white hover:!opacity-90 disabled:opacity-60"
+                      >
+                        {isAddingAdminUser ? 'Adicionando...' : 'Adicionar Usuário'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
         )
+      case 'about':
+        return <AboutPage devices={devices} wsConnected={isConnected} />
       default:
         return <Dashboard devices={devices} isConnected={isConnected} onViewChange={setCurrentView} />
     }
   }
 
+  // If not authenticated, show login page
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={(user) => handleLogin(user)} />
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         currentView={currentView}
         onViewChange={setCurrentView}
+        userName={currentUser?.name || currentUser?.username || 'Admin'}
+        userRole={currentUser?.role || 'admin'}
       />
 
       {/* Main Content */}
@@ -1891,6 +2659,7 @@ export default function Home() {
             handleSupportClick(device)
           }}
           onViewChange={setCurrentView}
+          onLogout={handleLogout}
         />
 
         {/* Content */}
@@ -1924,6 +2693,7 @@ export default function Home() {
           sendMessage={sendMessage}
           onUnlinkUser={handleUnlinkUser}
           initialTab={deviceModalInitialTab}
+          userRole={currentUser?.role || 'admin'}
         />
       )}
 
@@ -2001,6 +2771,126 @@ export default function Home() {
           onConfirm={(apkUrl: string, version: string) => handleUpdateApp(apkUrl, version, updateDevice!)}
         />
       )}
+
+      {/* Install APK Modal */}
+      {showInstallApkModal && installApkDeviceId && (() => {
+        const isBulk = installApkDeviceId === '__bulk__'
+        const installDevice = isBulk ? null : devices.find(d => d.deviceId === installApkDeviceId)
+        const onlineDevices = devices.filter(d => d.status === 'online')
+        return (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[9999]">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl shadow-xl p-6 max-w-md w-full mx-4 relative">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowInstallApkModal(false)
+                  setInstallApkDeviceId(null)
+                  setInstallApkUrl('')
+                }}
+                className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:bg-[var(--surface-elevated)] transition-colors"
+                title="Fechar"
+              >
+                ✕
+              </button>
+              <h3 className="text-lg font-semibold text-primary mb-1 pr-8">
+                {isBulk ? 'Instalar App em Todos os Dispositivos' : 'Instalar Aplicativo Remotamente'}
+              </h3>
+              <p className="text-sm text-secondary mb-4">
+                {isBulk
+                  ? <>{onlineDevices.length} dispositivo{onlineDevices.length !== 1 ? 's' : ''} online receberão a instalação</>
+                  : <>Dispositivo: <strong>{installDevice?.name || installApkDeviceId}</strong></>
+                }
+              </p>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-[var(--text-primary)] mb-1">URL do APK</label>
+                <input
+                  type="text"
+                  value={installApkUrl}
+                  onChange={(e) => setInstallApkUrl(e.target.value)}
+                  placeholder="URL do APK ou selecione abaixo"
+                  className="w-full px-3 py-2 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  disabled={isInstallingApk}
+                />
+              </div>
+
+              <div className="mb-4">
+                <p className="text-sm font-medium text-[var(--text-secondary)] mb-2">Ações rápidas:</p>
+                <div className="flex gap-2">
+                  <button
+                    className="btn btn-sm flex-1 !bg-blue-600/30 !border-blue-400/30 !text-white hover:!bg-blue-600/50"
+                    onClick={() => setInstallApkUrl('/api/download-apk')}
+                    disabled={isInstallingApk}
+                  >
+                    MDM Agent (Atualizar)
+                  </button>
+                  <button
+                    className="btn btn-sm flex-1 !bg-green-600/30 !border-green-400/30 !text-white hover:!bg-green-600/50"
+                    onClick={() => setInstallApkUrl('/api/download-wms')}
+                    disabled={isInstallingApk}
+                  >
+                    WMS App
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <button
+                  className="btn flex-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
+                  onClick={() => {
+                    setShowInstallApkModal(false)
+                    setInstallApkDeviceId(null)
+                    setInstallApkUrl('')
+                  }}
+                  disabled={isInstallingApk}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="btn flex-1 !bg-primary !border-primary !text-white hover:!bg-primary/80 disabled:opacity-50"
+                  disabled={!installApkUrl.trim() || isInstallingApk}
+                  onClick={async () => {
+                    setIsInstallingApk(true)
+                    try {
+                      const res = await fetch('/api/update-app', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceIds: isBulk ? onlineDevices.map(d => d.deviceId) : [installApkDeviceId], apkUrl: installApkUrl, version: 'latest' })
+                      })
+                      if (!res.ok) {
+                        const data = await res.json().catch(() => ({}))
+                        throw new Error(data.error || 'Erro ao instalar aplicativo')
+                      }
+                      // Ativar barra de progresso na web
+                      const targetId = isBulk ? (onlineDevices[0]?.deviceId || '__bulk__') : installApkDeviceId!
+                      const targetDevice = devices.find(d => d.deviceId === targetId)
+                      const targetName = isBulk ? `${onlineDevices.length} dispositivo(s)` : (targetDevice?.name || targetId)
+                      setUpdateProgress({
+                        deviceId: targetId,
+                        deviceName: targetName,
+                        progress: 0,
+                        status: 'Enviando comando ao dispositivo...',
+                        startTime: Date.now(),
+                        startProgress: 0,
+                        lastProgressTime: Date.now()
+                      })
+                      setShowInstallApkModal(false)
+                      setInstallApkDeviceId(null)
+                      setInstallApkUrl('')
+                    } catch (err: any) {
+                      showAlert(err.message || 'Erro ao instalar aplicativo')
+                    } finally {
+                      setIsInstallingApk(false)
+                    }
+                  }}
+                >
+                  {isInstallingApk ? 'Instalando...' : 'Instalar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Bulk Update Modal */}
       {isBulkUpdateModalOpen && (
@@ -2107,6 +2997,182 @@ export default function Home() {
         cancelLabel="Não"
         variant="primary"
       />
+
+      {/* Confirmation modal for dangerous actions (requires typing CONFIRMAR) */}
+      {confirmAction && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100]">
+          <div className="bg-[var(--surface)] rounded-xl p-6 w-full max-w-md border border-[var(--border)]">
+            <div className="text-center mb-4">
+              <span className="text-4xl">&#9888;&#65039;</span>
+              <h3 className="text-lg font-bold text-[var(--text-primary)] mt-2">{confirmAction.title}</h3>
+              <p className="text-sm text-[var(--text-secondary)] mt-1">{confirmAction.message}</p>
+            </div>
+            <input
+              type="text"
+              placeholder='Digite "CONFIRMAR"'
+              value={confirmInput}
+              onChange={(e) => setConfirmInput(e.target.value)}
+              className="w-full px-4 py-2 bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] mb-4"
+            />
+            <div className="flex gap-3">
+              <button onClick={() => { setConfirmAction(null); setConfirmInput('') }} className="flex-1 px-4 py-2 bg-[var(--surface-elevated)] text-[var(--text-secondary)] rounded-lg">Cancelar</button>
+              <button
+                onClick={() => { if (confirmInput === 'CONFIRMAR') { confirmAction.callback(); setConfirmAction(null); setConfirmInput('') }}}
+                disabled={confirmInput !== 'CONFIRMAR'}
+                className={`flex-1 px-4 py-2 rounded-lg font-medium ${confirmInput === 'CONFIRMAR' ? 'bg-red-600 text-white' : 'bg-gray-600 text-gray-400 cursor-not-allowed'}`}
+              >Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR Formatar */}
+      {showWipeQrModal && (
+        <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center">
+          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-white">QR Formatar - Factory Reset</h2>
+                <button onClick={() => { setShowWipeQrModal(false); setWipeQrImageUrl(null) }} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              </div>
+
+              <p className="text-sm text-gray-400 mb-4">
+                Gere um QR Code que ao ser escaneado pelo celular com MDM, executa factory reset imediato sem confirmacao.
+              </p>
+
+              <div className="p-3 rounded-lg bg-red-900/30 border border-red-500/30 text-red-400 text-xs mb-4">
+                <p className="font-bold">ATENCAO: Este QR apaga TODOS os dados do celular instantaneamente ao ser lido!</p>
+                <p className="mt-1">O token expira em 24 horas.</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  const wsHost = window.location.hostname || 'localhost'
+                  setWipeQrImageUrl(`http://${wsHost}:3001/api/wipe-qr-image?_t=${Date.now()}`)
+                }}
+                className="w-full px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-lg transition-colors mb-4"
+              >
+                Gerar QR de Formatacao
+              </button>
+
+              {wipeQrImageUrl && (
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-4 rounded-xl">
+                    <img src={wipeQrImageUrl} alt="QR Wipe" style={{ width: 280, height: 280 }} />
+                  </div>
+
+                  <div className="mt-4 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
+                    <p className="font-semibold text-white">Como usar:</p>
+                    <p>1. Abra a camera ou leitor QR no celular com MDM</p>
+                    <p>2. Escaneie este QR Code</p>
+                    <p>3. O celular sera formatado instantaneamente</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const w = window.open('', '_blank', 'width=500,height=550,scrollbars=no,resizable=no')
+                      if (w) {
+                        w.document.write(`<html>
+<head><title>QR Formatar - MDM Center</title></head>
+<body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+  <h2 style="margin:0 0 4px 0;font-size:20px;color:#dc2626;">QR Factory Reset</h2>
+  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie para formatar o celular com MDM</p>
+  <img src="${wipeQrImageUrl}" width="350" height="350" style="border-radius:10px;" />
+  <p style="margin-top:12px;font-size:11px;color:#999;">Token valido por 24 horas</p>
+  <button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#dc2626;color:white;border-radius:8px;cursor:pointer;font-size:14px;">Imprimir</button>
+</body></html>`)
+                        w.document.close()
+                      }
+                    }}
+                    className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                  >
+                    Imprimir QR Code
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR Code MDM */}
+      {showProvisioningQrModal && (
+        <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center">
+          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-bold text-white">QR Code MDM</h2>
+                <button onClick={() => setShowProvisioningQrModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+              </div>
+
+              <p className="text-sm text-gray-400 mb-4">
+                Escaneie este QR Code com o celular para baixar e instalar o MDM + WMS. Apos instalar, o app conecta ao servidor e trava o celular automaticamente.
+              </p>
+
+              {!provQrImageUrl ? (
+                <button
+                  onClick={() => {
+                    const wsHost = window.location.hostname || 'localhost'
+                    setProvQrImageUrl(`http://${wsHost}:3001/api/apk-qr-image?_t=${Date.now()}`)
+                  }}
+                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors mb-4"
+                >
+                  Gerar QR Code
+                </button>
+              ) : (
+                <div className="flex flex-col items-center">
+                  <div className="bg-white p-4 rounded-xl">
+                    <img src={provQrImageUrl} alt="QR Code MDM" style={{ width: 280, height: 280 }} />
+                  </div>
+
+                  <div className="mt-4 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
+                    <p className="font-semibold text-white">Como usar:</p>
+                    <p>1. Abra a camera do celular</p>
+                    <p>2. Escaneie este QR Code</p>
+                    <p>3. Baixe e instale o MDM</p>
+                    <p>4. O app conecta ao servidor e bloqueia o celular</p>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const w = window.open('', '_blank', 'width=500,height=550,scrollbars=no,resizable=no')
+                      if (w) {
+                        w.document.write(`<html>
+<head><title>QR Code MDM - MDM Center</title></head>
+<body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
+  <h2 style="margin:0 0 4px 0;font-size:20px;color:#1e293b;">MDM Center</h2>
+  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie para instalar o MDM + WMS</p>
+  <img src="${provQrImageUrl}" width="350" height="350" style="border-radius:10px;" />
+  <div style="margin-top:16px;font-size:12px;color:#555;text-align:left;max-width:350px;line-height:1.6;">
+    <p><b>1.</b> Abra a camera e escaneie</p>
+    <p><b>2.</b> Baixe e instale o app</p>
+    <p><b>3.</b> O MDM conecta e trava automaticamente</p>
+  </div>
+  <button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#2563eb;color:white;border-radius:8px;cursor:pointer;font-size:14px;">Imprimir</button>
+</body></html>`)
+                        w.document.close()
+                      }
+                    }}
+                    className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                  >
+                    Imprimir QR Code
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Toast notifications */}
+      {toast && (
+        <div className={`fixed bottom-6 right-6 px-5 py-3 rounded-xl shadow-2xl z-[200] flex items-center gap-2 ${
+          toast.type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
+        }`} style={{ animation: 'slideInFromBottom 0.3s ease-out' }}>
+          <span>{toast.type === 'success' ? '\u2705' : '\u274C'}</span>
+          <span className="text-sm font-medium">{toast.message}</span>
+        </div>
+      )}
     </div>
   )
 }

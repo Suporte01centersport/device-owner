@@ -303,6 +303,8 @@ class DeviceModel {
                 language: device.language,
                 country: device.country,
                 complianceStatus: device.compliance_status || 'unknown',
+                nfKey: device.nf_key || null,
+                purchaseDate: device.purchase_date || null,
                 status: device.status,
                 lastSeen: device.last_seen,
                 installedAppsCount: 0,

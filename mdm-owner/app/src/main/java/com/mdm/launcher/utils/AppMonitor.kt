@@ -294,15 +294,20 @@ object AppMonitor {
     }
 
         private fun isSystemCriticalApp(packageName: String): Boolean {
-        // Lista restritiva: apenas apps essenciais para o sistema funcionar
-        // NÃO incluir Settings - em modo kiosk deve ficar bloqueado
-        val criticalSystemProcesses = listOf(
+        val criticalSystemProcesses = mutableListOf(
             "android", // O próprio sistema Android
             "com.android.systemui", // Barra de status, navegação
-            "com.android.permissioncontroller" // Controlador de permissões (dialogs)
+            "com.android.permissioncontroller", // Controlador de permissões (dialogs)
+            "com.android.bluetooth", // Configurações de Bluetooth
+            "com.android.settings" // Settings (necessário para WiFi/BT config)
         )
-        
-        // ✅ CORREÇÃO: Apenas apps realmente críticos, não todos os com.android.*
+        // Incluir Settings de OEMs (Realme/Oppo/Samsung)
+        criticalSystemProcesses.addAll(listOf(
+            "com.coloros.settings",
+            "com.oppo.settings",
+            "com.samsung.android.settings",
+            "com.oplus.settings"
+        ))
         return criticalSystemProcesses.contains(packageName)
     }
 

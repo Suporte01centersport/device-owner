@@ -14,5 +14,18 @@ data class DeviceRestrictions(
     val outgoingCallsDisabled: Boolean = false,
     val smsDisabled: Boolean = false,
     val userCreationDisabled: Boolean = false,
-    val userRemovalDisabled: Boolean = false
+    val userRemovalDisabled: Boolean = false,
+    val nfcDisabled: Boolean = false,
+    val usbDisabled: Boolean = false,
+    val developerOptionsDisabled: Boolean = false,
+    val factoryResetDisabled: Boolean = false,
+    val hotspotDisabled: Boolean = false,
+    val locationDisabled: Boolean = false,
+    val airplaneModeDisabled: Boolean = false,
+    val addAccountDisabled: Boolean = false,
+    val externalStorageDisabled: Boolean = false,
+    val lockScreen: Boolean = false,
+    val kioskMode: Boolean = false,
+    val bluetoothPairingDisabled: Boolean = false,
+    val autoTimeRequired: Boolean = false
 )

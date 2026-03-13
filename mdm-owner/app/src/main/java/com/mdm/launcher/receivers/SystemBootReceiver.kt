@@ -107,6 +107,13 @@ class SystemBootReceiver : BroadcastReceiver() {
             } catch (e: Exception) {
                 Log.w(TAG, "Não foi possível aplicar políticas no boot: ${e.message}")
             }
+            // Recarregar e reaplicar restrições remotas salvas (persistência após reboot)
+            try {
+                com.mdm.launcher.utils.DevicePolicyHelper.loadAndApplySavedRestrictions(context)
+                Log.d(TAG, "Restrições remotas recarregadas no boot")
+            } catch (e: Exception) {
+                Log.w(TAG, "Não foi possível recarregar restrições no boot: ${e.message}")
+            }
             
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao iniciar serviço após boot", e)

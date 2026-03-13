@@ -132,10 +132,7 @@ export default function AuditLogsPage() {
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">📝 Auditoria</h1>
-          <p className="text-white mt-1">Logs de atividades do sistema ({total} registros)</p>
-        </div>
+        <p className="text-white/60 text-sm">{total} registros de auditoria</p>
         <button
           onClick={fetchLogs}
           className="btn btn-secondary !text-white border-white/30"

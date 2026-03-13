@@ -12,13 +12,19 @@ interface DeviceCardProps {
   onUpdate: () => void
   onLigar?: () => void
   onDesligar?: () => void
+  onRevert?: () => void
   onSupportCountUpdate?: number
 }
 
-export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onLigar, onDesligar, onSupportCountUpdate }: DeviceCardProps) {
+export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpdate, onLigar, onDesligar, onRevert, onSupportCountUpdate }: DeviceCardProps) {
   const [readMessagesCount, setReadMessagesCount] = useState(0)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showUpdateConfirm, setShowUpdateConfirm] = useState(false)
+  const [showRevertConfirm, setShowRevertConfirm] = useState(false)
+  const [nfKey, setNfKey] = useState(device.nfKey || '')
+  const [purchaseDate, setPurchaseDate] = useState(device.purchaseDate || '')
+  const [editingNf, setEditingNf] = useState(false)
+  const [savingNf, setSavingNf] = useState(false)
 
   const loadReadMessagesCount = useCallback(async () => {
     try {
@@ -206,6 +212,37 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         </div>
       </div>
 
+      {/* Hardware Inventory Details */}
+      {(device.imei || device.serialNumber || device.phoneNumber || device.simNumber) && (
+        <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] space-y-1">
+          <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Inventário</span>
+          {device.imei && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-[var(--text-muted)]">IMEI</span>
+              <span className="text-xs font-mono text-[var(--text-secondary)] truncate ml-2">{device.imei}</span>
+            </div>
+          )}
+          {device.serialNumber && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-[var(--text-muted)]">S/N</span>
+              <span className="text-xs font-mono text-[var(--text-secondary)] truncate ml-2">{device.serialNumber}</span>
+            </div>
+          )}
+          {device.phoneNumber && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-[var(--text-muted)]">Telefone</span>
+              <span className="text-xs font-mono text-[var(--text-secondary)] truncate ml-2">{device.phoneNumber}</span>
+            </div>
+          )}
+          {device.simNumber && (
+            <div className="flex justify-between items-center">
+              <span className="text-xs text-[var(--text-muted)]">SIM</span>
+              <span className="text-xs font-mono text-[var(--text-secondary)] truncate ml-2">{device.simNumber}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Botões Ligar / Desligar */}
       {(onLigar || onDesligar) && (
         <div className="flex gap-2 mb-4">
@@ -236,15 +273,114 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         </div>
       )}
 
+      {/* NF e Data de Compra */}
+      <div className="mb-4 px-3 py-2 rounded-lg bg-[var(--surface-elevated)] border border-[var(--border)] space-y-2">
+        <span className="text-xs text-[var(--text-muted)] uppercase tracking-wider">Nota Fiscal / Compra</span>
+        {!editingNf && (device.nfKey || device.purchaseDate) ? (
+          <>
+            {device.nfKey && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[var(--text-muted)]">Chave NF</span>
+                <span className="text-xs font-mono text-[var(--text-secondary)] truncate ml-2 max-w-[200px]" title={device.nfKey}>{device.nfKey}</span>
+              </div>
+            )}
+            {device.purchaseDate && (
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-[var(--text-muted)]">Data Compra</span>
+                <span className="text-xs font-mono text-[var(--text-secondary)]">
+                  {new Date(device.purchaseDate + 'T00:00:00').toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+            )}
+            {!device.purchaseDate && (
+              <button
+                className="text-xs text-blue-400 hover:text-blue-300 underline"
+                onClick={(e) => { e.stopPropagation(); setEditingNf(true) }}
+              >
+                Adicionar data de compra
+              </button>
+            )}
+          </>
+        ) : !editingNf && !device.nfKey && !device.purchaseDate ? (
+          <button
+            className="text-xs text-blue-400 hover:text-blue-300 underline"
+            onClick={(e) => { e.stopPropagation(); setEditingNf(true) }}
+          >
+            Cadastrar dados da NF
+          </button>
+        ) : (
+          <div className="space-y-2" onClick={e => e.stopPropagation()}>
+            <div>
+              <label className="text-[10px] text-[var(--text-muted)]">Chave de Acesso NF</label>
+              <input
+                type="text"
+                value={nfKey}
+                onChange={e => setNfKey(e.target.value)}
+                placeholder="0000 0000 0000 0000 0000 0000 0000 0000 0000 0000 0000"
+                className="w-full px-2 py-1 text-xs rounded bg-[var(--background)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-blue-500"
+                disabled={!!device.nfKey}
+              />
+            </div>
+            <div>
+              <label className="text-[10px] text-[var(--text-muted)]">Data de Compra</label>
+              <input
+                type="date"
+                value={purchaseDate}
+                onChange={e => setPurchaseDate(e.target.value)}
+                className="w-full px-2 py-1 text-xs rounded bg-[var(--background)] border border-[var(--border)] text-[var(--text-primary)] outline-none focus:border-blue-500"
+                disabled={!!device.purchaseDate}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                disabled={savingNf || (!nfKey && !purchaseDate)}
+                className="flex-1 px-2 py-1 text-xs rounded bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setSavingNf(true)
+                  try {
+                    const wsHost = window.location.hostname || 'localhost'
+                    const token = localStorage.getItem('mdm_auth_token')
+                    const body: any = {}
+                    if (nfKey && !device.nfKey) body.nfKey = nfKey
+                    if (purchaseDate && !device.purchaseDate) body.purchaseDate = purchaseDate
+                    await fetch(`http://${wsHost}:3001/api/devices/${encodeURIComponent(device.deviceId)}/update-info`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}) },
+                      body: JSON.stringify(body)
+                    })
+                    setEditingNf(false)
+                    // Force refresh by reloading
+                    window.location.reload()
+                  } catch (err) {
+                    console.error('Erro ao salvar NF:', err)
+                  } finally {
+                    setSavingNf(false)
+                  }
+                }}
+              >
+                {savingNf ? 'Salvando...' : 'Salvar'}
+              </button>
+              <button
+                className="px-2 py-1 text-xs rounded bg-[var(--background)] border border-[var(--border)] text-[var(--text-secondary)] hover:text-white"
+                onClick={(e) => { e.stopPropagation(); setEditingNf(false); setNfKey(device.nfKey || ''); setPurchaseDate(device.purchaseDate || '') }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Actions */}
-      <div className="flex gap-2 pt-4 border-t border-[var(--border)]">
-        <button 
-          className="btn btn-sm relative flex-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
+      <div className="grid grid-cols-4 gap-1.5 pt-4 border-t border-[var(--border)]">
+        <button
+          className="btn btn-sm relative !text-xs !px-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
           onClick={(e) => {
             e.stopPropagation()
             onSupport()
           }}
-          title={readMessagesCount > 0 ? `${readMessagesCount} mensagem${readMessagesCount !== 1 ? 's' : ''} lida${readMessagesCount !== 1 ? 's' : ''} (aguardando resolução)` : 'Mensagens de Suporte'}
+          title="Mensagens de Suporte"
         >
           🔔 Suporte
           {readMessagesCount > 0 && (
@@ -253,8 +389,8 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
             </span>
           )}
         </button>
-        <button 
-          className="btn btn-sm flex-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
+        <button
+          className="btn btn-sm !text-xs !px-1 !bg-[var(--surface-elevated)] !border-[var(--border)] !text-[var(--text-primary)] hover:!bg-[var(--border)]"
           onClick={(e) => {
             e.stopPropagation()
             setShowUpdateConfirm(true)
@@ -263,12 +399,25 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         >
           📥 Atualizar
         </button>
+        {onRevert && (
+          <button
+            className="btn btn-sm !text-xs !px-1 !bg-orange-500/20 !border-orange-400/30 !text-orange-400 hover:!bg-orange-500/40"
+            onClick={(e) => {
+              e.stopPropagation()
+              setShowRevertConfirm(true)
+            }}
+            title="Reverter: remove MDM e libera o celular"
+          >
+            🔓 Reverter
+          </button>
+        )}
         <button
-          className="btn btn-sm flex-1 !bg-red-500/150/150/30 !border-red-400/30 !text-white hover:!bg-red-500/150/150/50"
+          className="btn btn-sm !text-xs !px-1 !bg-red-500/20 !border-red-400/30 !text-red-400 hover:!bg-red-500/40"
           onClick={(e) => {
             e.stopPropagation()
             setShowDeleteConfirm(true)
           }}
+          title="Deletar dispositivo"
         >
           🗑️ Deletar
         </button>
@@ -301,6 +450,21 @@ export default function DeviceCard({ device, onClick, onDelete, onSupport, onUpd
         confirmLabel="Sim"
         cancelLabel="Não"
         variant="primary"
+        insideCard
+      />
+
+      <ConfirmModal
+        isOpen={showRevertConfirm}
+        onClose={() => setShowRevertConfirm(false)}
+        onConfirm={() => {
+          setShowRevertConfirm(false)
+          if (onRevert) onRevert()
+        }}
+        title="Reverter Dispositivo?"
+        message={`Isso vai REMOVER o MDM do dispositivo "${device.name}". Todas as restrições serão desativadas e o celular voltará ao normal. Para gerenciar novamente, será necessário fazer factory reset e escanear o QR Code. Continuar?`}
+        confirmLabel="Sim, reverter"
+        cancelLabel="Cancelar"
+        variant="danger"
         insideCard
       />
 

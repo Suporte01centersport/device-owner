@@ -81,7 +81,7 @@ export default function DeviceLocationMap({ device, className = '', sendMessage 
       const lat = deviceRef.current.latitude || defaultLat
       const lng = deviceRef.current.longitude || defaultLng
 
-      const map = window.L.map(container, { fadeAnimation: false }).setView([lat, lng], 15)
+      const map = window.L.map(container, { fadeAnimation: false }).setView([lat, lng], 18)
 
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',

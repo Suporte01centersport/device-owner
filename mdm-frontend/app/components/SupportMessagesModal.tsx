@@ -354,7 +354,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
     <>
       {/* Modal principal - azul meio escuro fora dos balões */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4"
         onClick={onClose}
       >
         <div
@@ -550,7 +550,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
       {/* Modal de Histórico de Mensagens Enviadas */}
       {showHistoryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[80] p-4">
           <div className="bg-surface rounded-xl shadow-xl max-w-2xl w-full max-h-[80vh] flex flex-col">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h3 className="text-lg font-semibold text-primary">📋 Histórico de Mensagens Enviadas</h3>
@@ -605,7 +605,7 @@ export default function SupportMessagesModal({ device, isOpen, onClose, onMessag
 
       {/* Modal de detalhes da mensagem - mesma cor do fundo */}
       {selectedMessage && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
           <div className="bg-background rounded-xl shadow-xl max-w-2xl w-full">
             <div className="flex justify-between items-center p-6 border-b border-border">
               <h3 className="text-lg font-semibold text-primary flex items-center">

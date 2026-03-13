@@ -309,14 +309,35 @@ class AppUpdateReceiver : BroadcastReceiver() {
             android.content.pm.PackageInstaller.STATUS_FAILURE_INCOMPATIBLE,
             android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID,
             android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE -> {
-                val message = intent?.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
-                Log.e("AppUpdateReceiver", "❌ Instalação falhou: $message (Status: $status)")
+                val rawMessage = intent?.getStringExtra(android.content.pm.PackageInstaller.EXTRA_STATUS_MESSAGE)
+                val friendlyMessage = when (status) {
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_CONFLICT -> "Conflito de assinatura - desinstale a versão atual primeiro ou use APK com mesma assinatura"
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_STORAGE -> "Sem espaço no dispositivo"
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_INCOMPATIBLE -> "APK incompatível com este dispositivo"
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_INVALID -> "APK inválido ou corrompido"
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_BLOCKED -> "Instalação bloqueada pelo sistema"
+                    android.content.pm.PackageInstaller.STATUS_FAILURE_ABORTED -> "Instalação cancelada"
+                    else -> rawMessage ?: "Falha ao instalar APK"
+                }
+                val message = "$friendlyMessage (status=$status, detail=$rawMessage)"
+                Log.e("AppUpdateReceiver", "❌ Instalação falhou: $message")
                 
                 // Notificar servidor sobre falha
                 notifyServerUpdateFailure(context, message ?: "Erro desconhecido")
             }
             android.content.pm.PackageInstaller.STATUS_PENDING_USER_ACTION -> {
-                Log.w("AppUpdateReceiver", "⚠️ Ação do usuário necessária (não deveria acontecer em Device Owner)")
+                Log.w("AppUpdateReceiver", "⚠️ Ação do usuário necessária - abrindo tela de confirmação")
+                // O sistema exige confirmação do usuário - abrir a Intent de confirmação automaticamente
+                val confirmIntent = intent?.getParcelableExtra<Intent>(Intent.EXTRA_INTENT)
+                if (confirmIntent != null && context != null) {
+                    confirmIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try {
+                        context.startActivity(confirmIntent)
+                        Log.d("AppUpdateReceiver", "Tela de confirmação aberta automaticamente")
+                    } catch (e: Exception) {
+                        Log.e("AppUpdateReceiver", "Erro ao abrir tela de confirmação: ${e.message}")
+                    }
+                }
             }
         }
     }

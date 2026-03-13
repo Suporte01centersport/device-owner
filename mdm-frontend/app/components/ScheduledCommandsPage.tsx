@@ -21,6 +21,7 @@ const COMMAND_TYPES = [
   { id: 'update-mdm', label: 'Atualização MDM', icon: '📥' },
   { id: 'clear-cache', label: 'Limpar Cache', icon: '🧹' },
   { id: 'send-message', label: 'Enviar Mensagem', icon: '💬' },
+  { id: 'report', label: 'Relatório', icon: '📊' },
 ]
 
 const DAYS_OF_WEEK = [
@@ -89,6 +90,9 @@ export default function ScheduledCommandsPage() {
   const [scheduleTime, setScheduleTime] = useState('03:00')
   const [scheduleDay, setScheduleDay] = useState('1')
   const [parameters, setParameters] = useState('')
+  const [reportType, setReportType] = useState('compliance')
+  const [reportFormat, setReportFormat] = useState('pdf')
+  const [reportEmail, setReportEmail] = useState('')
 
   const fetchCommands = useCallback(async () => {
     try {
@@ -132,6 +136,9 @@ export default function ScheduledCommandsPage() {
       scheduleType,
       scheduleValue,
       parameters: commandType === 'send-message' ? parameters : undefined,
+      reportType: commandType === 'report' ? reportType : undefined,
+      format: commandType === 'report' ? reportFormat : undefined,
+      email: commandType === 'report' ? reportEmail : undefined,
     }
 
     try {
@@ -150,6 +157,9 @@ export default function ScheduledCommandsPage() {
         setScheduleTime('03:00')
         setScheduleDay('1')
         setParameters('')
+        setReportType('compliance')
+        setReportFormat('pdf')
+        setReportEmail('')
         fetchCommands()
       }
     } catch (err) {
@@ -301,6 +311,47 @@ export default function ScheduledCommandsPage() {
                 ))}
               </select>
             </div>
+          )}
+
+          {/* Parameters (for report) */}
+          {commandType === 'report' && (
+            <>
+              <div>
+                <label className={labelClass}>Tipo de Relatório</label>
+                <select
+                  value={reportType}
+                  onChange={e => setReportType(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="compliance">Compliance</option>
+                  <option value="inventory">Inventário</option>
+                  <option value="app-usage">Uso de Apps</option>
+                  <option value="location">Localização</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Formato</label>
+                <select
+                  value={reportFormat}
+                  onChange={e => setReportFormat(e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="pdf">PDF</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>E-mail de Destino</label>
+                <input
+                  type="email"
+                  value={reportEmail}
+                  onChange={e => setReportEmail(e.target.value)}
+                  placeholder="usuario@exemplo.com"
+                  className={inputClass}
+                  required
+                />
+              </div>
+            </>
           )}
 
           {/* Parameters (for send-message) */}

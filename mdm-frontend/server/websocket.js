@@ -8,6 +8,7 @@ const url = require('url');
 const fs = require('fs');
 const path = require('path');
 
+const crypto = require('crypto');
 const os = require('os');
 const { execSync } = require('child_process');
 const config = require('./config');
@@ -22,6 +23,163 @@ const ComputerModel = require('./database/models/Computer');
 const { query, transaction } = require('./database/config');
 const BatchQueue = require('./database/batch-queue');
 const LocationCache = require('./database/location-cache');
+
+// ==================== JWT Auth ====================
+const JWT_SECRET = process.env.JWT_SECRET || 'mdm-secret-key-change-in-production';
+
+function createJWT(payload) {
+    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    const body = Buffer.from(JSON.stringify({ ...payload, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 86400 })).toString('base64url');
+    const signature = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+    return `${header}.${body}.${signature}`;
+}
+
+function verifyJWT(token) {
+    try {
+        const [header, body, signature] = token.split('.');
+        const expected = crypto.createHmac('sha256', JWT_SECRET).update(`${header}.${body}`).digest('base64url');
+        if (signature !== expected) return null;
+        const payload = JSON.parse(Buffer.from(body, 'base64url').toString());
+        if (payload.exp < Math.floor(Date.now() / 1000)) return null;
+        return payload;
+    } catch { return null; }
+}
+
+function hashPassword(password) {
+    return crypto.createHash('sha256').update(password).digest('hex');
+}
+
+// Helper: parse JSON body from raw HTTP request
+function parseBody(req) {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', chunk => { body += chunk.toString(); });
+        req.on('end', () => {
+            try { resolve(JSON.parse(body || '{}')); }
+            catch (e) { reject(e); }
+        });
+        req.on('error', reject);
+    });
+}
+
+// Helper: extract and verify JWT from Authorization header
+function authenticateRequest(req) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+    return verifyJWT(authHeader.slice(7));
+}
+
+// ==================== Rate Limiter ====================
+const loginAttempts = new Map(); // IP -> { count, firstAttempt }
+const RATE_LIMIT_WINDOW = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 5;
+
+// Auto-clean old entries every 15 minutes
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, data] of loginAttempts) {
+        if (now - data.firstAttempt > RATE_LIMIT_WINDOW) {
+            loginAttempts.delete(ip);
+        }
+    }
+}, RATE_LIMIT_WINDOW);
+
+function isRateLimited(ip) {
+    const now = Date.now();
+    const entry = loginAttempts.get(ip);
+    if (!entry) {
+        loginAttempts.set(ip, { count: 1, firstAttempt: now });
+        return false;
+    }
+    if (now - entry.firstAttempt > RATE_LIMIT_WINDOW) {
+        loginAttempts.set(ip, { count: 1, firstAttempt: now });
+        return false;
+    }
+    entry.count++;
+    return entry.count > RATE_LIMIT_MAX;
+}
+
+// Ensure admin_users table exists and has default user
+async function ensureAdminUsersSchema() {
+    try {
+        await query(`
+            CREATE TABLE IF NOT EXISTS admin_users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash VARCHAR(255) NOT NULL,
+                name VARCHAR(100) NOT NULL,
+                role VARCHAR(20) DEFAULT 'admin',
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                last_login TIMESTAMPTZ
+            );
+        `);
+        // Insert default admin user if table is empty
+        const defaultHash = hashPassword('adm123');
+        await query(`
+            INSERT INTO admin_users (username, password_hash, name, role)
+            SELECT 'adm', $1, 'Administrador', 'admin'
+            WHERE NOT EXISTS (SELECT 1 FROM admin_users LIMIT 1);
+        `, [defaultHash]);
+        console.log('✅ Tabela admin_users verificada/criada');
+
+        // Criar tabela de restrições de dispositivo (dropar se device_id era UUID)
+        try {
+            const colCheck = await query(`SELECT data_type FROM information_schema.columns WHERE table_name = 'device_restrictions' AND column_name = 'device_id'`);
+            if (colCheck.rows.length > 0 && colCheck.rows[0].data_type === 'uuid') {
+                await query(`DROP TABLE device_restrictions`);
+                console.log('Tabela device_restrictions antiga (UUID) removida');
+            }
+        } catch (_) {}
+        await query(`
+            CREATE TABLE IF NOT EXISTS device_restrictions (
+                id SERIAL PRIMARY KEY,
+                device_id VARCHAR(255) UNIQUE NOT NULL,
+                restrictions JSONB NOT NULL DEFAULT '{}',
+                is_global BOOLEAN DEFAULT false,
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        `);
+        console.log('✅ Tabela device_restrictions verificada/criada');
+
+        // Carregar restrições do banco AQUI (após tabela garantida)
+        try {
+            const globalResult = await query("SELECT restrictions FROM device_restrictions WHERE device_id = '__global__'");
+            if (globalResult.rows.length > 0) {
+                globalRestrictions = globalResult.rows[0].restrictions;
+            }
+            const perDeviceResult = await query("SELECT device_id, restrictions FROM device_restrictions WHERE device_id != '__global__'");
+            for (const row of perDeviceResult.rows) {
+                perDeviceRestrictions[row.device_id] = row.restrictions;
+            }
+            console.log('✅ Restrições carregadas do banco', { global: !!globalRestrictions, perDevice: Object.keys(perDeviceRestrictions).length });
+        } catch (e2) {
+            console.log('Restrições do banco não disponíveis, usando arquivo', e2.message);
+        }
+        // Criar tabela audit_logs
+        await query(`
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                action VARCHAR(100) NOT NULL,
+                target_type VARCHAR(50),
+                target_id VARCHAR(255),
+                target_name VARCHAR(255),
+                details JSONB DEFAULT '{}',
+                user_agent VARCHAR(500),
+                ip_address VARCHAR(50),
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        `);
+        // Garantir que colunas target_type e target_name existam (tabela pode ter sido criada com schema antigo)
+        await query(`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_type VARCHAR(50)`).catch(() => {});
+        await query(`ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS target_name VARCHAR(255)`).catch(() => {});
+        console.log('✅ Tabela audit_logs verificada/criada');
+    } catch (e) {
+        console.error('❌ Falha ao garantir tabelas de schema:', e.message);
+    }
+}
+
+ensureAdminUsersSchema();
+// ==================== End JWT Auth ====================
 
 // Função para obter IP público da rede
 let cachedPublicIp = null;
@@ -79,7 +237,7 @@ async function getPublicIp() {
  */
 async function getApkUrlForAnyNetwork() {
     // 1. URL pública configurada (domínio, IP público, ngrok, etc.)
-    const publicBase = process.env.MDM_PUBLIC_URL;
+    const publicBase = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL;
     if (publicBase && publicBase.trim()) {
         const base = publicBase.trim().replace(/\/$/, '');
         const apkUrl = `${base}/apk/mdm.apk`;
@@ -123,17 +281,19 @@ async function getApkUrlForAnyNetwork() {
 /** URL do WebSocket para clientes conectarem (celular e web na mesma rede WiFi) */
 async function getWebSocketUrlForClients() {
     const port = process.env.WEBSOCKET_PORT || '3001';
-    const protocol = process.env.MDM_PUBLIC_URL?.startsWith('https') ? 'wss' : 'ws';
-    // 1. WEBSOCKET_CLIENT_HOST ou WEBSOCKET_HOST (IP real) - prioridade para mesma rede
+    const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL;
+    const protocol = publicUrl?.startsWith('https') ? 'wss' : 'ws';
+    // 1. URL pública tem prioridade (funciona de qualquer rede/WiFi)
+    if (publicUrl) {
+        try {
+            const u = new URL(publicUrl);
+            return `${protocol}://${u.hostname}:${port}`;
+        } catch (_) {}
+    }
+    // 2. WEBSOCKET_CLIENT_HOST ou WEBSOCKET_HOST (IP real) - mesma rede
     const envHost = process.env.WEBSOCKET_CLIENT_HOST || process.env.WEBSOCKET_HOST;
     if (envHost && !['localhost', '127.0.0.1', '0.0.0.0'].includes(envHost)) {
         return `ws://${envHost}:${port}`;
-    }
-    if (process.env.MDM_PUBLIC_URL) {
-        try {
-            const u = new URL(process.env.MDM_PUBLIC_URL);
-            return `${protocol}://${u.hostname}:${port}`;
-        } catch (_) {}
     }
     // 2. Priorizar IP local 192.168.x.x (WiFi) sobre 172.x (WSL/Docker)
     const interfaces = os.networkInterfaces();
@@ -231,19 +391,119 @@ class ConfigurableLogger {
             debug: 3
         };
         this.currentLevel = this.levels[level] || this.levels.info;
+
+        // File logging configuration
+        this.logDir = path.join(__dirname, 'logs');
+        this.logFile = path.join(this.logDir, 'mdm-server.log');
+        this.maxFileSize = 10 * 1024 * 1024; // 10MB
+        this.maxFiles = 7;
+        this.fileLoggingEnabled = false;
+        this._currentDate = null;
+        this._writeStream = null;
+        this._initFileLogging();
     }
-    
+
+    _initFileLogging() {
+        try {
+            if (!fs.existsSync(this.logDir)) {
+                fs.mkdirSync(this.logDir, { recursive: true });
+            }
+            this._openStream();
+            this.fileLoggingEnabled = true;
+        } catch (err) {
+            console.warn('[Logger] Failed to initialize file logging:', err.message);
+        }
+    }
+
+    _openStream() {
+        if (this._writeStream) {
+            try { this._writeStream.end(); } catch (_) { /* ignore */ }
+        }
+        this._currentDate = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+        this._writeStream = fs.createWriteStream(this.logFile, { flags: 'a' });
+        this._writeStream.on('error', () => {
+            this.fileLoggingEnabled = false;
+        });
+    }
+
+    _shouldRotate() {
+        try {
+            const today = new Date().toISOString().slice(0, 10);
+            if (today !== this._currentDate) return true;
+            const stats = fs.statSync(this.logFile);
+            if (stats.size >= this.maxFileSize) return true;
+        } catch (_) {
+            // File may not exist yet, no rotation needed
+        }
+        return false;
+    }
+
+    _rotate() {
+        try {
+            if (this._writeStream) {
+                this._writeStream.end();
+                this._writeStream = null;
+            }
+            // Rename current log to timestamped file
+            if (fs.existsSync(this.logFile)) {
+                const timestamp = this._currentDate || new Date().toISOString().slice(0, 10);
+                const now = Date.now();
+                const rotatedName = path.join(this.logDir, `mdm-server-${timestamp}-${now}.log`);
+                fs.renameSync(this.logFile, rotatedName);
+            }
+            // Cleanup old files beyond maxFiles
+            this._cleanup();
+            // Open a fresh stream
+            this._openStream();
+            this.fileLoggingEnabled = true;
+        } catch (err) {
+            console.warn('[Logger] Log rotation failed:', err.message);
+            this.fileLoggingEnabled = false;
+        }
+    }
+
+    _cleanup() {
+        try {
+            const files = fs.readdirSync(this.logDir)
+                .filter(f => f.startsWith('mdm-server-') && f.endsWith('.log'))
+                .map(f => ({ name: f, time: fs.statSync(path.join(this.logDir, f)).mtimeMs }))
+                .sort((a, b) => b.time - a.time);
+
+            while (files.length > this.maxFiles) {
+                const oldest = files.pop();
+                fs.unlinkSync(path.join(this.logDir, oldest.name));
+            }
+        } catch (_) { /* ignore cleanup errors */ }
+    }
+
+    _writeToFile(line) {
+        if (!this.fileLoggingEnabled) return;
+        try {
+            if (this._shouldRotate()) {
+                this._rotate();
+            }
+            if (this._writeStream && !this._writeStream.destroyed) {
+                this._writeStream.write(line + '\n');
+            }
+        } catch (_) {
+            // Graceful fallback: file logging silently fails
+        }
+    }
+
     setLevel(level) {
         this.currentLevel = this.levels[level] || this.levels.info;
     }
-    
+
     log(level, message, data = {}) {
         if (this.levels[level] <= this.currentLevel) {
             const timestamp = new Date().toISOString();
-            console.log(`[${timestamp}] [${level.toUpperCase()}] ${message}`, data);
+            const logLine = `[${timestamp}] [${level.toUpperCase()}] ${message}`;
+            const dataStr = data && Object.keys(data).length > 0 ? ' ' + JSON.stringify(data) : '';
+            console.log(logLine, data);
+            this._writeToFile(logLine + dataStr);
         }
     }
-    
+
     error(message, data) { this.log('error', message, data); }
     warn(message, data) { this.log('warn', message, data); }
     info(message, data) { this.log('info', message, data); }
@@ -376,18 +636,172 @@ async function resolveOfflineAlert(deviceId) {
 }
 
 // Criar servidor HTTP para API REST
-const server = http.createServer((req, res) => {
+const server = http.createServer(async (req, res) => {
     // Configurar CORS
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    
+
+    // Security headers
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+
     if (req.method === 'OPTIONS') {
         res.writeHead(200);
         res.end();
         return;
     }
-    
+
+    // ==================== Auth API Routes ====================
+
+    // POST /api/auth/login
+    if (req.method === 'POST' && req.url === '/api/auth/login') {
+        const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket.remoteAddress;
+        if (isRateLimited(clientIp)) {
+            res.writeHead(429, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }));
+            return;
+        }
+        try {
+            const { username, password } = await parseBody(req);
+            if (!username || !password) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Usuário e senha são obrigatórios' }));
+                return;
+            }
+            const result = await query('SELECT * FROM admin_users WHERE username = $1', [username]);
+            if (result.rows.length === 0) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Credenciais inválidas' }));
+                return;
+            }
+            const user = result.rows[0];
+            const inputHash = hashPassword(password);
+            if (inputHash !== user.password_hash) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Credenciais inválidas' }));
+                return;
+            }
+            // Update last_login
+            await query('UPDATE admin_users SET last_login = NOW() WHERE id = $1', [user.id]);
+            const token = createJWT({ id: user.id, username: user.username, name: user.name, role: user.role });
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                token,
+                user: { id: user.id, username: user.username, name: user.name, role: user.role }
+            }));
+        } catch (e) {
+            console.error('Login error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Erro interno do servidor' }));
+        }
+        return;
+    }
+
+    // GET /api/auth/me
+    if (req.method === 'GET' && req.url === '/api/auth/me') {
+        const payload = authenticateRequest(req);
+        if (!payload) {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Token inválido ou expirado' }));
+            return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, user: { id: payload.id, username: payload.username, name: payload.name, role: payload.role } }));
+        return;
+    }
+
+    // POST /api/auth/users (admin only - create user)
+    if (req.method === 'POST' && req.url === '/api/auth/users') {
+        const payload = authenticateRequest(req);
+        if (!payload || payload.role !== 'admin') {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Não autorizado' }));
+            return;
+        }
+        try {
+            const { username, password, name, role } = await parseBody(req);
+            if (!username || !password || !name) {
+                res.writeHead(400, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'username, password e name são obrigatórios' }));
+                return;
+            }
+            const pwHash = hashPassword(password);
+            const result = await query(
+                'INSERT INTO admin_users (username, password_hash, name, role) VALUES ($1, $2, $3, $4) RETURNING id, username, name, role, created_at',
+                [username, pwHash, name, role || 'admin']
+            );
+            res.writeHead(201, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, user: result.rows[0] }));
+        } catch (e) {
+            if (e.code === '23505') { // unique violation
+                res.writeHead(409, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Usuário já existe' }));
+            } else {
+                console.error('Create user error:', e.message);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Erro interno do servidor' }));
+            }
+        }
+        return;
+    }
+
+    // GET /api/auth/users (admin only - list users)
+    if (req.method === 'GET' && req.url === '/api/auth/users') {
+        const payload = authenticateRequest(req);
+        if (!payload || payload.role !== 'admin') {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Não autorizado' }));
+            return;
+        }
+        try {
+            const result = await query('SELECT id, username, name, role, created_at, last_login FROM admin_users ORDER BY id');
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, users: result.rows }));
+        } catch (e) {
+            console.error('List users error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Erro interno do servidor' }));
+        }
+        return;
+    }
+
+    // DELETE /api/auth/users/:id (admin only - delete user)
+    const deleteUserMatch = req.method === 'DELETE' && req.url && req.url.match(/^\/api\/auth\/users\/(\d+)$/);
+    if (deleteUserMatch) {
+        const payload = authenticateRequest(req);
+        if (!payload || payload.role !== 'admin') {
+            res.writeHead(401, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Não autorizado' }));
+            return;
+        }
+        const userId = parseInt(deleteUserMatch[1], 10);
+        if (userId === payload.id) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Não é possível deletar o próprio usuário' }));
+            return;
+        }
+        try {
+            const result = await query('DELETE FROM admin_users WHERE id = $1', [userId]);
+            if (result.rowCount === 0) {
+                res.writeHead(404, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: 'Usuário não encontrado' }));
+                return;
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, message: 'Usuário deletado' }));
+        } catch (e) {
+            console.error('Delete user error:', e.message);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, error: 'Erro interno do servidor' }));
+        }
+        return;
+    }
+
+    // ==================== End Auth API Routes ====================
+
     // Rota para desbloquear dispositivo deletado (usado pelo add-device)
     const unblockMatch = req.method === 'POST' && req.url && req.url.match(/^\/api\/devices\/([^/]+)\/unblock$/);
     if (unblockMatch) {
@@ -444,17 +858,31 @@ const server = http.createServer((req, res) => {
             body += chunk.toString();
         });
         
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
-                const { deviceIds, apkUrl, version } = JSON.parse(body);
-                
+                const { deviceIds, apkUrl: rawApkUrl, version } = JSON.parse(body);
+
+                // Converter URLs relativas em absolutas para o celular conseguir baixar
+                let apkUrl = rawApkUrl;
+                if (rawApkUrl && (rawApkUrl.startsWith('/') || !rawApkUrl.startsWith('http'))) {
+                    // URL relativa como /api/download-apk → converter para URL absoluta
+                    const baseUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL;
+                    if (baseUrl) {
+                        apkUrl = `${baseUrl.replace(/\/$/, '')}${rawApkUrl.startsWith('/') ? rawApkUrl : '/' + rawApkUrl}`;
+                    } else {
+                        // Fallback: usar getApkUrlForAnyNetwork para APK padrão
+                        apkUrl = await getApkUrlForAnyNetwork();
+                    }
+                    console.log(`📡 URL relativa "${rawApkUrl}" convertida para "${apkUrl}"`);
+                }
+
                 console.log('═══════════════════════════════════════════════');
                 console.log('📥 HTTP API: Comando de atualização recebido');
-                console.log('═══════════════��═══════════════════════════════');
+                console.log('═══════════════════════════════════════════════');
                 console.log('Device IDs:', deviceIds);
                 console.log('APK URL:', apkUrl);
                 console.log('Version:', version);
-                
+
                 // Chamar função para enviar comando via WebSocket
                 const result = sendAppUpdateCommand(deviceIds, apkUrl, version || 'latest');
                 
@@ -516,6 +944,46 @@ const server = http.createServer((req, res) => {
         return;
     }
     
+    // Alias /api/download-apk → serve o mesmo APK de /apk/mdm.apk
+    if (path === '/api/download-apk' && req.method === 'GET') {
+        const pathMod = require('path');
+        const projectRoot = pathMod.resolve(__dirname, '..', '..');
+        const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+        const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
+        if (apkPath) {
+            const stat = fs.statSync(apkPath);
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+            res.setHeader('Content-Disposition', 'attachment; filename="mdm-launcher.apk"');
+            res.setHeader('Content-Length', String(stat.size));
+            fs.createReadStream(apkPath).pipe(res);
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'APK MDM não encontrado. Execute o build primeiro.' }));
+        }
+        return;
+    }
+
+    // Alias /api/download-wms → serve APK do WMS se existir
+    if (path === '/api/download-wms' && req.method === 'GET') {
+        const pathMod = require('path');
+        const projectRoot = pathMod.resolve(__dirname, '..', '..');
+        const wmsDebug = pathMod.join(projectRoot, 'wms-app', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+        const wmsRelease = pathMod.join(projectRoot, 'wms-app', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+        const apkPath = fs.existsSync(wmsRelease) ? wmsRelease : (fs.existsSync(wmsDebug) ? wmsDebug : null);
+        if (apkPath) {
+            const stat = fs.statSync(apkPath);
+            res.setHeader('Content-Type', 'application/vnd.android.package-archive');
+            res.setHeader('Content-Disposition', 'attachment; filename="wms-app.apk"');
+            res.setHeader('Content-Length', String(stat.size));
+            fs.createReadStream(apkPath).pipe(res);
+        } else {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'APK WMS não encontrado. Coloque o APK em wms-app/app/build/outputs/apk/' }));
+        }
+        return;
+    }
+
     // Retornar URL do APK MDM (acessível de qualquer rede se MDM_PUBLIC_URL ou IP público)
     if (path === '/api/apk-url' && req.method === 'GET') {
         (async () => {
@@ -525,6 +993,279 @@ const server = http.createServer((req, res) => {
                 res.end(JSON.stringify({ success: true, url: apkUrl }));
             } catch (err) {
                 console.error('Erro ao obter APK URL:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // Backup - salvar cópia no servidor
+    if (path === '/api/backup' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', () => {
+            try {
+                const { filename, data } = JSON.parse(body);
+                const pathMod = require('path');
+                const backupDir = pathMod.join(__dirname, '..', 'backups');
+                if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+                const filePath = pathMod.join(backupDir, filename);
+                fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+                console.log(`💾 Backup salvo: ${filePath}`);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, path: filePath, filename }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+
+    // Configuração persistente de wallpaper
+    if (path === '/api/config/wallpaper' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const { url } = JSON.parse(body);
+                await query(`CREATE TABLE IF NOT EXISTS system_config (key VARCHAR(100) PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT NOW())`);
+                await query(`INSERT INTO system_config (key, value, updated_at) VALUES ('wallpaper_url', $1, NOW()) ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`, [url || '']);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true }));
+            } catch (err) {
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        });
+        return;
+    }
+    if (path === '/api/config/wallpaper' && req.method === 'GET') {
+        (async () => {
+            try {
+                await query(`CREATE TABLE IF NOT EXISTS system_config (key VARCHAR(100) PRIMARY KEY, value TEXT, updated_at TIMESTAMP DEFAULT NOW())`);
+                const result = await query(`SELECT value FROM system_config WHERE key = 'wallpaper_url'`);
+                const url = result.rows.length > 0 ? result.rows[0].value : '';
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, url }));
+            } catch (err) {
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, url: '' }));
+            }
+        })();
+        return;
+    }
+
+    // QR Code com URL de download do APK MDM (simples - só baixa o app)
+    if (path === '/api/apk-qr-image' && req.method === 'GET') {
+        (async () => {
+            try {
+                const QRCode = require('qrcode');
+                const apkUrl = await getApkUrlForAnyNetwork();
+                const pngBuffer = await QRCode.toBuffer(apkUrl, {
+                    type: 'png',
+                    width: 400,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+                res.writeHead(200, {
+                    'Content-Type': 'image/png',
+                    'Content-Length': pngBuffer.length,
+                    'Cache-Control': 'no-cache'
+                });
+                res.end(pngBuffer);
+            } catch (err) {
+                console.error('Erro ao gerar APK QR:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // QR Code para factory reset remoto via deep link (mdmcenter://wipe)
+    if (path === '/api/wipe-qr-image' && req.method === 'GET') {
+        (async () => {
+            try {
+                const QRCode = require('qrcode');
+                const WIPE_SECRET = 'MDM_CENTER_WIPE_2026';
+                const ts = Date.now().toString();
+                const hmac = crypto.createHmac('sha256', WIPE_SECRET).update(ts).digest('hex');
+                const wipeUrl = `mdmcenter://wipe?token=${hmac}&ts=${ts}`;
+
+                const pngBuffer = await QRCode.toBuffer(wipeUrl, {
+                    type: 'png',
+                    width: 400,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+
+                res.writeHead(200, {
+                    'Content-Type': 'image/png',
+                    'Content-Length': pngBuffer.length,
+                    'Cache-Control': 'no-cache'
+                });
+                res.end(pngBuffer);
+            } catch (err) {
+                console.error('Erro ao gerar wipe QR:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // Checksum SHA-256 do APK (necessário para QR provisioning Android)
+    if (path === '/api/apk-checksum' && req.method === 'GET') {
+        (async () => {
+            try {
+                const pathMod = require('path');
+                const projectRoot = pathMod.resolve(__dirname, '..', '..');
+                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
+                if (!apkPath) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'APK não encontrado' }));
+                    return;
+                }
+                const fileBuffer = fs.readFileSync(apkPath);
+                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, checksum, algorithm: 'SHA-256', apkPath: apkPath.includes('release') ? 'release' : 'debug' }));
+            } catch (err) {
+                console.error('Erro ao calcular checksum:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // JSON de provisionamento Android (para QR Code de Device Owner)
+    if (path === '/api/provisioning-qr' && req.method === 'GET') {
+        (async () => {
+            try {
+                const url = require('url');
+                const params = new url.URL(req.url, `http://${req.headers.host}`).searchParams;
+                const wifiSsid = params.get('wifi_ssid') || '';
+                const wifiPassword = params.get('wifi_password') || '';
+                const wifiSecurity = params.get('wifi_security') || 'WPA';
+
+                // Obter URL do APK e checksum
+                const apkUrl = await getApkUrlForAnyNetwork();
+                const pathMod = require('path');
+                const projectRoot = pathMod.resolve(__dirname, '..', '..');
+                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
+                if (!apkPath) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'APK não encontrado para gerar checksum' }));
+                    return;
+                }
+                const fileBuffer = fs.readFileSync(apkPath);
+                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+
+                // Montar URL WebSocket (converter http→ws)
+                const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL || `http://localhost:${PORT}`;
+                const wsUrl = publicUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+
+                // Montar payload de provisionamento Android
+                const payload = {
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.mdm.launcher/.DeviceAdminReceiver',
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': apkUrl,
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM': checksum,
+                    'android.app.extra.PROVISIONING_SKIP_ENCRYPTION': true,
+                    'android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED': true,
+                    'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': {
+                        'server_url': wsUrl
+                    }
+                };
+
+                // Adicionar WiFi se fornecido
+                if (wifiSsid) {
+                    payload['android.app.extra.PROVISIONING_WIFI_SSID'] = wifiSsid;
+                    payload['android.app.extra.PROVISIONING_WIFI_PASSWORD'] = wifiPassword;
+                    payload['android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE'] = wifiSecurity;
+                    payload['android.app.extra.PROVISIONING_WIFI_HIDDEN'] = false;
+                }
+
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, payload, wsUrl, apkUrl }));
+            } catch (err) {
+                console.error('Erro ao gerar provisioning QR:', err);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: false, error: err.message }));
+            }
+        })();
+        return;
+    }
+
+    // Imagem QR Code de provisionamento (PNG gerado server-side)
+    if (path === '/api/provisioning-qr-image' && req.method === 'GET') {
+        (async () => {
+            try {
+                const QRCode = require('qrcode');
+                const url = require('url');
+                const params = new url.URL(req.url, `http://${req.headers.host}`).searchParams;
+                const wifiSsid = params.get('wifi_ssid') || '';
+                const wifiPassword = params.get('wifi_password') || '';
+                const wifiSecurity = params.get('wifi_security') || 'WPA';
+
+                // Obter URL do APK e checksum
+                const apkUrl = await getApkUrlForAnyNetwork();
+                const pathMod = require('path');
+                const projectRoot = pathMod.resolve(__dirname, '..', '..');
+                const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
+                const debugPath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'debug', 'app-debug.apk');
+                const apkPath = fs.existsSync(releasePath) ? releasePath : (fs.existsSync(debugPath) ? debugPath : null);
+                if (!apkPath) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: false, error: 'APK não encontrado' }));
+                    return;
+                }
+                const fileBuffer = fs.readFileSync(apkPath);
+                const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
+
+                const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL || `http://localhost:${PORT}`;
+                const wsUrl = publicUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+
+                const payload = {
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.mdm.launcher/.DeviceAdminReceiver',
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_DOWNLOAD_LOCATION': apkUrl,
+                    'android.app.extra.PROVISIONING_DEVICE_ADMIN_PACKAGE_CHECKSUM': checksum,
+                    'android.app.extra.PROVISIONING_SKIP_ENCRYPTION': true,
+                    'android.app.extra.PROVISIONING_LEAVE_ALL_SYSTEM_APPS_ENABLED': true,
+                    'android.app.extra.PROVISIONING_ADMIN_EXTRAS_BUNDLE': {
+                        'server_url': wsUrl
+                    }
+                };
+
+                if (wifiSsid) {
+                    payload['android.app.extra.PROVISIONING_WIFI_SSID'] = wifiSsid;
+                    payload['android.app.extra.PROVISIONING_WIFI_PASSWORD'] = wifiPassword;
+                    payload['android.app.extra.PROVISIONING_WIFI_SECURITY_TYPE'] = wifiSecurity;
+                    payload['android.app.extra.PROVISIONING_WIFI_HIDDEN'] = false;
+                }
+
+                const jsonStr = JSON.stringify(payload);
+                const pngBuffer = await QRCode.toBuffer(jsonStr, {
+                    type: 'png',
+                    width: 400,
+                    margin: 2,
+                    errorCorrectionLevel: 'M'
+                });
+
+                res.writeHead(200, {
+                    'Content-Type': 'image/png',
+                    'Content-Length': pngBuffer.length,
+                    'Cache-Control': 'no-cache'
+                });
+                res.end(pngBuffer);
+            } catch (err) {
+                console.error('Erro ao gerar QR image:', err);
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ success: false, error: err.message }));
             }
@@ -749,7 +1490,7 @@ const server = http.createServer((req, res) => {
         // Enviar restrições para dispositivos (todos, por grupo, ou selecionados) - SALVA E APLICA
         let body = '';
         req.on('data', chunk => { body += chunk.toString(); });
-        req.on('end', () => {
+        req.on('end', async () => {
             try {
                 const { restrictions, targetDeviceIds } = JSON.parse(body);
                 if (!restrictions || typeof restrictions !== 'object') {
@@ -770,6 +1511,33 @@ const server = http.createServer((req, res) => {
                     log.info('Restrições globais salvas');
                 }
                 saveRestrictionsToFile();
+
+                // Persistir restrições no banco de dados
+                try {
+                    if (Array.isArray(targetDeviceIds) && targetDeviceIds.length > 0) {
+                        for (const did of targetDeviceIds) {
+                            await query(
+                                `INSERT INTO device_restrictions (device_id, restrictions, is_global, updated_at)
+                                 VALUES ($1, $2, false, NOW())
+                                 ON CONFLICT (device_id) DO UPDATE SET restrictions = $2, is_global = false, updated_at = NOW()`,
+                                [did, JSON.stringify(restrictions)]
+                            );
+                        }
+                        log.info('Restrições per-device salvas no banco', { count: targetDeviceIds.length });
+                    } else {
+                        await query(
+                            `INSERT INTO device_restrictions (device_id, restrictions, is_global, updated_at)
+                             VALUES ('__global__', $1, true, NOW())
+                             ON CONFLICT (device_id) DO UPDATE SET restrictions = $1, is_global = true, updated_at = NOW()`,
+                            [JSON.stringify(restrictions)]
+                        );
+                        // Limpar restrições per-device do banco quando aplicando global
+                        await query(`DELETE FROM device_restrictions WHERE device_id != '__global__'`);
+                        log.info('Restrições globais salvas no banco');
+                    }
+                } catch (dbErr) {
+                    log.error('Erro ao salvar restrições no banco', { error: dbErr.message });
+                }
 
                 // Determinar quais dispositivos enviar
                 let targetEntries;
@@ -870,6 +1638,37 @@ const server = http.createServer((req, res) => {
                     } else {
                         applyAppPermissionsToDevice(deviceId, allowedApps);
                     }
+                } else if (path.includes('/update-info')) {
+                    // Atualizar campos manuais do dispositivo (NF, data de compra)
+                    // purchaseDate só pode ser definida UMA vez (não permite sobrescrever)
+                    const existing = await query('SELECT nf_key, purchase_date FROM devices WHERE device_id = $1', [deviceId]);
+                    const existingRow = existing.rows[0] || {};
+                    const updates = [];
+                    const values = [];
+                    let paramIdx = 1;
+                    if (data.nfKey !== undefined) {
+                        updates.push(`nf_key = $${paramIdx++}`);
+                        values.push(data.nfKey || null);
+                    }
+                    if (data.purchaseDate !== undefined && !existingRow.purchase_date) {
+                        updates.push(`purchase_date = $${paramIdx++}`);
+                        values.push(data.purchaseDate || null);
+                    }
+                    if (updates.length > 0) {
+                        values.push(deviceId);
+                        await query(`UPDATE devices SET ${updates.join(', ')}, updated_at = NOW() WHERE device_id = $${paramIdx}`, values);
+                        // Atualizar no cache em memória
+                        const cached = persistentDevices.get(deviceId);
+                        if (cached) {
+                            if (data.nfKey !== undefined) cached.nfKey = data.nfKey || null;
+                            if (data.purchaseDate !== undefined) cached.purchaseDate = data.purchaseDate || null;
+                            persistentDevices.set(deviceId, cached);
+                        }
+                        log.info('Info do dispositivo atualizada', { deviceId, nfKey: data.nfKey, purchaseDate: data.purchaseDate });
+                    }
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ success: true, message: 'Informações atualizadas' }));
+                    return;
                 } else if (path.includes('/apply-policies')) {
                     // Aplicar políticas: desabilitar bloqueio, bloquear Settings, restringir Quick Settings
                     const applyPoliciesMessage = { type: 'apply_device_policies', timestamp: Date.now() };
@@ -1143,6 +1942,39 @@ const server = http.createServer((req, res) => {
             }
         });
 
+    // Rota para buscar histórico de localização de um dispositivo
+    } else if (req.method === 'GET' && req.url && req.url.startsWith('/api/devices/') && req.url.endsWith('/location-history')) {
+        const match = req.url.match(/^\/api\/devices\/([^/]+)\/location-history/);
+        if (match) {
+            const deviceId = decodeURIComponent(match[1]);
+            try {
+                // Buscar device UUID pelo deviceId string
+                const deviceResult = await query(`SELECT id FROM devices WHERE device_id = $1 LIMIT 1`, [deviceId]);
+                if (deviceResult.rows.length === 0) {
+                    res.writeHead(404, { 'Content-Type': 'application/json' });
+                    res.end(JSON.stringify({ error: 'Dispositivo não encontrado' }));
+                    return;
+                }
+                const dbId = deviceResult.rows[0].id;
+                const locationResult = await query(`
+                    SELECT latitude, longitude, created_at
+                    FROM device_locations
+                    WHERE device_id = $1
+                    ORDER BY created_at DESC
+                    LIMIT 200
+                `, [dbId]);
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ success: true, locations: locationResult.rows }));
+            } catch (error) {
+                log.error('Erro ao buscar histórico de localização', { error: error.message });
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ error: error.message }));
+            }
+        } else {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'URL inválida' }));
+        }
+
     } else {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ error: 'Endpoint não encontrado' }));
@@ -1173,6 +2005,8 @@ const deletedDeviceIds = new Set();
 async function ensureDeletedDevicesSchema() {
     try {
         await query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;`);
+        await query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS nf_key VARCHAR(255);`);
+        await query(`ALTER TABLE devices ADD COLUMN IF NOT EXISTS purchase_date DATE;`);
         // Tabela persistente para bloquear reconexão de dispositivos deletados
         await query(`
             CREATE TABLE IF NOT EXISTS deleted_devices (
@@ -1268,32 +2102,48 @@ async function loadDevicesFromDatabase() {
         if (deviceIds.length > 0) {
             try {
                 const locationResult = await query(`
-                    SELECT DISTINCT ON (device_id) 
-                        device_id, latitude, longitude, created_at
+                    SELECT DISTINCT ON (device_id)
+                        device_id, latitude, longitude, accuracy, provider, address, created_at
                     FROM device_locations
                     WHERE device_id = ANY($1::uuid[])
                     ORDER BY device_id, created_at DESC
                 `, [deviceIds]);
-                
+
+                // Construir mapa de id interno → última localização
+                const locationMap = new Map();
                 locationResult.rows.forEach(row => {
                     locationCache.set(row.device_id, row.latitude, row.longitude, row.created_at);
+                    locationMap.set(row.device_id, row);
                 });
-                
-                log.debug('Cache de localização inicializado', { 
-                    locationsLoaded: locationResult.rows.length 
+
+                log.debug('Cache de localização inicializado', {
+                    locationsLoaded: locationResult.rows.length
+                });
+
+                // Injetar última localização nos devices para que offline apareçam no mapa
+                devices.forEach(device => {
+                    const loc = locationMap.get(device.id);
+                    if (loc) {
+                        device.latitude = parseFloat(loc.latitude);
+                        device.longitude = parseFloat(loc.longitude);
+                        device.locationAccuracy = loc.accuracy ? parseFloat(loc.accuracy) : null;
+                        device.locationProvider = loc.provider || null;
+                        device.address = loc.address || device.address || null;
+                        device.lastLocationUpdate = loc.created_at;
+                    }
                 });
             } catch (error) {
                 log.warn('Erro ao carregar cache de localização (não crítico)', { error: error.message });
             }
         }
-        
+
         // Converter array para Map para compatibilidade
         devices.forEach(device => {
             if (!device.deviceId || device.deviceId === 'null' || device.deviceId === 'undefined') {
                 log.warn('DeviceId inválido encontrado', { deviceId: device.deviceId });
                 return; // Pular dispositivos com deviceId inválido
             }
-            
+
             persistentDevices.set(device.deviceId, device);
         });
         
@@ -1505,8 +2355,33 @@ console.log('Tamanho:', globalAdminPassword ? globalAdminPassword.length : 0);
 // Carregar restrições salvas na inicialização
 loadRestrictionsFromFile();
 
+// Restrições do banco são carregadas dentro de ensureAdminUsersSchema() (após criar tabela)
+
 // Limpar dados existentes com valores null
 cleanInstalledAppsData();
+
+// Verificação periódica de compliance de dispositivos (a cada 5 minutos)
+setInterval(async () => {
+    const now = Date.now();
+    for (const [deviceId, device] of connectedDevices.entries()) {
+        const lastSeen = device.lastHeartbeat || device.connectedAt || 0;
+        const offlineMinutes = (now - lastSeen) / 60000;
+        // If device has been offline for more than 2 hours, log compliance violation
+        if (offlineMinutes > 120 && !device.isOnline) {
+            try {
+                await query(
+                    `INSERT INTO audit_logs (action, target_type, target_id, target_name, details)
+                     VALUES ($1, $2, $3, $4, $5)
+                     ON CONFLICT DO NOTHING`,
+                    ['compliance_violation', 'device', deviceId, device.deviceName || deviceId,
+                     JSON.stringify({ reason: 'offline_exceeded', minutes: Math.round(offlineMinutes) })]
+                );
+            } catch (e) {
+                // Silencioso - não interromper o loop
+            }
+        }
+    }
+}, 5 * 60 * 1000);
 
 wss.on('connection', ws => {
     serverStats.totalConnections++;
@@ -1884,6 +2759,7 @@ async function handleMessage(ws, data) {
             });
             break;
         case 'update_app_error':
+            console.error('❌ UPDATE_APP_ERROR do dispositivo:', data.deviceId, '- Erro:', data.error);
             notifyWebClients({
                 type: 'update_app_error',
                 deviceId: data.deviceId,
@@ -1896,6 +2772,9 @@ async function handleMessage(ws, data) {
             break;
         case 'reboot_device':
             handleRebootDevice(ws, data);
+            break;
+        case 'revert_device':
+            handleRevertDevice(ws, data);
             break;
         case 'lock_device':
             handleLockDevice(ws, data);
@@ -2343,7 +3222,21 @@ persistentDevices.set(deviceId, deviceData);
     }
 
     // ✅ AUTO-APLICAR RESTRIÇÕES salvas ao dispositivo que conectou/reconectou
-    const savedRestrictions = getRestrictionsForDevice(deviceId);
+    let savedRestrictions = getRestrictionsForDevice(deviceId);
+    // Enhanced: try DB if memory doesn't have restrictions
+    if (!savedRestrictions) {
+        try {
+            const dbResult = await query(
+                "SELECT restrictions FROM device_restrictions WHERE device_id = $1 OR device_id = '__global__' ORDER BY CASE WHEN device_id = $1 THEN 0 ELSE 1 END LIMIT 1",
+                [deviceId]
+            );
+            if (dbResult.rows.length > 0) {
+                savedRestrictions = dbResult.rows[0].restrictions;
+            }
+        } catch (e) {
+            // Fallback silencioso - sem restrições do banco
+        }
+    }
     if (savedRestrictions && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({
             type: 'set_device_restrictions',
@@ -3757,6 +4650,29 @@ function handleWakeDevice(ws, data) {
         message: 'Dispositivo não conectado. Verifique se o celular está online e na mesma rede.'
     });
     return { success: false, error: 'Dispositivo não conectado' };
+}
+
+function handleRevertDevice(ws, data) {
+    const { deviceId } = data;
+    const deviceWs = connectedDevices.get(deviceId);
+    if (deviceWs && deviceWs.readyState === WebSocket.OPEN) {
+        deviceWs.send(JSON.stringify({ type: 'revert_device', timestamp: Date.now() }));
+        log.info('Comando revert_device enviado', { deviceId, connectionId: ws.connectionId });
+        notifyWebClients({
+            type: 'revert_device_result',
+            success: true,
+            deviceId,
+            message: 'Comando de reversão enviado. O MDM será removido e o celular voltará ao normal.'
+        });
+    } else {
+        log.warn('Dispositivo não conectado para reverter', { deviceId });
+        notifyWebClients({
+            type: 'revert_device_result',
+            success: false,
+            deviceId,
+            message: 'Dispositivo não conectado. O celular precisa estar online para reverter.'
+        });
+    }
 }
 
 // enviar comando de formatação (factory reset) ao dispositivo

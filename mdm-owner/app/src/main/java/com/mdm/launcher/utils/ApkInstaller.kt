@@ -92,6 +92,59 @@ object ApkInstaller {
             Log.d(TAG, "APK baixado: ${tempFile!!.absolutePath} (${tempFile!!.length()} bytes)")
             onProgress?.invoke(80)
 
+            // Verificar se o APK baixado é válido e obter info do pacote
+            val apkInfo = context.packageManager.getPackageArchiveInfo(tempFile!!.absolutePath, 0)
+            if (apkInfo == null) {
+                val error = "Arquivo baixado não é um APK válido (pode ser uma página de erro HTML)"
+                Log.e(TAG, error)
+                showToast(context, error)
+                onComplete?.invoke(false, error)
+                try { tempFile?.delete() } catch (_: Exception) {}
+                return@withContext
+            }
+            Log.d(TAG, "APK válido: ${apkInfo.packageName} v${apkInfo.versionName} (code: ${apkInfo.longVersionCode})")
+
+            // Se é o próprio app MDM, verificar se a assinatura é compatível
+            if (apkInfo.packageName == context.packageName) {
+                Log.d(TAG, "Auto-atualização detectada: atualizando ${context.packageName}")
+                try {
+                    val currentSigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                            .signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() } ?: emptyList()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.packageManager.getPackageInfo(context.packageName, android.content.pm.PackageManager.GET_SIGNATURES)
+                            .signatures?.map { it.toByteArray().contentHashCode() } ?: emptyList()
+                    }
+
+                    val newPkgInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        context.packageManager.getPackageArchiveInfo(tempFile!!.absolutePath, android.content.pm.PackageManager.GET_SIGNING_CERTIFICATES)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        context.packageManager.getPackageArchiveInfo(tempFile!!.absolutePath, android.content.pm.PackageManager.GET_SIGNATURES)
+                    }
+
+                    val newSigs = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        newPkgInfo?.signingInfo?.apkContentsSigners?.map { it.toByteArray().contentHashCode() } ?: emptyList()
+                    } else {
+                        @Suppress("DEPRECATION")
+                        newPkgInfo?.signatures?.map { it.toByteArray().contentHashCode() } ?: emptyList()
+                    }
+
+                    if (currentSigs.isNotEmpty() && newSigs.isNotEmpty() && currentSigs != newSigs) {
+                        val error = "Assinatura do APK diferente da versão instalada. Recompile o APK com a mesma keystore (debug/release) usada na instalação original."
+                        Log.e(TAG, error)
+                        showToast(context, error)
+                        onComplete?.invoke(false, error)
+                        try { tempFile?.delete() } catch (_: Exception) {}
+                        return@withContext
+                    }
+                    Log.d(TAG, "Assinaturas compatíveis, prosseguindo com auto-atualização")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Não foi possível verificar assinatura, tentando instalar mesmo assim: ${e.message}")
+                }
+            }
+
             onProgress?.invoke(85)
             val installError = installApk(context, tempFile!!, dpm, componentName)
 
@@ -218,12 +271,23 @@ object ApkInstaller {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 val packageInstaller = context.packageManager.packageInstaller
 
+                // Abandonar sessões antigas pendentes para evitar conflitos
+                for (info in packageInstaller.mySessions) {
+                    try {
+                        packageInstaller.abandonSession(info.sessionId)
+                        Log.d(TAG, "Sessão antiga abandonada: ${info.sessionId}")
+                    } catch (_: Exception) {}
+                }
+
                 val sessionParams = PackageInstaller.SessionParams(
                     PackageInstaller.SessionParams.MODE_FULL_INSTALL
                 ).apply {
                     setSize(apkFile.length())
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        setInstallReason(android.content.pm.PackageManager.INSTALL_REASON_POLICY)
                     }
                 }
 

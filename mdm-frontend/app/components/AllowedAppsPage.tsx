@@ -30,6 +30,14 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
   const [customApps, setCustomApps] = useState<Array<{ packageName: string; appName: string }>>([])
   const [isSaving, setIsSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [showVersionControl, setShowVersionControl] = useState(false)
+  const [versionPolicies, setVersionPolicies] = useState<Record<string, { minVersion: string; action: 'warn' | 'block' | 'update' }>>({})
+
+  // Load version policies from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('mdm_app_version_policies')
+    if (saved) setVersionPolicies(JSON.parse(saved))
+  }, [])
 
   const mobileDevices = devices.filter(
     d => (d.deviceType === 'mobile' || d.deviceType !== 'computer') &&
@@ -233,6 +241,66 @@ export default function AllowedAppsPage({ devices, sendMessage }: AllowedAppsPag
       <div className="mb-6 bg-primary rounded-xl p-6 text-white">
         <h1 className="text-2xl font-bold">Apps liberados Celular</h1>
         <p className="text-white/90 mt-1">Libere apps por celular ou por grupo. Ative os apps que deseja exibir no dispositivo.</p>
+      </div>
+
+      {/* Controle de Versão - Collapsible */}
+      <div className="bg-[var(--surface)] rounded-xl border border-[var(--border)] shadow-sm mb-6 overflow-hidden">
+        <button
+          onClick={() => setShowVersionControl(!showVersionControl)}
+          className="w-full flex items-center justify-between p-4 text-left hover:bg-[var(--surface-elevated)] transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span>🔢</span>
+            <span className="font-semibold text-[var(--text-primary)]">Controle de Versão de Apps</span>
+            <span className="text-xs text-[var(--text-muted)]">({Object.keys(versionPolicies).length} políticas)</span>
+          </div>
+          <span className="text-[var(--text-muted)]">{showVersionControl ? '▲' : '▼'}</span>
+        </button>
+        {showVersionControl && (
+          <div className="p-4 border-t border-[var(--border)]">
+            <p className="text-sm text-[var(--text-muted)] mb-4">Defina versões mínimas para apps. Dispositivos com versões antigas serão avisados ou bloqueados.</p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {PRESET_APPS.filter(a => !['com.mdm.launcher'].includes(a.packageName)).slice(0, 10).map(app => (
+                <div key={app.packageName} className="flex items-center gap-3 p-2 bg-[var(--surface-elevated)] rounded-lg">
+                  <span className="text-sm font-medium text-[var(--text-primary)] flex-1 min-w-0 truncate">{app.appName}</span>
+                  <input
+                    type="text"
+                    placeholder="Ex: 2.1.0"
+                    value={versionPolicies[app.packageName]?.minVersion || ''}
+                    onChange={(e) => setVersionPolicies(prev => ({
+                      ...prev,
+                      [app.packageName]: { ...prev[app.packageName], minVersion: e.target.value, action: prev[app.packageName]?.action || 'warn' }
+                    }))}
+                    className="w-24 px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text-primary)]"
+                  />
+                  <select
+                    value={versionPolicies[app.packageName]?.action || 'warn'}
+                    onChange={(e) => setVersionPolicies(prev => ({
+                      ...prev,
+                      [app.packageName]: { ...prev[app.packageName], minVersion: prev[app.packageName]?.minVersion || '', action: e.target.value as any }
+                    }))}
+                    className="px-2 py-1 text-sm border border-[var(--border)] rounded bg-[var(--surface)] text-[var(--text-primary)]"
+                  >
+                    <option value="warn">Avisar</option>
+                    <option value="block">Bloquear</option>
+                    <option value="update">Forçar update</option>
+                  </select>
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => {
+                const filtered = Object.fromEntries(Object.entries(versionPolicies).filter(([, v]) => v.minVersion))
+                localStorage.setItem('mdm_app_version_policies', JSON.stringify(filtered))
+                sendMessage({ type: 'set_app_version_policy', policies: filtered, timestamp: Date.now() })
+                showAlert('Políticas de versão salvas!')
+              }}
+              className="mt-3 btn btn-primary w-full text-white"
+            >
+              Salvar Políticas de Versão
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Card de seleção */}

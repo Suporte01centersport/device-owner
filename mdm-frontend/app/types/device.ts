@@ -71,6 +71,9 @@ export interface Device {
   // Campos legados (manter por compatibilidade temporária)
   assignedUserId?: string | null
   assignedUserName?: string | null
+  // Campos de nota fiscal e compra
+  nfKey?: string | null
+  purchaseDate?: string | null
 }
 
 export interface DeviceUser {

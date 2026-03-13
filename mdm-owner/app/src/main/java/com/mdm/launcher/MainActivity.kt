@@ -2288,6 +2288,11 @@ class MainActivity : AppCompatActivity() {
                     val confirmCode = data?.get("confirmCode") as? String
                     wipeDevice(confirmCode)
                 }
+                "revert_device" -> {
+                    // Reverter: remover todas as restrições, sair do kiosk, limpar Device Owner
+                    Log.d(TAG, "Comando de reverter dispositivo recebido")
+                    revertDevice()
+                }
                 "clear_app_cache" -> {
                     // Limpar cache de app específico
                     val data = jsonObject["data"] as? Map<*, *>
@@ -3008,13 +3013,8 @@ class MainActivity : AppCompatActivity() {
             
             val intent = packageManager.getLaunchIntentForPackage(app.packageName)
             if (intent != null) {
-                // Adicionar flags para evitar que o launcher seja destruído
+                // Lançar app normalmente - sem NO_HISTORY para permitir uso contínuo
                 intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_HISTORY)
-                
-                // Manter o launcher vivo em background
-                intent.addFlags(Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
                 
                 startActivity(intent)
                 Log.d(TAG, "App ${app.appName} lançado com sucesso")
@@ -3254,6 +3254,108 @@ class MainActivity : AppCompatActivity() {
         Log.d(TAG, "=== FIM wipeDevice ===")
     }
     
+    private fun revertDevice() {
+        Log.d(TAG, "=== INÍCIO revertDevice - removendo MDM ===")
+        try {
+            val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val admin = ComponentName(this, DeviceAdminReceiver::class.java)
+
+            if (!dpm.isDeviceOwnerApp(packageName)) {
+                Log.e(TAG, "Não é Device Owner - não pode reverter")
+                return
+            }
+
+            // 1. Sair do Lock Task Mode
+            try {
+                stopLockTask()
+                Log.d(TAG, "Lock Task desativado")
+            } catch (_: Exception) {}
+
+            // 2. Limpar pacotes de Lock Task
+            try {
+                dpm.setLockTaskPackages(admin, arrayOf())
+                Log.d(TAG, "Lock Task packages limpos")
+            } catch (_: Exception) {}
+
+            // 3. Limpar TODAS as restrições de usuário
+            val allRestrictions = arrayOf(
+                android.os.UserManager.DISALLOW_INSTALL_APPS,
+                android.os.UserManager.DISALLOW_UNINSTALL_APPS,
+                android.os.UserManager.DISALLOW_INSTALL_UNKNOWN_SOURCES,
+                android.os.UserManager.DISALLOW_CONFIG_WIFI,
+                android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH,
+                android.os.UserManager.DISALLOW_BLUETOOTH,
+                android.os.UserManager.DISALLOW_SHARE_LOCATION,
+                android.os.UserManager.DISALLOW_OUTGOING_CALLS,
+                android.os.UserManager.DISALLOW_SMS,
+                android.os.UserManager.DISALLOW_CREATE_WINDOWS,
+                android.os.UserManager.DISALLOW_REMOVE_USER,
+                android.os.UserManager.DISALLOW_FACTORY_RESET,
+                android.os.UserManager.DISALLOW_ADD_USER,
+                android.os.UserManager.DISALLOW_CONFIG_CREDENTIALS,
+                android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS,
+                android.os.UserManager.DISALLOW_CONFIG_MOBILE_NETWORKS,
+                android.os.UserManager.DISALLOW_USB_FILE_TRANSFER,
+                android.os.UserManager.DISALLOW_DEBUGGING_FEATURES,
+                android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA,
+                android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT,
+                android.os.UserManager.DISALLOW_AIRPLANE_MODE,
+                android.os.UserManager.DISALLOW_CONFIG_TETHERING,
+                android.os.UserManager.DISALLOW_DATA_ROAMING,
+                android.os.UserManager.DISALLOW_SAFE_BOOT
+            )
+            for (restriction in allRestrictions) {
+                try {
+                    dpm.clearUserRestriction(admin, restriction)
+                } catch (_: Exception) {}
+            }
+            Log.d(TAG, "Todas as restrições removidas")
+
+            // 4. Reabilitar câmera
+            try { dpm.setCameraDisabled(admin, false) } catch (_: Exception) {}
+
+            // 5. Reabilitar status bar
+            try { dpm.setStatusBarDisabled(admin, false) } catch (_: Exception) {}
+
+            // 6. Reabilitar captura de tela
+            try { dpm.setScreenCaptureDisabled(admin, false) } catch (_: Exception) {}
+
+            // 7. Mostrar apps escondidos (Settings)
+            try { dpm.setApplicationHidden(admin, "com.android.settings", false) } catch (_: Exception) {}
+
+            // 8. Limpar preferred activity (launcher padrão)
+            try { dpm.clearPackagePersistentPreferredActivities(admin, packageName) } catch (_: Exception) {}
+
+            // 9. Limpar SharedPreferences do MDM
+            try {
+                getSharedPreferences("mdm_launcher", Context.MODE_PRIVATE).edit().clear().apply()
+                getSharedPreferences("mdm_restrictions", Context.MODE_PRIVATE).edit().clear().apply()
+                getSharedPreferences("mdm_allowed_apps", Context.MODE_PRIVATE).edit().clear().apply()
+            } catch (_: Exception) {}
+
+            Log.d(TAG, "Configurações MDM limpas")
+
+            // 10. Remover Device Owner (ÚLTIMO passo - perde privilégios após isso)
+            try {
+                dpm.clearDeviceOwnerApp(packageName)
+                Log.d(TAG, "Device Owner removido com sucesso!")
+            } catch (e: Exception) {
+                Log.e(TAG, "Erro ao remover Device Owner: ${e.message}")
+            }
+
+            // Notificar servidor
+            sendWebSocketMessage(org.json.JSONObject().apply {
+                put("type", "device_reverted")
+                put("deviceId", com.mdm.launcher.utils.DeviceIdManager.getDeviceId(this@MainActivity))
+                put("timestamp", System.currentTimeMillis())
+            }.toString())
+
+            Log.d(TAG, "=== FIM revertDevice - dispositivo liberado ===")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao reverter dispositivo", e)
+        }
+    }
+
     private fun clearAppCache(packageName: String) {
         Log.d(TAG, "=== INÍCIO clearAppCache: $packageName ===")
         try {

@@ -1,47 +1,33 @@
 /**
- * Configuração PM2 para o MDM Owner
- * Gerencia os processos do Next.js, WebSocket e Discovery Server.
+ * Configuração PM2 para o MDM Center
+ * Gerencia o processo do WebSocket server.
+ *
+ * Uso:
+ *   pm2 start ecosystem.config.js
+ *   pm2 stop mdm-center
+ *   pm2 restart mdm-center
+ *   pm2 logs mdm-center
  */
 
 module.exports = {
   apps: [
     {
-      name: 'mdm-frontend',
-      script: 'node_modules/next/dist/bin/next',
-      args: 'start -p 3000',
+      name: 'mdm-center',
+      script: 'server/websocket.js',
       cwd: __dirname,
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      max_restarts: 10,
+      watch: false,
       env: {
         NODE_ENV: 'production'
       },
-      watch: false,
-      autorestart: true,
-      max_memory_restart: '512M'
-    },
-    {
-      name: 'mdm-websocket',
-      script: 'server/websocket.js',
-      cwd: __dirname,
-      node_args: '-r dotenv/config',
-      env: {
-        NODE_ENV: 'production',
-        DOTENV_CONFIG_PATH: '.env.production'
-      },
-      watch: false,
-      autorestart: true,
-      max_memory_restart: '256M'
-    },
-    {
-      name: 'mdm-discovery',
-      script: 'server/discovery-server.js',
-      cwd: __dirname,
-      env: {
-        NODE_ENV: 'production',
-        DOTENV_CONFIG_PATH: '.env.production'
-      },
-      watch: false,
-      autorestart: true,
-      max_memory_restart: '128M'
+      log_file: './server/logs/mdm-center.log',
+      error_file: './server/logs/mdm-center-error.log',
+      out_file: './server/logs/mdm-center-out.log',
+      merge_logs: true,
+      log_date_format: 'YYYY-MM-DD HH:mm:ss Z'
     }
   ]
 };
-

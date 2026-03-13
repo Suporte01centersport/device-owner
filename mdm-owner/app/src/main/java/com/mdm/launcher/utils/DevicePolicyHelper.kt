@@ -10,6 +10,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import com.mdm.launcher.DeviceAdminReceiver
+import com.mdm.launcher.data.DeviceRestrictions
 
 /**
  * Helper para aplicar políticas de Device Owner.
@@ -91,7 +92,17 @@ object DevicePolicyHelper {
             liberateWifiBluetooth(context)
             disableLockScreen(context)
             setScreenTimeout(context, SCREEN_TIMEOUT_MS)
-            blockSettingsAccess(context)
+            // Settings: verificar restrição salva antes de bloquear
+            val savedRestrictions = context.getSharedPreferences("mdm_restrictions", Context.MODE_PRIVATE)
+                .getString("restrictions_json", null)
+            val settingsBlocked = if (savedRestrictions != null) {
+                try { org.json.JSONObject(savedRestrictions).optBoolean("settingsDisabled", true) } catch (_: Exception) { true }
+            } else true
+            if (settingsBlocked) {
+                blockSettingsAccess(context)
+            } else {
+                Log.d(TAG, "Settings liberado conforme restrições salvas")
+            }
             restrictQuickSettingsTiles(context)
             blockCredentialConfig(context)
             // Habilitar status bar + Quick Settings no Lock Task Mode (WiFi/Bluetooth acessíveis)
@@ -340,7 +351,7 @@ object DevicePolicyHelper {
 
     /**
      * Restringe Quick Settings a: brilho, wifi, bluetooth, lanterna.
-     * Desabilita o lápis (editar) para impedir adicionar mais periféricos.
+     * Bloqueia: engrenagem (settings), lápis (editar), power, conta de usuário.
      * Data, horário e bateria ficam no header (barra de status).
      */
     fun restrictQuickSettingsTiles(context: Context) {
@@ -351,20 +362,22 @@ object DevicePolicyHelper {
             Log.d(TAG, "Quick Settings restritos a: $tiles")
 
             // Desabilitar botão lápis (editar) - impede adicionar mais tiles
-            try {
-                Settings.Secure.putInt(context.contentResolver, "sysui_qs_edit", 0)
-                Log.d(TAG, "Botão editar Quick Settings desabilitado")
-            } catch (_: Exception) {}
-            try {
-                Settings.Secure.putInt(context.contentResolver, "qs_show_edit", 0)
-                Log.d(TAG, "qs_show_edit desabilitado")
-            } catch (_: Exception) {}
+            try { Settings.Secure.putInt(context.contentResolver, "sysui_qs_edit", 0) } catch (_: Exception) {}
+            try { Settings.Secure.putInt(context.contentResolver, "qs_show_edit", 0) } catch (_: Exception) {}
+
+            // Desabilitar engrenagem (Settings) no header dos Quick Settings
+            try { Settings.Secure.putInt(context.contentResolver, "qs_show_settings", 0) } catch (_: Exception) {}
+            // Esconder ícone de conta/usuário no header
+            try { Settings.Secure.putInt(context.contentResolver, "qs_show_user", 0) } catch (_: Exception) {}
+            try { Settings.Secure.putInt(context.contentResolver, "sysui_qs_user_detail", 0) } catch (_: Exception) {}
+            // Esconder botão power no Quick Settings
+            try { Settings.Secure.putInt(context.contentResolver, "qs_show_power", 0) } catch (_: Exception) {}
+            try { Settings.Global.putInt(context.contentResolver, "power_menu_disabled", 1) } catch (_: Exception) {}
+
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                try {
-                    Settings.Global.putInt(context.contentResolver, "qs_edit_icon_visible", 0)
-                    Log.d(TAG, "qs_edit_icon_visible desabilitado")
-                } catch (_: Exception) {}
+                try { Settings.Global.putInt(context.contentResolver, "qs_edit_icon_visible", 0) } catch (_: Exception) {}
             }
+            Log.d(TAG, "Quick Settings restritos: tiles=$tiles, engrenagem/lápis/power/usuário bloqueados")
         } catch (e: Exception) {
             Log.e(TAG, "Erro ao restringir Quick Settings: ${e.message}")
         }
@@ -551,6 +564,184 @@ object DevicePolicyHelper {
             Log.d(TAG, "🔒 Lockdown concluído - apenas permissões do MDM ativas")
         } catch (e: Exception) {
             Log.e(TAG, "Erro no lockdown: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Aplica todas as restrições remotas recebidas do servidor MDM.
+     * Usa DevicePolicyManager para configurar restrições de UserManager, câmera, captura de tela, etc.
+     * Persiste as restrições em SharedPreferences para reaplicar após reboot.
+     */
+    fun applyRemoteRestrictions(context: Context, restrictions: DeviceRestrictions) {
+        try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            val adminComponent = ComponentName(context, DeviceAdminReceiver::class.java)
+            if (!dpm.isDeviceOwnerApp(context.packageName)) return
+
+            // Helper to set/clear restriction
+            fun setRestriction(restriction: String, disabled: Boolean) {
+                try {
+                    if (disabled) dpm.addUserRestriction(adminComponent, restriction)
+                    else dpm.clearUserRestriction(adminComponent, restriction)
+                } catch (e: Exception) {
+                    Log.w(TAG, "Restriction $restriction: ${e.message}")
+                }
+            }
+
+            // Camera
+            try { dpm.setCameraDisabled(adminComponent, restrictions.cameraDisabled) } catch (_: Exception) {}
+
+            // Screen capture
+            try { dpm.setScreenCaptureDisabled(adminComponent, restrictions.screenCaptureDisabled) } catch (_: Exception) {}
+
+            // Status bar
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                try { dpm.setStatusBarDisabled(adminComponent, restrictions.statusBarDisabled) } catch (_: Exception) {}
+            }
+
+            // UserManager restrictions mapping
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_WIFI, restrictions.wifiDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH, restrictions.bluetoothDisabled)
+            // Sempre limpar DISALLOW_BLUETOOTH - o filtro de pareamento é feito pelo BluetoothPairingReceiver
+            setRestriction(android.os.UserManager.DISALLOW_BLUETOOTH, false)
+            setRestriction(android.os.UserManager.DISALLOW_INSTALL_APPS, restrictions.installAppsDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_UNINSTALL_APPS, restrictions.uninstallAppsDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_SHARE_LOCATION, restrictions.sharingDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_OUTGOING_CALLS, restrictions.outgoingCallsDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_SMS, restrictions.smsDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_CREATE_WINDOWS, restrictions.userCreationDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_REMOVE_USER, restrictions.userRemovalDisabled)
+
+            // NEW restrictions
+            setRestriction(android.os.UserManager.DISALLOW_FACTORY_RESET, restrictions.factoryResetDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_ADD_USER, restrictions.addAccountDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA, restrictions.externalStorageDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_USB_FILE_TRANSFER, restrictions.usbDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_DEBUGGING_FEATURES, restrictions.developerOptionsDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_TETHERING, restrictions.hotspotDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_AIRPLANE_MODE, restrictions.airplaneModeDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_CONFIG_LOCATION, restrictions.locationDisabled)
+            setRestriction(android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS, restrictions.addAccountDisabled)
+
+            // NFC
+            if (restrictions.nfcDisabled) {
+                setRestriction(android.os.UserManager.DISALLOW_OUTGOING_BEAM, true)
+            }
+
+            // Bluetooth pairing - NÃO usar DISALLOW_BLUETOOTH pois bloqueia tudo (ligar/desligar/config)
+            // O filtro de pareamento é feito pelo BluetoothPairingReceiver no manifest
+            // que só permite dispositivos com "barcoder" no nome
+            // Aqui apenas garantimos que o Bluetooth fique LIBERADO para uso
+            if (restrictions.bluetoothPairingDisabled) {
+                // Liberar Bluetooth (ligar/desligar e configurações)
+                setRestriction(android.os.UserManager.DISALLOW_BLUETOOTH, false)
+                setRestriction(android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH, false)
+                Log.d(TAG, "Bluetooth liberado - pareamento filtrado pelo BluetoothPairingReceiver (só 'barcoder')")
+            }
+
+            // Auto time
+            if (restrictions.autoTimeRequired) {
+                try { dpm.setAutoTimeRequired(adminComponent, true) } catch (_: Exception) {}
+            }
+
+            // Settings access
+            if (restrictions.settingsDisabled) {
+                blockSettingsAccess(context)
+            } else {
+                // Desfazer bloqueio - mostrar Settings novamente
+                for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
+                    try { dpm.setApplicationHidden(adminComponent, pkg, false) } catch (_: Exception) {}
+                }
+                try { dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT) } catch (_: Exception) {}
+                Log.d(TAG, "Settings desbloqueado")
+            }
+
+            // System notifications - block via status bar notifications
+            if (restrictions.systemNotificationsDisabled) {
+                try { dpm.setPermittedAccessibilityServices(adminComponent, listOf()) } catch (_: Exception) {}
+            }
+
+            // Save to SharedPreferences for reboot persistence
+            val prefs = context.getSharedPreferences("mdm_restrictions", Context.MODE_PRIVATE)
+            val json = org.json.JSONObject().apply {
+                put("wifiDisabled", restrictions.wifiDisabled)
+                put("bluetoothDisabled", restrictions.bluetoothDisabled)
+                put("cameraDisabled", restrictions.cameraDisabled)
+                put("statusBarDisabled", restrictions.statusBarDisabled)
+                put("installAppsDisabled", restrictions.installAppsDisabled)
+                put("uninstallAppsDisabled", restrictions.uninstallAppsDisabled)
+                put("settingsDisabled", restrictions.settingsDisabled)
+                put("systemNotificationsDisabled", restrictions.systemNotificationsDisabled)
+                put("screenCaptureDisabled", restrictions.screenCaptureDisabled)
+                put("sharingDisabled", restrictions.sharingDisabled)
+                put("outgoingCallsDisabled", restrictions.outgoingCallsDisabled)
+                put("smsDisabled", restrictions.smsDisabled)
+                put("userCreationDisabled", restrictions.userCreationDisabled)
+                put("userRemovalDisabled", restrictions.userRemovalDisabled)
+                put("nfcDisabled", restrictions.nfcDisabled)
+                put("usbDisabled", restrictions.usbDisabled)
+                put("developerOptionsDisabled", restrictions.developerOptionsDisabled)
+                put("factoryResetDisabled", restrictions.factoryResetDisabled)
+                put("hotspotDisabled", restrictions.hotspotDisabled)
+                put("locationDisabled", restrictions.locationDisabled)
+                put("airplaneModeDisabled", restrictions.airplaneModeDisabled)
+                put("addAccountDisabled", restrictions.addAccountDisabled)
+                put("externalStorageDisabled", restrictions.externalStorageDisabled)
+                put("autoTimeRequired", restrictions.autoTimeRequired)
+                put("bluetoothPairingDisabled", restrictions.bluetoothPairingDisabled)
+                put("lockScreen", restrictions.lockScreen)
+                put("kioskMode", restrictions.kioskMode)
+            }
+            prefs.edit().putString("saved_restrictions", json.toString()).apply()
+
+            Log.d(TAG, "Restricoes remotas aplicadas e salvas")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao aplicar restricoes remotas: ${e.message}", e)
+        }
+    }
+
+    /**
+     * Recarrega e reaplica as restrições salvas em SharedPreferences.
+     * Chamado pelo SystemBootReceiver após BOOT_COMPLETED para garantir persistência.
+     */
+    fun loadAndApplySavedRestrictions(context: Context) {
+        try {
+            val prefs = context.getSharedPreferences("mdm_restrictions", Context.MODE_PRIVATE)
+            val json = prefs.getString("saved_restrictions", null) ?: return
+            val obj = org.json.JSONObject(json)
+            val restrictions = DeviceRestrictions(
+                wifiDisabled = obj.optBoolean("wifiDisabled", false),
+                bluetoothDisabled = obj.optBoolean("bluetoothDisabled", false),
+                cameraDisabled = obj.optBoolean("cameraDisabled", false),
+                statusBarDisabled = obj.optBoolean("statusBarDisabled", false),
+                installAppsDisabled = obj.optBoolean("installAppsDisabled", false),
+                uninstallAppsDisabled = obj.optBoolean("uninstallAppsDisabled", false),
+                settingsDisabled = obj.optBoolean("settingsDisabled", false),
+                systemNotificationsDisabled = obj.optBoolean("systemNotificationsDisabled", false),
+                screenCaptureDisabled = obj.optBoolean("screenCaptureDisabled", false),
+                sharingDisabled = obj.optBoolean("sharingDisabled", false),
+                outgoingCallsDisabled = obj.optBoolean("outgoingCallsDisabled", false),
+                smsDisabled = obj.optBoolean("smsDisabled", false),
+                userCreationDisabled = obj.optBoolean("userCreationDisabled", false),
+                userRemovalDisabled = obj.optBoolean("userRemovalDisabled", false),
+                nfcDisabled = obj.optBoolean("nfcDisabled", false),
+                usbDisabled = obj.optBoolean("usbDisabled", false),
+                developerOptionsDisabled = obj.optBoolean("developerOptionsDisabled", false),
+                factoryResetDisabled = obj.optBoolean("factoryResetDisabled", false),
+                hotspotDisabled = obj.optBoolean("hotspotDisabled", false),
+                locationDisabled = obj.optBoolean("locationDisabled", false),
+                airplaneModeDisabled = obj.optBoolean("airplaneModeDisabled", false),
+                addAccountDisabled = obj.optBoolean("addAccountDisabled", false),
+                externalStorageDisabled = obj.optBoolean("externalStorageDisabled", false),
+                lockScreen = obj.optBoolean("lockScreen", false),
+                kioskMode = obj.optBoolean("kioskMode", false),
+                bluetoothPairingDisabled = obj.optBoolean("bluetoothPairingDisabled", false),
+                autoTimeRequired = obj.optBoolean("autoTimeRequired", false)
+            )
+            applyRemoteRestrictions(context, restrictions)
+            Log.d(TAG, "Restricoes salvas recarregadas apos boot")
+        } catch (e: Exception) {
+            Log.e(TAG, "Erro ao recarregar restricoes: ${e.message}")
         }
     }
 

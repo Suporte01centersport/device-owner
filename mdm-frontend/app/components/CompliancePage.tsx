@@ -9,6 +9,9 @@ interface ComplianceDevice {
   hasRestrictions: boolean
   hasUser: boolean
   isNotRooted: boolean
+  batteryOk: boolean
+  seenRecently: boolean
+  score: number
   isCompliant: boolean
 }
 
@@ -35,6 +38,8 @@ export default function CompliancePage() {
   }, [])
 
   const complianceData = useMemo<ComplianceDevice[]>(() => {
+    const now = Date.now()
+    const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000
     return devices
       .filter(d => d.deviceType !== 'computer')
       .map(device => {
@@ -43,64 +48,121 @@ export default function CompliancePage() {
         const hasRestrictions = Object.values(restrictions).some(v => v === true)
         const hasUser = !!(device.assignedUser || device.assignedUserName || device.assignedDeviceUserId)
         const isNotRooted = !device.isDeveloperOptionsEnabled
-        const isCompliant = isOnline && hasRestrictions && hasUser && isNotRooted
-        return { device, isOnline, hasRestrictions, hasUser, isNotRooted, isCompliant }
+        const batteryOk = (device.batteryLevel ?? 100) >= 10
+        const seenRecently = device.lastSeen ? (now - device.lastSeen) < TWENTY_FOUR_HOURS : false
+
+        // Weighted scoring: Online 25, User 20, Restrictions 25, Battery 15, LastSeen 15
+        let score = 0
+        if (isOnline) score += 25
+        if (hasUser) score += 20
+        if (hasRestrictions) score += 25
+        if (batteryOk) score += 15
+        if (seenRecently) score += 15
+
+        const isCompliant = score >= 100
+        return { device, isOnline, hasRestrictions, hasUser, isNotRooted, batteryOk, seenRecently, score, isCompliant }
       })
   }, [devices])
 
   const totalDevices = complianceData.length
   const compliantCount = complianceData.filter(d => d.isCompliant).length
   const nonCompliantCount = totalDevices - compliantCount
+  const avgScore = totalDevices > 0 ? Math.round(complianceData.reduce((sum, d) => sum + d.score, 0) / totalDevices) : 0
   const compliancePercent = totalDevices > 0 ? Math.round((compliantCount / totalDevices) * 100) : 0
 
   const issues = useMemo(() => {
-    const counts = { offline: 0, noRestrictions: 0, noUser: 0, rooted: 0 }
+    const counts = { offline: 0, noRestrictions: 0, noUser: 0, rooted: 0, batteryCritical: 0, notSeenRecently: 0 }
     complianceData.forEach(d => {
       if (!d.isOnline) counts.offline++
       if (!d.hasRestrictions) counts.noRestrictions++
       if (!d.hasUser) counts.noUser++
       if (!d.isNotRooted) counts.rooted++
+      if (!d.batteryOk) counts.batteryCritical++
+      if (!d.seenRecently) counts.notSeenRecently++
     })
     return [
       { label: 'Dispositivos offline', count: counts.offline },
       { label: 'Sem restrições aplicadas', count: counts.noRestrictions },
       { label: 'Sem usuário atribuído', count: counts.noUser },
       { label: 'Opções de desenvolvedor ativas (Root)', count: counts.rooted },
+      { label: 'Bateria crítica (< 10%)', count: counts.batteryCritical },
+      { label: 'Sem comunicação há mais de 24h', count: counts.notSeenRecently },
     ].sort((a, b) => b.count - a.count)
   }, [complianceData])
 
   const needsAttention = complianceData.filter(d => !d.isCompliant)
 
   const handleExportPDF = () => {
-    const printContent = document.getElementById('compliance-report')
-    if (!printContent) return
     const win = window.open('', '_blank')
     if (!win) return
+    const compliant = complianceData.filter(d => d.isCompliant).length
+    const nonCompliant = complianceData.filter(d => !d.isCompliant).length
+    const avgScore = complianceData.length > 0 ? Math.round(complianceData.reduce((s, d) => s + d.score, 0) / complianceData.length) : 0
+    const tableRows = complianceData.map(d => `
+      <tr>
+        <td>${d.device.name || d.device.deviceId}</td>
+        <td>${d.device.model || '-'}</td>
+        <td style="color:${d.isOnline ? '#16a34a' : '#dc2626'};font-weight:600;">${d.isOnline ? 'Online' : 'Offline'}</td>
+        <td>${d.hasRestrictions ? '✓' : '✗'}</td>
+        <td>${d.hasUser ? (d.device.assignedUser?.name || d.device.assignedUserName || 'Sim') : '✗'}</td>
+        <td>${d.batteryOk ? 'OK' : 'Crítica'}</td>
+        <td style="font-weight:700;color:${d.score >= 80 ? '#16a34a' : d.score >= 50 ? '#d97706' : '#dc2626'};">${d.score}/100</td>
+        <td><span style="padding:3px 10px;border-radius:4px;font-weight:600;font-size:12px;${d.isCompliant ? 'background:#d1fae5;color:#065f46;' : 'background:#fee2e2;color:#991b1b;'}">${d.isCompliant ? 'Conforme' : 'Não conforme'}</span></td>
+      </tr>
+    `).join('')
     win.document.write(`
-      <html><head><title>Relatório de Compliance - MDM Center</title>
-      <style>
-        body { font-family: Arial, sans-serif; padding: 20px; color: #333; }
-        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f5f5f5; }
-        .compliant { color: #10b981; } .non-compliant { color: #ef4444; }
-        h1 { color: #1f2937; } h2 { color: #374151; margin-top: 30px; }
-        .score { font-size: 48px; font-weight: bold; text-align: center; margin: 20px 0; }
-        .badge { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .badge-green { background: #d1fae5; color: #065f46; }
-        .badge-red { background: #fee2e2; color: #991b1b; }
-      </style></head><body>
-      <h1>Relatório de Compliance - MDM Center</h1>
-      <p>Gerado em: ${new Date().toLocaleString('pt-BR')}</p>
-      ${printContent.innerHTML}
-      </body></html>
+      <html>
+      <head>
+        <title>Relatório de Compliance - MDM Center</title>
+        <style>
+          @page { size: landscape; margin: 15mm; }
+          body { font-family: Arial, Helvetica, sans-serif; padding: 30px; color: #222; }
+          h1 { font-size: 26px; color: #1e293b; margin: 0 0 6px 0; }
+          .meta { color: #555; font-size: 14px; margin-bottom: 20px; }
+          .summary { display: flex; gap: 24px; margin-bottom: 24px; }
+          .summary-card { padding: 16px 24px; border-radius: 8px; background: #f8fafc; border: 1px solid #e2e8f0; text-align: center; }
+          .summary-card .value { font-size: 28px; font-weight: 700; }
+          .summary-card .label { font-size: 12px; color: #64748b; margin-top: 4px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+          th { background: #1e293b; color: #fff; font-size: 13px; font-weight: 600; padding: 10px 12px; text-align: left; }
+          td { border-bottom: 1px solid #e2e8f0; padding: 9px 12px; font-size: 13px; }
+          tr:nth-child(even) { background: #f8fafc; }
+          .footer { margin-top: 24px; font-size: 11px; color: #94a3b8; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <h1>Relatório de Compliance — MDM Center</h1>
+        <div class="meta">Gerado em: ${new Date().toLocaleString('pt-BR')} &nbsp;|&nbsp; Total: ${complianceData.length} dispositivos</div>
+        <div class="summary">
+          <div class="summary-card"><div class="value" style="color:#16a34a;">${compliant}</div><div class="label">Conformes</div></div>
+          <div class="summary-card"><div class="value" style="color:#dc2626;">${nonCompliant}</div><div class="label">Não Conformes</div></div>
+          <div class="summary-card"><div class="value" style="color:${avgScore >= 80 ? '#16a34a' : avgScore >= 50 ? '#d97706' : '#dc2626'};">${avgScore}</div><div class="label">Score Médio</div></div>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Dispositivo</th>
+              <th>Modelo</th>
+              <th>Status</th>
+              <th>Restrições</th>
+              <th>Usuário</th>
+              <th>Bateria</th>
+              <th>Score</th>
+              <th>Compliance</th>
+            </tr>
+          </thead>
+          <tbody>${tableRows}</tbody>
+        </table>
+        <div class="footer">MDM Center — Relatório de Compliance gerado automaticamente</div>
+      </body>
+      </html>
     `)
     win.document.close()
     win.print()
   }
 
   const handleExportCSV = () => {
-    const headers = ['Dispositivo', 'Modelo', 'Status', 'Restrições', 'Usuário', 'Root', 'Compliance']
+    const headers = ['Dispositivo', 'Modelo', 'Status', 'Restrições', 'Usuário', 'Root', 'Bateria', 'Última conexão', 'Score', 'Compliance']
     const rows = complianceData.map(d => [
       d.device.name || d.device.deviceId,
       d.device.model || '-',
@@ -108,6 +170,9 @@ export default function CompliancePage() {
       d.hasRestrictions ? 'Sim' : 'Não',
       d.hasUser ? (d.device.assignedUser?.name || d.device.assignedUserName || 'Sim') : 'Não',
       d.isNotRooted ? 'Não' : 'Sim',
+      d.batteryOk ? 'OK' : 'Crítica',
+      d.seenRecently ? 'Sim' : 'Não',
+      `${d.score}/100`,
       d.isCompliant ? 'Conforme' : 'Não conforme',
     ])
     const csvContent = [headers, ...rows].map(r => r.map(c => `"${c}"`).join(',')).join('\n')
@@ -237,6 +302,21 @@ export default function CompliancePage() {
               <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>dispositivos</div>
             </div>
 
+            {/* Average Score */}
+            <div style={{
+              background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px',
+              gridColumn: '1 / -1'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(99,102,241,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '20px', color: '#6366f1' }}>
+                  &#9733;
+                </div>
+                <span style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>Score Médio</span>
+              </div>
+              <div style={{ fontSize: '36px', fontWeight: 'bold', color: avgScore >= 80 ? '#10b981' : avgScore >= 50 ? '#f59e0b' : '#ef4444' }}>{avgScore}/100</div>
+              <div style={{ color: 'var(--text-secondary)', fontSize: '13px', marginTop: '4px' }}>pontos (Online: 25, Restrições: 25, Usuário: 20, Bateria: 15, Última conexão: 15)</div>
+            </div>
+
             {/* Most common issues */}
             <div style={{
               background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '12px', padding: '24px',
@@ -296,7 +376,7 @@ export default function CompliancePage() {
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['Dispositivo', 'Status', 'Restrições', 'Usuário', 'Root', 'Compliance'].map(h => (
+                {['Dispositivo', 'Status', 'Restrições', 'Usuário', 'Root', 'Bateria', 'Visto 24h', 'Score', 'Compliance'].map(h => (
                   <th key={h} style={{
                     padding: '12px 16px', textAlign: 'left', fontSize: '13px', fontWeight: '600',
                     color: 'var(--text-secondary)', borderBottom: '2px solid var(--border)',
@@ -334,6 +414,21 @@ export default function CompliancePage() {
                     {d.isNotRooted ? <CheckIcon /> : <XIcon />}
                   </td>
                   <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>
+                    {d.batteryOk ? <CheckIcon /> : <XIcon />}
+                  </td>
+                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>
+                    {d.seenRecently ? <CheckIcon /> : <XIcon />}
+                  </td>
+                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>
+                    <span style={{
+                      padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
+                      background: d.score >= 80 ? 'rgba(16,185,129,0.15)' : d.score >= 50 ? 'rgba(245,158,11,0.15)' : 'rgba(239,68,68,0.15)',
+                      color: d.score >= 80 ? '#10b981' : d.score >= 50 ? '#f59e0b' : '#ef4444'
+                    }}>
+                      {d.score}/100
+                    </span>
+                  </td>
+                  <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', textAlign: 'center' }}>
                     <span style={{
                       padding: '4px 12px', borderRadius: '9999px', fontSize: '12px', fontWeight: '600',
                       background: d.isCompliant ? 'rgba(16,185,129,0.15)' : 'rgba(239,68,68,0.15)',
@@ -346,7 +441,7 @@ export default function CompliancePage() {
               ))}
               {complianceData.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+                  <td colSpan={9} style={{ padding: '32px', textAlign: 'center', color: 'var(--text-secondary)' }}>
                     Nenhum dispositivo encontrado
                   </td>
                 </tr>

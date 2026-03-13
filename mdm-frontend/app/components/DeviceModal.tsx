@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { Device, AppInfo } from '../types/device'
-import LocationView from './LocationView'
 import ReportsTab from './ReportsTab'
 import TermsModal from './TermsModal'
 import { showAlert, showConfirm } from '../lib/dialog'
@@ -17,9 +16,11 @@ interface DeviceModalProps {
   sendMessage: (message: any) => void
   onUnlinkUser?: () => void
   initialTab?: string
+  userRole?: string
 }
 
-export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendMessage, onUnlinkUser, initialTab = 'overview' }: DeviceModalProps) {
+export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendMessage, onUnlinkUser, initialTab = 'overview', userRole }: DeviceModalProps) {
+  const isViewer = userRole === 'viewer'
   const [activeTab, setActiveTab] = useState(initialTab)
   const [assignedUser, setAssignedUser] = useState<any>(null)
 
@@ -27,7 +28,37 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
     setActiveTab(initialTab)
   }, [initialTab, device.deviceId])
   const [loadingUser, setLoadingUser] = useState(false)
-  
+
+  // Campos de NF e Data de Compra
+  const [nfKey, setNfKey] = useState(device.nfKey || '')
+  const [purchaseDate, setPurchaseDate] = useState(device.purchaseDate || '')
+  const [savingInfo, setSavingInfo] = useState(false)
+  const purchaseDateLocked = !!device.purchaseDate
+
+  const saveDeviceInfo = useCallback(async () => {
+    if (savingInfo) return
+    setSavingInfo(true)
+    try {
+      const body: any = { nfKey }
+      if (!purchaseDateLocked && purchaseDate) {
+        body.purchaseDate = purchaseDate
+      }
+      const res = await fetch(`/api/devices/${device.deviceId}/update-info`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      })
+      const result = await res.json()
+      if (result.success) {
+        if (onUpdate) onUpdate()
+      }
+    } catch (e) {
+      console.error('Erro ao salvar info:', e)
+    } finally {
+      setSavingInfo(false)
+    }
+  }, [nfKey, purchaseDate, purchaseDateLocked, device.deviceId, savingInfo, onUpdate])
+
   // Buscar dados completos do usuário da API
   useEffect(() => {
     const loadUserData = async () => {
@@ -91,6 +122,13 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
 
   // Estado para Modo Perdido
   const [lostModeMessage, setLostModeMessage] = useState('')
+
+  // Estado para Transferência de Dispositivo
+  const [showTransfer, setShowTransfer] = useState(false)
+  const [transferUsers, setTransferUsers] = useState<any[]>([])
+  const [selectedTransferUser, setSelectedTransferUser] = useState('')
+  const [transferReason, setTransferReason] = useState('')
+  const [isTransferring, setIsTransferring] = useState(false)
 
   // Estado para Configuração WiFi
   const [wifiSSID, setWifiSSID] = useState('')
@@ -486,7 +524,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
   const tabs = [
     { id: 'overview', label: 'Visão Geral', icon: '📊' },
     { id: 'apps', label: 'Aplicações', icon: '📱' },
-    { id: 'map', label: 'Localização', icon: '🗺️' },
     { id: 'reports', label: 'Relatórios', icon: '📈' },
     { id: 'network', label: 'Rede', icon: '🌐' },
     { id: 'info', label: 'Informações', icon: '📋' }
@@ -611,7 +648,7 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         </div>
                       ) : (
                         <div className="text-xl font-bold text-primary">
-                          {Math.round((device.storageUsed / device.storageTotal) * 100)}%
+                          {device.storageTotal && device.storageUsed != null ? `${Math.round((device.storageUsed / device.storageTotal) * 100)}%` : 'N/D'}
                         </div>
                       )}
                     </div>
@@ -796,6 +833,60 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                         <span className="text-[var(--text-primary)] flex-shrink-0">MEID</span>
                         <span className="font-mono text-xs text-primary truncate">{device.meid || 'N/A'}</span>
                       </div>
+                      <div className="flex justify-between gap-2">
+                        <span className="text-[var(--text-primary)] flex-shrink-0">N/S</span>
+                        <span className="font-mono text-xs text-primary truncate">{device.serialNumber || 'N/A'}</span>
+                      </div>
+                      {device.phoneNumber && (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-[var(--text-primary)] flex-shrink-0">Telefone</span>
+                          <span className="font-mono text-xs text-primary truncate">{device.phoneNumber}</span>
+                        </div>
+                      )}
+                      {device.simNumber && (
+                        <div className="flex justify-between gap-2">
+                          <span className="text-[var(--text-primary)] flex-shrink-0">SIM</span>
+                          <span className="font-mono text-xs text-primary truncate">{device.simNumber}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="card p-4">
+                    <h4 className="font-semibold text-primary mb-3">Nota Fiscal / Compra</h4>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm text-[var(--text-primary)] mb-1 block">Chave NF</label>
+                        <input
+                          type="text"
+                          value={nfKey}
+                          onChange={(e) => setNfKey(e.target.value)}
+                          placeholder="Chave de acesso da NF"
+                          disabled={isViewer}
+                          className="w-full px-3 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] placeholder:text-[var(--text-secondary)] focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm text-[var(--text-primary)] mb-1 block">
+                          Data de Compra {purchaseDateLocked && <span className="text-xs text-yellow-500 ml-1">(travada)</span>}
+                        </label>
+                        <input
+                          type="date"
+                          value={purchaseDate}
+                          onChange={(e) => setPurchaseDate(e.target.value)}
+                          disabled={isViewer || purchaseDateLocked}
+                          className={`w-full px-3 py-2 rounded-lg bg-[var(--bg-secondary)] border border-[var(--border-color)] text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-blue-500 ${purchaseDateLocked ? 'opacity-60 cursor-not-allowed' : ''}`}
+                        />
+                      </div>
+                      {!isViewer && (
+                        <button
+                          onClick={saveDeviceInfo}
+                          disabled={savingInfo}
+                          className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors disabled:opacity-50"
+                        >
+                          {savingInfo ? 'Salvando...' : 'Salvar'}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1121,10 +1212,6 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
             </div>
           )}
 
-          {activeTab === 'map' && (
-            <LocationView device={device} sendMessage={sendMessage} />
-          )}
-
           {activeTab === 'reports' && (
             <ReportsTab device={device} isActive={true} />
           )}
@@ -1161,7 +1248,31 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
               <span>{isApplyingPolicies ? '⏳' : '🔒'}</span>
               {isApplyingPolicies ? 'Aplicando...' : 'Aplicar Políticas'}
             </button>
-            <button 
+            <button
+              className={`btn flex-1 !bg-red-600/30 !border-red-400/30 !text-white hover:!bg-red-600/50 ${isViewer ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => {
+                if (isViewer) { showAlert('Sem permissão para esta ação.'); return }
+                sendMessage({ type: 'lock_device', deviceId: device.deviceId })
+                showAlert('Comando de bloqueio enviado ao dispositivo.')
+              }}
+              title={isViewer ? 'Sem permissão' : 'Bloquear tela do dispositivo remotamente'}
+              disabled={isViewer}
+            >
+              <span>🔒</span>
+              Bloquear Tela
+            </button>
+            <button
+              className="btn flex-1 !bg-green-600/30 !border-green-400/30 !text-white hover:!bg-green-600/50"
+              onClick={() => {
+                sendMessage({ type: 'unlock_device', deviceId: device.deviceId })
+                showAlert('Comando de desbloqueio enviado ao dispositivo.')
+              }}
+              title="Desbloquear tela do dispositivo remotamente"
+            >
+              <span>🔓</span>
+              Desbloquear
+            </button>
+            <button
               className="btn btn-primary flex-1"
               onClick={handleOpenMessageModal}
             >
@@ -1176,9 +1287,10 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
               Histórico
             </button>
             <button
-              className="btn btn-danger flex-1"
-              onClick={() => setShowSelectiveWipeConfirm(true)}
-              title="Remove apenas dados de aplicações, sem resetar o dispositivo"
+              className={`btn btn-danger flex-1 ${isViewer ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => { if (isViewer) { showAlert('Sem permissão para esta ação.'); return }; setShowSelectiveWipeConfirm(true) }}
+              title={isViewer ? 'Sem permissão' : 'Remove apenas dados de aplicações, sem resetar o dispositivo'}
+              disabled={isViewer}
             >
               <span>🧹</span>
               Wipe Seletivo
@@ -1192,7 +1304,73 @@ export default function DeviceModal({ device, onClose, onDelete, onUpdate, sendM
                 Desvincular
               </button>
             )}
+            <button
+              className="btn flex-1 !bg-blue-600/30 !border-blue-400/30 !text-white hover:!bg-blue-600/50"
+              onClick={async () => {
+                setShowTransfer(!showTransfer)
+                if (!showTransfer) {
+                  try {
+                    const res = await fetch('/api/device-users?active=true')
+                    const data = await res.json()
+                    if (data.success) setTransferUsers(data.users || data.data || [])
+                  } catch {}
+                }
+              }}
+            >
+              <span>🔄</span>
+              Transferir
+            </button>
           </div>
+
+          {/* Painel de Transferência */}
+          {showTransfer && (
+            <div className="mt-3 p-4 bg-blue-500/10 border border-blue-400/30 rounded-lg">
+              <h4 className="text-sm font-semibold text-white mb-3">Transferir Dispositivo</h4>
+              {assignedUser && (
+                <p className="text-xs text-white/60 mb-2">Usuário atual: <span className="text-white">{assignedUser.name}</span></p>
+              )}
+              <select
+                value={selectedTransferUser}
+                onChange={(e) => setSelectedTransferUser(e.target.value)}
+                className="w-full px-3 py-2 mb-2 bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)]"
+              >
+                <option value="">Selecione o novo usuário...</option>
+                {transferUsers.filter(u => u.id !== assignedUser?.id).map(u => (
+                  <option key={u.id} value={u.id}>{u.name} {u.cpf ? `(${u.cpf})` : ''}</option>
+                ))}
+              </select>
+              <textarea
+                value={transferReason}
+                onChange={(e) => setTransferReason(e.target.value)}
+                placeholder="Motivo da transferência (opcional)"
+                rows={2}
+                className="w-full px-3 py-2 mb-2 bg-[var(--surface-elevated)] border border-[var(--border)] rounded-lg text-sm text-[var(--text-primary)] resize-none"
+              />
+              <button
+                disabled={!selectedTransferUser || isTransferring}
+                onClick={async () => {
+                  if (!selectedTransferUser) return
+                  setIsTransferring(true)
+                  try {
+                    await fetch('/api/devices/assign-user', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ deviceId: device.deviceId, userId: selectedTransferUser })
+                    })
+                    sendMessage({ type: 'transfer_device', deviceId: device.deviceId, newUserId: selectedTransferUser, reason: transferReason, timestamp: Date.now() })
+                    await showAlert('Dispositivo transferido com sucesso!')
+                    setShowTransfer(false)
+                    setSelectedTransferUser('')
+                    setTransferReason('')
+                  } catch { await showAlert('Erro ao transferir dispositivo.') }
+                  finally { setIsTransferring(false) }
+                }}
+                className="btn btn-primary w-full text-white disabled:opacity-50"
+              >
+                {isTransferring ? 'Transferindo...' : 'Confirmar Transferência'}
+              </button>
+            </div>
+          )}
         </div>
 
       </div>

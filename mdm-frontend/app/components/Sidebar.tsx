@@ -7,9 +7,11 @@ interface SidebarProps {
   onClose: () => void
   currentView: string
   onViewChange: (view: string) => void
+  userName?: string
+  userRole?: string
 }
 
-export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: SidebarProps) {
+export default function Sidebar({ isOpen, onClose, currentView, onViewChange, userName, userRole }: SidebarProps) {
   const menuItems = [
     {
       id: 'dashboard',
@@ -60,28 +62,39 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
       description: 'Comandos agendados'
     },
     {
-      id: 'compliance',
-      label: 'Compliance',
-      icon: '✅',
-      description: 'Relatório de conformidade'
+      id: 'map',
+      label: 'Mapa',
+      icon: '🗺️',
+      description: 'Localização dos dispositivos'
+    },
+    {
+      id: 'about',
+      label: 'Sobre',
+      icon: 'ℹ️',
+      description: 'Informações do sistema'
     },
     {
       id: 'settings',
       label: 'Configurações',
       icon: '⚙️',
       description: 'Configurações do sistema'
+    },
+    {
+      id: 'help',
+      label: 'Ajuda',
+      icon: '❓',
+      description: 'Central de ajuda'
     }
   ]
 
   return (
     <>
       {/* Overlay para mobile */}
-      {isOpen && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 z-40 md:hidden"
-          onClick={onClose}
-        />
-      )}
+      <div
+        className={`fixed inset-0 bg-black/50 z-40 md:hidden sidebar-overlay ${isOpen ? 'visible' : ''}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
 
       {/* Sidebar */}
       <div className={`sidebar ${isOpen ? 'open' : ''}`}>
@@ -131,11 +144,11 @@ export default function Sidebar({ isOpen, onClose, currentView, onViewChange }: 
         <div className="flex-shrink-0 p-3 border-t border-border">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-border-light">
             <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-sm font-semibold">U</span>
+              <span className="text-white text-sm font-semibold">{(userName || 'U').charAt(0).toUpperCase()}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium text-primary">Usuário</div>
-              <div className="text-xs text-secondary truncate">admin@mdm.com</div>
+              <div className="text-sm font-medium text-primary">{userName || 'Usuário'}</div>
+              <div className="text-xs text-secondary truncate">{userRole === 'viewer' ? 'Visualizador' : 'Administrador'}</div>
             </div>
           </div>
         </div>

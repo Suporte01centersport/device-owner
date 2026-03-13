@@ -20,6 +20,7 @@ import com.mdm.launcher.MainActivity
 import com.mdm.launcher.R
 import com.mdm.launcher.UpdateProgressActivity
 import com.mdm.launcher.data.DeviceInfo
+import com.mdm.launcher.data.DeviceRestrictions
 import com.mdm.launcher.network.WebSocketClient
 import com.mdm.launcher.utils.ConnectionStateManager
 import com.mdm.launcher.utils.DeviceIdManager
@@ -864,183 +865,89 @@ class WebSocketService : Service() {
                             val dpm = getSystemService(Context.DEVICE_POLICY_SERVICE) as android.app.admin.DevicePolicyManager
                             val adminComponent = android.content.ComponentName(this, com.mdm.launcher.DeviceAdminReceiver::class.java)
                             if (dpm.isDeviceOwnerApp(packageName)) {
-                                // WiFi
-                                if (data["wifiDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_WIFI)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_WIFI)
-                                }
-                                // Bluetooth
-                                if (data["bluetoothDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_BLUETOOTH)
-                                }
-                                // Câmera
-                                dpm.setCameraDisabled(adminComponent, data["cameraDisabled"] == true)
-                                // Screenshots
-                                if (data["screenshotDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_SCREEN_TIMEOUT)
-                                }
-                                dpm.setScreenCaptureDisabled(adminComponent, data["screenshotDisabled"] == true)
-                                // Status bar
-                                dpm.setStatusBarDisabled(adminComponent, data["statusBarDisabled"] == true)
-                                // Instalar apps (pular se APK update em andamento)
-                                if (isUpdatingApk) {
-                                    Log.d(TAG, "Pulando restrição DISALLOW_INSTALL_APPS - atualização de APK em andamento")
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
-                                } else if (data["installAppsDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
-                                }
-                                // Desinstalar apps
-                                if (data["uninstallAppsDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_UNINSTALL_APPS)
-                                }
-                                // Factory reset
-                                if (data["factoryResetDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_FACTORY_RESET)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_FACTORY_RESET)
-                                }
-                                // USB (bloqueia tudo: file transfer + ADB/depuração)
-                                if (data["usbDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
-                                    // Desabilitar ADB
+                                // Build DeviceRestrictions from incoming data
+                                val restrictions = DeviceRestrictions(
+                                    wifiDisabled = data["wifiDisabled"] == true,
+                                    bluetoothDisabled = data["bluetoothDisabled"] == true,
+                                    cameraDisabled = data["cameraDisabled"] == true,
+                                    statusBarDisabled = data["statusBarDisabled"] == true,
+                                    installAppsDisabled = if (isUpdatingApk) false else data["installAppsDisabled"] == true,
+                                    uninstallAppsDisabled = data["uninstallAppsDisabled"] == true,
+                                    settingsDisabled = data["settingsDisabled"] == true,
+                                    systemNotificationsDisabled = data["systemNotificationsDisabled"] == true,
+                                    screenCaptureDisabled = data["screenshotDisabled"] == true || data["screenCaptureDisabled"] == true,
+                                    sharingDisabled = data["sharingDisabled"] == true || data["shareDisabled"] == true,
+                                    outgoingCallsDisabled = data["outgoingCallsDisabled"] == true,
+                                    smsDisabled = data["smsDisabled"] == true,
+                                    userCreationDisabled = data["userCreationDisabled"] == true,
+                                    userRemovalDisabled = data["userRemovalDisabled"] == true,
+                                    nfcDisabled = data["nfcDisabled"] == true,
+                                    usbDisabled = data["usbDisabled"] == true,
+                                    developerOptionsDisabled = data["developerOptionsDisabled"] == true,
+                                    factoryResetDisabled = data["factoryResetDisabled"] == true,
+                                    hotspotDisabled = data["hotspotDisabled"] == true,
+                                    locationDisabled = data["locationDisabled"] == true,
+                                    airplaneModeDisabled = data["airplaneModeDisabled"] == true,
+                                    addAccountDisabled = data["addAccountDisabled"] == true,
+                                    externalStorageDisabled = data["externalStorageDisabled"] == true,
+                                    lockScreen = data["lockScreen"] == true,
+                                    kioskMode = data["kioskMode"] == true,
+                                    bluetoothPairingDisabled = data["bluetoothPairingDisabled"] == true,
+                                    autoTimeRequired = data["autoTimeRequired"] == true
+                                )
+
+                                // Apply all restrictions via centralized helper
+                                com.mdm.launcher.utils.DevicePolicyHelper.applyRemoteRestrictions(this, restrictions)
+
+                                // USB-specific: ADB toggle and SharedPreferences state
+                                if (restrictions.usbDisabled) {
                                     try {
                                         Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 0)
                                     } catch (e: Exception) {
-                                        Log.w(TAG, "Não foi possível desabilitar ADB: ${e.message}")
+                                        Log.w(TAG, "Nao foi possivel desabilitar ADB: ${e.message}")
                                     }
-                                    // Salvar estado para UsbConnectionReceiver
                                     getSharedPreferences("mdm_launcher", MODE_PRIVATE)
                                         .edit()
                                         .putBoolean("usb_blocked", true)
                                         .putBoolean("usb_temp_unlocked", false)
                                         .apply()
-                                    Log.d(TAG, "USB totalmente bloqueado (file transfer + ADB)")
                                 } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_USB_FILE_TRANSFER)
-                                    // Nota: DISALLOW_DEBUGGING_FEATURES é controlado por developerOptionsDisabled
-                                    if (data["developerOptionsDisabled"] != true) {
+                                    if (!restrictions.developerOptionsDisabled) {
                                         dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
                                     }
-                                    // Reabilitar ADB
                                     try {
                                         Settings.Global.putInt(contentResolver, Settings.Global.ADB_ENABLED, 1)
                                     } catch (e: Exception) {
-                                        Log.w(TAG, "Não foi possível reabilitar ADB: ${e.message}")
+                                        Log.w(TAG, "Nao foi possivel reabilitar ADB: ${e.message}")
                                     }
                                     getSharedPreferences("mdm_launcher", MODE_PRIVATE)
                                         .edit()
                                         .putBoolean("usb_blocked", false)
                                         .putBoolean("usb_temp_unlocked", false)
                                         .apply()
-                                    Log.d(TAG, "USB desbloqueado")
                                 }
-                                // Hotspot/tethering
-                                if (data["hotspotDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_TETHERING)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_TETHERING)
+
+                                // APK update override: keep install apps unblocked
+                                if (isUpdatingApk) {
+                                    Log.d(TAG, "Pulando restricao DISALLOW_INSTALL_APPS - atualizacao de APK em andamento")
+                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_INSTALL_APPS)
                                 }
-                                // NFC
-                                if (data["nfcDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_BEAM)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_BEAM)
-                                }
-                                // Localização
-                                if (data["locationDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_LOCATION)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CONFIG_LOCATION)
-                                }
-                                // Hora automática
-                                if (data["autoTimeRequired"] == true) {
-                                    dpm.setAutoTimeRequired(adminComponent, true)
-                                } else {
-                                    dpm.setAutoTimeRequired(adminComponent, false)
-                                }
-                                // Configurações (Settings)
-                                if (data["settingsDisabled"] == true) {
-                                    for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
-                                        try { dpm.setApplicationHidden(adminComponent, pkg, true) } catch (_: Exception) {}
-                                    }
-                                } else {
-                                    for (pkg in arrayOf("com.android.settings", "com.coloros.settings", "com.oppo.settings", "com.samsung.android.settings")) {
-                                        try { dpm.setApplicationHidden(adminComponent, pkg, false) } catch (_: Exception) {}
-                                    }
-                                }
-                                // Opções de desenvolvedor
-                                if (data["developerOptionsDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_DEBUGGING_FEATURES)
-                                }
-                                // Bluetooth pairing (impedir parear novos dispositivos)
-                                if (data["bluetoothPairingDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_BLUETOOTH)
-                                } else if (data["bluetoothDisabled"] != true) {
-                                    // Só libera se bluetooth não estiver totalmente bloqueado
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_BLUETOOTH)
-                                }
-                                // Bloquear adicionar contas (Google, etc)
-                                if (data["addAccountDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MODIFY_ACCOUNTS)
-                                }
-                                // Bloquear compartilhamento de dados (share/send)
-                                if (data["shareDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_CROSS_PROFILE_COPY_PASTE)
-                                }
-                                // Bloquear montagem de mídia externa (SD card etc)
-                                if (data["externalStorageDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_MOUNT_PHYSICAL_MEDIA)
-                                }
-                                // Bloquear ligar/desligar modo avião
-                                if (data["airplaneModeDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_AIRPLANE_MODE)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_AIRPLANE_MODE)
-                                }
-                                // Bloquear ligações de saída
-                                if (data["outgoingCallsDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_CALLS)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_OUTGOING_CALLS)
-                                }
-                                // Bloquear SMS
-                                if (data["smsDisabled"] == true) {
-                                    dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SMS)
-                                } else {
-                                    dpm.clearUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SMS)
-                                }
+
                                 // Lock Screen (trava remota)
-                                if (data["lockScreen"] == true) {
+                                if (restrictions.lockScreen) {
                                     com.mdm.launcher.utils.DevicePolicyHelper.showLockScreenOnly(this)
                                 }
                                 // Fixar app (impedir sair do app atual - kiosk)
-                                if (data["kioskMode"] == true) {
+                                if (restrictions.kioskMode) {
                                     val mainIntent = Intent(this, com.mdm.launcher.MainActivity::class.java)
                                     mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                     startActivity(mainIntent)
-                                    // O startLockTask será chamado pelo MainActivity
                                 }
 
                                 // Restringir Quick Settings a apenas WiFi, Bluetooth e Lanterna
                                 com.mdm.launcher.utils.DevicePolicyHelper.restrictQuickSettingsTiles(this)
-                                // Garantir que Settings está oculto (impede acesso via engrenagem)
-                                if (data["settingsDisabled"] == true) {
+                                // Garantir que Settings esta oculto (impede acesso via engrenagem)
+                                if (restrictions.settingsDisabled) {
                                     com.mdm.launcher.utils.DevicePolicyHelper.blockSettingsAccess(this)
                                 }
                                 // Bloquear menu power (desligar/reiniciar) - remove GLOBAL_ACTIONS do Lock Task
@@ -1051,10 +958,10 @@ class WebSocketService : Service() {
                                         dpm.addUserRestriction(adminComponent, android.os.UserManager.DISALLOW_SAFE_BOOT)
                                     }
                                 } catch (e: Exception) {
-                                    Log.w(TAG, "DISALLOW_SAFE_BOOT não suportado: ${e.message}")
+                                    Log.w(TAG, "DISALLOW_SAFE_BOOT nao suportado: ${e.message}")
                                 }
 
-                                Log.d(TAG, "Restrições aplicadas com sucesso")
+                                Log.d(TAG, "Restricoes aplicadas com sucesso")
                                 webSocketClient?.sendMessage(gson.toJson(mapOf(
                                     "type" to "restrictions_applied",
                                     "deviceId" to DeviceIdManager.getDeviceId(this),
@@ -1064,7 +971,7 @@ class WebSocketService : Service() {
                             }
                         }
                     } catch (e: Exception) {
-                        Log.e(TAG, "Erro ao aplicar restrições: ${e.message}", e)
+                        Log.e(TAG, "Erro ao aplicar restricoes: ${e.message}", e)
                     }
                 }
                 "selective_wipe" -> {

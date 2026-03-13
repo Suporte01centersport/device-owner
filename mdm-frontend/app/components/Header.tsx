@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import PersistenceStatus from './PersistenceStatus'
+import { playNotificationSound } from '../lib/notification-sound'
 
 interface HeaderProps {
   isConnected: boolean
@@ -12,6 +13,7 @@ interface HeaderProps {
   unreadSupportCount?: number
   onSupportNotificationClick?: (deviceId: string, deviceName?: string) => void
   onViewChange?: (view: string) => void
+  onLogout?: () => void
 }
 
 interface AlertItem {
@@ -28,14 +30,47 @@ interface AlertItem {
   resolved_at: string | null
 }
 
-export default function Header({ isConnected, onMenuClick, onRefreshDevices, onReconnect, supportNotifications = [], unreadSupportCount = 0, onSupportNotificationClick, onViewChange }: HeaderProps) {
+function timeAgo(dateStr: string): string {
+  const now = new Date()
+  const date = new Date(dateStr)
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  if (diffMin < 1) return 'agora'
+  if (diffMin < 60) return `há ${diffMin} min`
+  const diffHours = Math.floor(diffMin / 60)
+  if (diffHours < 24) return `há ${diffHours}h`
+  const diffDays = Math.floor(diffHours / 24)
+  return `há ${diffDays}d`
+}
+
+export default function Header({ isConnected, onMenuClick, onRefreshDevices, onReconnect, supportNotifications = [], unreadSupportCount = 0, onSupportNotificationClick, onViewChange, onLogout }: HeaderProps) {
   const [showSupportDropdown, setShowSupportDropdown] = useState(false)
   const [showAlertsDropdown, setShowAlertsDropdown] = useState(false)
   const [showUserDashboard, setShowUserDashboard] = useState(false)
   const [unreadMessages, setUnreadMessages] = useState<any[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [unreadAlertCount, setUnreadAlertCount] = useState(0)
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const alertPollRef = useRef<NodeJS.Timeout | null>(null)
+  const prevUnreadCountRef = useRef<number>(0)
+
+  // Forçar tema escuro sempre
+  useEffect(() => {
+    setTheme('dark')
+    localStorage.setItem('mdm_theme', 'dark')
+    document.documentElement.classList.remove('light')
+  }, [])
+
+  const toggleTheme = () => {
+    const newTheme = theme === 'dark' ? 'light' : 'dark'
+    setTheme(newTheme)
+    localStorage.setItem('mdm_theme', newTheme)
+    if (newTheme === 'light') {
+      document.documentElement.classList.add('light')
+    } else {
+      document.documentElement.classList.remove('light')
+    }
+  }
 
   // Carregar alertas não lidos
   const loadAlerts = useCallback(async () => {
@@ -58,6 +93,14 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
       // silencioso
     }
   }, [])
+
+  // Tocar som quando novos alertas chegam
+  useEffect(() => {
+    if (unreadAlertCount > prevUnreadCountRef.current && prevUnreadCountRef.current !== 0) {
+      playNotificationSound()
+    }
+    prevUnreadCountRef.current = unreadAlertCount
+  }, [unreadAlertCount])
 
   // Poll de alertas a cada 30s
   useEffect(() => {
@@ -152,14 +195,13 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
   }
 
   const handleAlertClick = async (alert: AlertItem) => {
-    // Marcar como lido
+    // Marcar como lido via API individual
     if (!alert.is_read) {
       try {
-        await fetch('/api/alerts', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: [alert.id], action: 'read' })
-        })
+        await fetch(`/api/alerts/${alert.id}/read`, { method: 'POST' })
+        // Atualizar estado local imediatamente
+        setAlerts(prev => prev.map(a => a.id === alert.id ? { ...a, is_read: true, read_at: new Date().toISOString() } : a))
+        setUnreadAlertCount(prev => Math.max(0, prev - 1))
       } catch {}
     }
     setShowAlertsDropdown(false)
@@ -178,16 +220,21 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
 
   const markAllAlertsRead = async () => {
     try {
-      const unreadIds = alerts.filter(a => !a.is_read).map(a => a.id)
-      if (unreadIds.length > 0) {
-        await fetch('/api/alerts', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ids: unreadIds, action: 'read' })
-        })
-        loadAlerts()
-      }
+      await fetch('/api/alerts/mark-all-read', { method: 'POST' })
+      // Atualizar estado local imediatamente
+      setAlerts(prev => prev.map(a => ({ ...a, is_read: true, read_at: a.read_at || new Date().toISOString() })))
+      setUnreadAlertCount(0)
+      loadAlerts()
     } catch {}
+  }
+
+  const getSeverityDotColor = (severity: string) => {
+    switch (severity) {
+      case 'critical': return 'bg-red-500'
+      case 'warning': return 'bg-yellow-500'
+      case 'info': return 'bg-blue-500'
+      default: return 'bg-gray-400'
+    }
   }
 
   const getSeverityIcon = (severity: string) => {
@@ -208,11 +255,23 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
     }
   }
 
+  const getAlertTypeIcon = (type: string) => {
+    switch (type) {
+      case 'battery': case 'battery_low': return '🔋'
+      case 'offline': case 'device_offline': return '📡'
+      case 'geofence': case 'geofence_exit': return '📍'
+      case 'root': return '⚠️'
+      case 'storage': return '💾'
+      case 'compliance': return '📋'
+      default: return '🔔'
+    }
+  }
+
   const getAlertTypeLabel = (type: string) => {
     switch (type) {
-      case 'battery': return 'Bateria baixa'
-      case 'offline': return 'Dispositivo offline'
-      case 'geofence': return 'Geofence'
+      case 'battery': case 'battery_low': return 'Bateria baixa'
+      case 'offline': case 'device_offline': return 'Dispositivo offline'
+      case 'geofence': case 'geofence_exit': return 'Saída de geofence'
       case 'root': return 'Root detectado'
       case 'storage': return 'Armazenamento'
       case 'compliance': return 'Compliance'
@@ -221,7 +280,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
   }
 
   return (
-    <header className="bg-surface border-b border-border px-6 py-4">
+    <header className="bg-surface border-b border-border px-3 py-3 md:px-6 md:py-4">
       <div className="flex items-center justify-between">
         {/* Left side */}
         <div className="flex items-center gap-4">
@@ -271,6 +330,8 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
             )}
           </div>
 
+          {/* Theme Toggle removido - apenas modo escuro */}
+
           {/* Alerts Bell */}
           <div className="relative alerts-dropdown-container">
             <button
@@ -282,7 +343,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                 {unreadAlertCount > 0 ? '🔔' : '🔕'}
               </span>
               {unreadAlertCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500/150/150 text-white text-xs font-bold rounded-full shadow-lg">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">
                   {unreadAlertCount > 99 ? '99+' : unreadAlertCount}
                 </span>
               )}
@@ -297,7 +358,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                       <span>🔔</span>
                       Alertas
                       {unreadAlertCount > 0 && (
-                        <span className="px-2 py-0.5 bg-red-500/150/150/20 text-red-400 text-xs rounded-full font-medium">
+                        <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full font-medium">
                           {unreadAlertCount} novo{unreadAlertCount !== 1 ? 's' : ''}
                         </span>
                       )}
@@ -308,7 +369,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                           onClick={markAllAlertsRead}
                           className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
                         >
-                          Marcar lidos
+                          Marcar todas como lidas
                         </button>
                       )}
                       <button
@@ -327,20 +388,21 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                       <div
                         key={alert.id}
                         className={`p-3 border-b border-[var(--border)] hover:bg-[var(--surface-elevated)] cursor-pointer transition-colors ${
-                          !alert.is_read ? 'bg-[var(--surface-elevated)]/50' : ''
+                          !alert.is_read ? 'bg-blue-500/5 border-l-2 border-l-blue-500' : 'opacity-75'
                         }`}
                         onClick={() => handleAlertClick(alert)}
                       >
                         <div className="flex items-start gap-3">
-                          <div className="flex-shrink-0 mt-0.5 text-lg">
-                            {getSeverityIcon(alert.severity)}
+                          <div className="flex-shrink-0 mt-0.5 relative">
+                            <span className="text-lg">{getAlertTypeIcon(alert.type)}</span>
+                            <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border border-[var(--surface)] ${getSeverityDotColor(alert.severity)}`}></span>
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-0.5">
                               <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-                                alert.severity === 'critical' ? 'bg-red-500/150/150/20 text-red-400' :
-                                alert.severity === 'warning' ? 'bg-yellow-500/150/150/20 text-yellow-400' :
-                                'bg-blue-500/150/150/20 text-blue-400'
+                                alert.severity === 'critical' ? 'bg-red-500/20 text-red-400' :
+                                alert.severity === 'warning' ? 'bg-yellow-500/20 text-yellow-400' :
+                                'bg-blue-500/20 text-blue-400'
                               }`}>
                                 {getSeverityLabel(alert.severity)}
                               </span>
@@ -348,10 +410,10 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                                 {getAlertTypeLabel(alert.type)}
                               </span>
                               {!alert.is_read && (
-                                <span className="w-2 h-2 bg-blue-500/150/150 rounded-full flex-shrink-0"></span>
+                                <span className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0 animate-pulse"></span>
                               )}
                             </div>
-                            <p className="text-sm text-[var(--text-primary)] line-clamp-1">
+                            <p className={`text-sm line-clamp-1 ${!alert.is_read ? 'text-[var(--text-primary)] font-medium' : 'text-[var(--text-secondary)]'}`}>
                               {alert.message}
                             </p>
                             <div className="flex items-center gap-2 mt-1">
@@ -359,7 +421,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                                 📱 {alert.device_name || 'Dispositivo'}
                               </span>
                               <span className="text-xs text-[var(--text-muted)]">
-                                {formatTimestamp(alert.created_at)}
+                                {timeAgo(alert.created_at)}
                               </span>
                             </div>
                           </div>
@@ -403,7 +465,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
             >
               <span className="text-xl group-hover:scale-110 transition-transform">💬</span>
               {unreadSupportCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500/150/150 text-white text-xs font-bold rounded-full shadow-lg">
+                <span className="absolute -top-0.5 -right-0.5 min-w-[20px] h-5 flex items-center justify-center px-1 bg-red-500 text-white text-xs font-bold rounded-full shadow-lg">
                   {unreadSupportCount > 99 ? '99+' : unreadSupportCount}
                 </span>
               )}
@@ -449,7 +511,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                               <p className="text-sm font-semibold text-[var(--text-primary)] truncate">
                                 {message.deviceName}
                               </p>
-                              <span className="px-2 py-0.5 bg-red-500/150/150/20 text-red-400 text-xs rounded-full font-medium">
+                              <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full font-medium">
                                 Nova
                               </span>
                             </div>
@@ -504,7 +566,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
             >
               <div className="text-right hidden sm:block">
                 <div className="text-sm font-medium text-primary">Administrador</div>
-                <div className="text-xs text-secondary">admin@mdm.com</div>
+                <div className="text-xs text-secondary">adm</div>
               </div>
               <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center ring-2 ring-[var(--border)] shadow-md hover:ring-[var(--primary)] transition-all cursor-pointer">
                 <span className="text-white text-base font-semibold">A</span>
@@ -521,8 +583,8 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                     </div>
                     <div>
                       <h3 className="font-semibold text-[var(--text-primary)] text-lg">Administrador</h3>
-                      <p className="text-sm text-[var(--text-secondary)]">admin@mdm.com</p>
-                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/150/150/20 text-blue-400 text-xs font-medium rounded-full">
+                      <p className="text-sm text-[var(--text-secondary)]">adm</p>
+                      <span className="inline-block mt-1 px-2 py-0.5 bg-blue-500/20 text-blue-400 text-xs font-medium rounded-full">
                         Administrador do sistema
                       </span>
                     </div>
@@ -532,7 +594,7 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                   <div className="flex items-center justify-between py-2 border-b border-[var(--border)]">
                     <span className="text-sm text-[var(--text-secondary)]">Status</span>
                     <span className={`flex items-center gap-1.5 text-sm font-medium ${isConnected ? 'text-green-400' : 'text-red-400'}`}>
-                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500/150/150' : 'bg-red-500/150/150'}`} />
+                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`} />
                       {isConnected ? 'Conectado' : 'Desconectado'}
                     </span>
                   </div>
@@ -545,7 +607,15 @@ export default function Header({ isConnected, onMenuClick, onRefreshDevices, onR
                     <span className="text-sm text-[var(--text-primary)]">Agora</span>
                   </div>
                 </div>
-                <div className="p-3 bg-[var(--surface-elevated)] border-t border-[var(--border)]">
+                <div className="p-3 bg-[var(--surface-elevated)] border-t border-[var(--border)] space-y-2">
+                  {onLogout && (
+                    <button
+                      onClick={() => { setShowUserDashboard(false); onLogout(); }}
+                      className="w-full px-3 py-2 text-sm text-red-400 hover:bg-red-500/10 rounded-lg transition-colors flex items-center gap-2"
+                    >
+                      <span>🚪</span> Sair da conta
+                    </button>
+                  )}
                   <p className="text-xs text-center text-[var(--text-muted)]">
                     Painel de gerenciamento de dispositivos
                   </p>
