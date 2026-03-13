@@ -105,7 +105,7 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
         return
       }
 
-      const map = window.L.map(container, { fadeAnimation: false }).setView([-22.0, -49.5], 7)
+      const map = window.L.map(container, { fadeAnimation: false }).setView([-22.0, -49.5], 15)
 
       window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
@@ -536,20 +536,13 @@ export default function DeviceMapPage({ devices }: DeviceMapPageProps) {
   }
 
   return (
-    <div className="relative flex-1 flex flex-col" style={{ height: 'calc(100vh - 64px)', maxHeight: 'calc(100vh - 64px)', overflow: 'hidden' }}>
+    <div className="relative flex-1 flex flex-col" style={{ height: 'calc(100vh - 160px)', maxHeight: 'calc(100vh - 160px)', overflow: 'hidden' }}>
       {/* Top: Map + Sidebar */}
       <div className="relative flex flex-1 min-h-0">
         {/* Map */}
         <div ref={mapRef} className="flex-1" style={{ height: '100%' }} />
 
-        {/* Sidebar toggle */}
-        <button
-          onClick={() => setSidebarOpen(!sidebarOpen)}
-          className="absolute top-3 left-3 z-[1000] bg-[var(--surface)] text-[var(--text-primary)] px-2.5 py-1.5 rounded-lg shadow-lg hover:bg-[var(--surface-elevated)] transition-colors border border-[var(--border)] text-sm"
-          title={sidebarOpen ? 'Fechar painel' : 'Abrir painel'}
-        >
-          {sidebarOpen ? '✕' : '☰'}
-        </button>
+        {/* Sidebar toggle removed */}
 
         {/* Sidebar */}
         {sidebarOpen && (
