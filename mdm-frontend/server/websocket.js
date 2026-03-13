@@ -1230,9 +1230,28 @@ const server = http.createServer(async (req, res) => {
                 const wifiSsid = params.get('wifi_ssid') || '';
                 const wifiPassword = params.get('wifi_password') || '';
                 const wifiSecurity = params.get('wifi_security') || 'WPA';
+                const useLocal = params.get('use_local') === 'true';
 
-                // Obter URL do APK e checksum
-                const apkUrl = await getApkUrlForAnyNetwork();
+                // Obter URL do APK - usar IP local se solicitado (provisionamento na mesma rede)
+                let apkUrl;
+                if (useLocal) {
+                    const interfaces = os.networkInterfaces();
+                    let serverIp = 'localhost';
+                    for (const name of Object.keys(interfaces)) {
+                        for (const iface of interfaces[name]) {
+                            if (iface.family === 'IPv4' && !iface.internal) {
+                                serverIp = iface.address;
+                                break;
+                            }
+                        }
+                        if (serverIp !== 'localhost') break;
+                    }
+                    const wsPort = process.env.WEBSOCKET_PORT || '3001';
+                    apkUrl = `http://${serverIp}:${wsPort}/apk/mdm.apk`;
+                    console.log('📡 Provisioning QR usando IP LOCAL:', apkUrl);
+                } else {
+                    apkUrl = await getApkUrlForAnyNetwork();
+                }
                 const pathMod = require('path');
                 const projectRoot = pathMod.resolve(__dirname, '..', '..');
                 const releasePath = pathMod.join(projectRoot, 'mdm-owner', 'app', 'build', 'outputs', 'apk', 'release', 'app-release.apk');
@@ -1246,8 +1265,16 @@ const server = http.createServer(async (req, res) => {
                 const fileBuffer = fs.readFileSync(apkPath);
                 const checksum = crypto.createHash('sha256').update(fileBuffer).digest('base64url');
 
-                const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL || `http://localhost:${PORT}`;
-                const wsUrl = publicUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+                let wsUrl;
+                if (useLocal) {
+                    // Extrair IP do apkUrl (já é local)
+                    const localIp = apkUrl.replace(/^https?:\/\//, '').split(':')[0];
+                    const wsPort = process.env.WEBSOCKET_PORT || '3001';
+                    wsUrl = `ws://${localIp}:${wsPort}`;
+                } else {
+                    const publicUrl = process.env.MDM_PUBLIC_URL || process.env.WEBSOCKET_PUBLIC_URL || `http://localhost:${PORT}`;
+                    wsUrl = publicUrl.replace(/^http:/, 'ws:').replace(/^https:/, 'wss:');
+                }
 
                 const payload = {
                     'android.app.extra.PROVISIONING_DEVICE_ADMIN_COMPONENT_NAME': 'com.mdm.launcher/.DeviceAdminReceiver',

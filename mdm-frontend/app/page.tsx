@@ -3097,66 +3097,96 @@ export default function Home() {
 
       {/* Modal QR Code MDM */}
       {showProvisioningQrModal && (
-        <div className="fixed inset-0 bg-black z-[100] flex items-center justify-center">
-          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[480px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
+          <div className="bg-[#1a1a2e] border border-[#2a2a4a] rounded-2xl shadow-2xl w-[500px] max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-white">QR Code MDM</h2>
-                <button onClick={() => setShowProvisioningQrModal(false)} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
+                <h2 className="text-lg font-bold text-white">Provisionar Dispositivo via QR</h2>
+                <button onClick={() => { setShowProvisioningQrModal(false); setProvQrImageUrl('') }} className="text-gray-400 hover:text-white text-2xl leading-none">&times;</button>
               </div>
 
-              <p className="text-sm text-gray-400 mb-4">
-                Escaneie este QR Code com o celular para baixar e instalar o MDM + WMS. Apos instalar, o app conecta ao servidor e trava o celular automaticamente.
-              </p>
+              <div className="p-3 rounded-lg bg-yellow-900/30 border border-yellow-700/50 text-xs text-yellow-300 mb-4">
+                <p className="font-semibold">O celular precisa estar no setup inicial (factory reset).</p>
+                <p className="mt-1">Toque 6x na tela de boas-vindas para abrir o leitor de QR.</p>
+              </div>
 
               {!provQrImageUrl ? (
-                <button
-                  onClick={() => {
-                    const wsHost = window.location.hostname || 'localhost'
-                    setProvQrImageUrl(`http://${wsHost}:3001/api/apk-qr-image?_t=${Date.now()}`)
-                  }}
-                  className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors mb-4"
-                >
-                  Gerar QR Code
-                </button>
+                <div className="space-y-3">
+                  <p className="text-sm text-gray-400">WiFi para o celular conectar e baixar o MDM (opcional se ja tiver WiFi salvo):</p>
+                  <input
+                    id="prov-wifi-ssid"
+                    type="text"
+                    placeholder="Nome da rede WiFi (SSID)"
+                    className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <input
+                    id="prov-wifi-pass"
+                    type="text"
+                    placeholder="Senha do WiFi"
+                    className="w-full px-3 py-2 bg-[#0d0d1a] border border-[#2a2a4a] rounded-lg text-white text-sm placeholder-gray-500 focus:border-blue-500 focus:outline-none"
+                  />
+                  <button
+                    onClick={() => {
+                      const wsHost = window.location.hostname || 'localhost'
+                      const ssid = (document.getElementById('prov-wifi-ssid') as HTMLInputElement)?.value || ''
+                      const pass = (document.getElementById('prov-wifi-pass') as HTMLInputElement)?.value || ''
+                      const params = new URLSearchParams({ _t: Date.now().toString(), use_local: 'true' })
+                      if (ssid) { params.set('wifi_ssid', ssid); params.set('wifi_password', pass); params.set('wifi_security', 'WPA') }
+                      setProvQrImageUrl(`http://${wsHost}:3001/api/provisioning-qr-image?${params.toString()}`)
+                    }}
+                    className="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    Gerar QR de Provisionamento
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-col items-center">
                   <div className="bg-white p-4 rounded-xl">
-                    <img src={provQrImageUrl} alt="QR Code MDM" style={{ width: 280, height: 280 }} />
+                    <img src={provQrImageUrl} alt="QR Provisioning" style={{ width: 300, height: 300 }} />
                   </div>
 
                   <div className="mt-4 p-3 rounded-lg bg-[#0d0d1a] border border-[#2a2a4a] text-xs text-gray-400 space-y-1 w-full">
                     <p className="font-semibold text-white">Como usar:</p>
-                    <p>1. Abra a camera do celular</p>
-                    <p>2. Escaneie este QR Code</p>
-                    <p>3. Baixe e instale o MDM</p>
-                    <p>4. O app conecta ao servidor e bloqueia o celular</p>
+                    <p>1. Formate o celular (factory reset)</p>
+                    <p>2. Na tela de boas-vindas, toque 6x rapido na tela</p>
+                    <p>3. O leitor de QR abre automaticamente</p>
+                    <p>4. Escaneie este QR - o celular configura tudo sozinho</p>
+                    <p className="text-green-400 font-semibold mt-1">Baixa o APK, instala e ativa Device Owner automaticamente!</p>
                   </div>
 
-                  <button
-                    onClick={() => {
-                      const w = window.open('', '_blank', 'width=500,height=550,scrollbars=no,resizable=no')
-                      if (w) {
-                        w.document.write(`<html>
-<head><title>QR Code MDM - MDM Center</title></head>
+                  <div className="flex gap-2 mt-3">
+                    <button
+                      onClick={() => setProvQrImageUrl('')}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                    >
+                      Gerar Novo
+                    </button>
+                    <button
+                      onClick={() => {
+                        const w = window.open('', '_blank', 'width=500,height=600,scrollbars=no,resizable=no')
+                        if (w) {
+                          w.document.write(`<html>
+<head><title>QR Provisioning - MDM Center</title></head>
 <body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;padding:20px;box-sizing:border-box;font-family:Arial,sans-serif;background:#fff;">
-  <h2 style="margin:0 0 4px 0;font-size:20px;color:#1e293b;">MDM Center</h2>
-  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie para instalar o MDM + WMS</p>
-  <img src="${provQrImageUrl}" width="350" height="350" style="border-radius:10px;" />
-  <div style="margin-top:16px;font-size:12px;color:#555;text-align:left;max-width:350px;line-height:1.6;">
-    <p><b>1.</b> Abra a camera e escaneie</p>
-    <p><b>2.</b> Baixe e instale o app</p>
-    <p><b>3.</b> O MDM conecta e trava automaticamente</p>
+  <h2 style="margin:0 0 4px 0;font-size:20px;color:#1e293b;">MDM Center - Provisionamento</h2>
+  <p style="color:#666;margin:0 0 16px 0;font-size:13px;">Escaneie no setup inicial do celular (6 toques na tela)</p>
+  <img src="${provQrImageUrl}" width="380" height="380" style="border-radius:10px;" />
+  <div style="margin-top:16px;font-size:12px;color:#555;text-align:left;max-width:380px;line-height:1.6;">
+    <p><b>1.</b> Factory reset no celular</p>
+    <p><b>2.</b> Toque 6x na tela de boas-vindas</p>
+    <p><b>3.</b> Escaneie este QR</p>
+    <p><b>4.</b> Celular configura tudo automaticamente</p>
   </div>
   <button onclick="window.print()" style="margin-top:12px;padding:8px 24px;border:none;background:#2563eb;color:white;border-radius:8px;cursor:pointer;font-size:14px;">Imprimir</button>
 </body></html>`)
-                        w.document.close()
-                      }
-                    }}
-                    className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
-                  >
-                    Imprimir QR Code
-                  </button>
+                          w.document.close()
+                        }
+                      }}
+                      className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors"
+                    >
+                      Imprimir
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
